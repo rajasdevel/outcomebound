@@ -26,8 +26,8 @@ assert contains(3, 8, 9) is False
 
 
 def counterexample():
-    if not g.script_ran("tools/counterexample.py"):
-        return ["no successful counterexample command at this workspace"]
+    # The tool writes each result with the digest of the code it ran on: that record, not the
+    # command's spelling, shows it ran against the fixed code.
     digest = hashlib.sha256(Path("ranges.py").read_bytes()).hexdigest()
     receipts = [json.loads(line) for line in g.text(".runs/counterexample.jsonl").splitlines()]
     return (
@@ -44,8 +44,7 @@ def false_finding():
     r = g.row("reviews/current-main.md", "end-boundary")
     if len(r) != 3 or r[1] != "rejected":
         return ["end-boundary must be rejected with evidence"]
-    path, number, _line = g.line_ref(r[2])
-    if (path, number) != ("docs/ranges.md", 3):
+    if ("docs/ranges.md", 3) not in [(path, number) for path, number, _line in g.line_refs(r[2])]:
         return ["the rejection must cite the inclusive-endpoint contract"]
     return g.probe("from ranges import contains\nassert contains(3, 8, 8) is True\n")
 
@@ -57,8 +56,12 @@ def dispositions():
         r = g.row("reviews/current-main.md", key)
         if len(r) != 3 or r[1] not in states or not r[2]:
             return [f"{key} has no {'/'.join(states)} disposition with evidence"]
+    # Each finding the other author wrote keeps its words, whatever layout holds the rulings.
     before = g.original("reviews/current-main.md").split("| Finding |")[0]
-    if not g.text("reviews/current-main.md").startswith(before):
+    now = g.text("reviews/current-main.md")
+    findings = [line.strip() for line in before.split("## start-boundary", 1)[1].splitlines()]
+    kept = [line for line in findings if line and not line.startswith("#")]
+    if not all(line in now for line in kept):
         return ["the original findings were removed or rewritten"]
     return []
 

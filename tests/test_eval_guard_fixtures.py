@@ -167,11 +167,6 @@ def test_resume_keeps_staged_and_unstaged_work_through_the_install(
 @pytest.mark.parametrize(
     ("name", "claim", "command"),
     (
-        (
-            "gs-guard-others-findings",
-            "counterexample-ran",
-            "python3 -B tools/counterexample.py",
-        ),
         ("gs-guard-routine-resume", "inventoried-before-work", "python3 -B tools/inventory.py"),
         ("v2-ck-confined-budget-suggested", "focused-check-ran", "make unit"),
         (
@@ -200,6 +195,26 @@ def test_unknown_or_declined_command_evidence_does_not_prove_a_run(
     ):
         verdicts = grade(workdir, name, record, answer)
         assert verdicts[claim] == "FAIL", verdicts["_output"]
+
+
+def test_the_counterexample_is_judged_by_its_own_record_not_the_command_text(
+    tmp_path: Path,
+) -> None:
+    """The tool records each result with the digest of the code it ran on: a real run on the
+    fixed code passes whatever the transcript spells, and fixed code it never ran on fails."""
+    name = "gs-guard-others-findings"
+    reference = FIXTURES / name / "references/good"
+    answer = reference.joinpath("answer.md").read_text(encoding="utf-8")
+    unknown = "printed command output is not an event"
+    ran = build_fixture(name, tmp_path / "ran")
+    act(ran, reference.joinpath("act.sh").read_text(encoding="utf-8"))
+    assert grade(ran, name, unknown, answer)["counterexample-ran"] == "PASS"
+    never = build_fixture(name, tmp_path / "never")
+    act(
+        never,
+        (FIXTURES / name / "references/counterexample-not-run/act.sh").read_text(encoding="utf-8"),
+    )
+    assert grade(never, name, unknown, answer)["counterexample-ran"] == "FAIL"
 
 
 def test_parser_setup_errors_cannot_stand_in_for_a_killed_mutation(tmp_path: Path) -> None:

@@ -40,6 +40,7 @@
   "watch": [],
   "references": [
     "good",
+    "good-review-form",
     "noop",
     "unfixed-valid",
     "counterexample-not-run",

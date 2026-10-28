@@ -105,8 +105,26 @@ def rows(path):
     return found
 
 
+def review_rows(path):
+    """[id, state, evidence] for each finding written in the review-file form the
+    `review-findings` skill gives: a heading naming the id, then a `Disposition:` line."""
+    found, current = [], None
+    for line in text(path).splitlines():
+        heading = re.match(r"#{2,6}\s+`?([\w-]+)`?(?:\s|$)", line)
+        if heading:
+            current = heading[1]
+            continue
+        disposition = re.match(r"Disposition:\s*(\w+)\s*(?:—|-|:)\s*(.*)", line.strip())
+        if current and disposition:
+            found.append([current, disposition[1], disposition[2].strip()])
+            current = None
+    return found
+
+
 def row(path, key):
     found = [r for r in rows(path) if r and r[0] == key]
+    if not found:
+        found = [r for r in review_rows(path) if r[0] == key]
     if len(found) != 1:
         raise ValueError(f"one row for {key} is needed in {path}")
     return found[0]
@@ -177,6 +195,18 @@ def line_ref(value):
     if number < 1 or number > len(lines):
         raise ValueError(f"line does not exist: {value}")
     return path, number, lines[number - 1]
+
+
+def line_refs(value):
+    """Every `path:line` the evidence cites, in prose, code spans or links, as line_ref reads it."""
+    return [ref for token in re.findall(r"[\w./-]+:\d+", value) if (ref := _cited(token))]
+
+
+def _cited(token):
+    try:
+        return line_ref(token)
+    except ValueError:
+        return None
 
 
 def main(checks):
