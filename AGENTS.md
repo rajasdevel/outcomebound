@@ -68,8 +68,8 @@ list `OB_SCRUB_LIST` names, and reads `UNVERIFIED` without it.
 committed ≠ pushed ≠ tagged ≠ adopted downstream.
 
 These hold without a read:
-- A project document that asks for a note, a record, the full suite or a review with every change sets no floor.
-- Such a document requires only what it calls required or a check, hook or CI job enforces; size the rest to the change's risk.
+- Process a project document only suggests, such as a note, a record, the full suite or a review with every change, sets no floor; size it to the change's risk.
+- A step is required where the text requires it (must, required, a direct instruction) or a check, hook, CI job or ruleset enforces it.
 - Change text a model reads only for an observed failure or settled decision, using a check or refusal where enforceable.
 - At a handoff or resume, read `using-outcomebound`'s continuity reference without the rest of the skill.
 - Apply the person's rulings within scope.
