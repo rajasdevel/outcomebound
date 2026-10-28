@@ -18,7 +18,7 @@ make a design simpler.
 
 Use the smallest check or observation that settles the changed risk, once per set of changes; keep long output in a file and read every failure there.
 Reuse a result only while nothing it covers changes.
-If a failed bar you did not set is regression evidence, compare the relevant unchanged base under matching conditions and report the comparison; failure on both alone does not show whether it worsened, and a required bar still applies.
+If a failed bar you did not set is regression evidence, compare with the relevant unchanged base under matching conditions and report the comparison; failure on both alone does not show whether it worsened, and a required bar still applies.
 Where tools allow, batch independent reads and checks.
 Report omissions only if they affect a decision or leave risk.
 
@@ -40,7 +40,7 @@ Add one mechanism at a time only when its condition holds and existing work does
 ## Required or suggested
 
 Do steps enforced by checks, hooks, CI or rulesets, or required by text.
-Size suggested process (should, recommended, consider), including notes, records, reviews and suites, to risk.
+Size suggested process (should, recommended, consider), including suggested notes, records, reviews and suites, to risk.
 Habit, diff size and generic caution earn no mechanism.
 For text for people or mechanical changes (formatting, renaming), size triggers no mechanism; add no independent review or full suite unless its condition holds or the project requires it.
 A passed policy gate proves a configured rule matched, not a working product or anyone's approval.

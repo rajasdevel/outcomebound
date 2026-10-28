@@ -46,8 +46,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "0c58fa3496a51ac669b76ff95aee77212a8057446c522ea28f754403208e735a",
-      "sha256": "92cc61a483445ccd3f5f332360e14ab6f788b0eb621c131ad4a83fa36acc06c0"
+      "frame": "2055ed89f389dcb728b65ee304ab053de56a1c42fe5be1044d52c8a8e3f5fa00",
+      "sha256": "51eafa0d7431a8cc0aec17f5c6cdb2a3630f938aa0f69accdb71f899d196adbf"
     },
     {
       "kind": "fragment",
@@ -92,7 +92,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "b3781f4d92168a36df55e228482fa79c0d511baf2d7ab49f5e8cc4b27f2e9b46"
+      "sha256": "46500032e54fb8751b14796dda92c9a1b666e3a9e5db94d17a38475891669581"
     },
     {
       "kind": "skill",
@@ -146,7 +146,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "f801bffd41eabe549da960886001234c2024bc9a85798063dcc44491f9b25407"
+      "sha256": "365e91497c3c4875757ea608c423dd4cb54da7a76e8f38683b62ed7053a952ca"
     },
     {
       "kind": "skill",
@@ -227,7 +227,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "344180a4cb0d372642e0c914f3c19bfb89b2445f5bd6e1f3e4b5ea89ee069185"
+      "sha256": "b37d89cb52a0a3faa2fae7b160a555684c827339750abc9569a73aec54786be1"
     },
     {
       "kind": "skill",
@@ -290,7 +290,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "550ac60d0ff26d82a68e886490402e627519341ca1edbef56de68bb7c76acd79"
+      "sha256": "78d51e1d13257d8c95ba3fbf7ac36b5013bf760b346ead1be206198f8f82a985"
     },
     {
       "kind": "skill",
@@ -308,7 +308,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "12649d7fad205da7703b2dc709657e4732eae6ae39aad59ab7917693a184f25a"
+      "sha256": "099555b705141c7ff1105f088a8d170e6f3a1ef309169eb00957ea80bc82fe95"
     },
     {
       "kind": "skill",

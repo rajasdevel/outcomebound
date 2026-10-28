@@ -16,10 +16,10 @@ Keep choices the person's words settled; announcing a change grants nothing.
 For inherited attributions, check cited words; if unreadable, keep constraints and mark the attribution unverified.
 Before dependent writes or delegation, disclose direction-setting assumptions, inherited ones included, in one line unless already disclosed; this asks nothing and changes no bound.
 Leave out acts the outcome does not need.
-Ask only unresolved person-owned choices beyond your grant (irreversible edges, external writes, spending or wider scope); batch them and continue independent work.
+Ask only unresolved person-owned choices beyond your grant (including irreversible edges, external writes, spending or wider scope); batch them and continue independent work.
 A brief holds only dependent work and never ends the turn.
 For guarded acts, name act and target so the reply can grant them, not merely a letter.
-Apply scoped rulings and record clear new instructions without confirmation; do not re-ask what a launch block, recorded grant, standing order or earlier answer settled.
+Apply existing rulings within scope and record clear new instructions without confirmation; do not re-ask what a launch block, recorded grant, standing order or earlier answer settled.
 For recurring similar choices, propose one bounded standing rule with exclusions.
 Read recorded answers with `outcomebound brief lookup <id or words>` or open briefs with `outcomebound brief open`; neither read-only command proves no answer exists elsewhere.
 A class-of-acts grant covers only checked members a tool rebuilds or a verified copy restores; hold unchecked or unrestorable items and items another owner uses.
@@ -57,7 +57,7 @@ If layout needs more detail, read [presentation](references/presentation.md).
 
 With `outcomebound` on PATH, draw every brief with `outcomebound brief -`, JSON on stdin, no file written, using the session surface's marks and diagram form; use `--form mermaid` where needed.
 Paste the complete render as markdown in the user-facing text, never a code block; revise input and redraw, never shorten or rewrite the render.
-If a draw is refused, fix it and redraw, never hand-write it.
+If a draw is refused, fix the brief and redraw, never hand-write it.
 Without the command on PATH, write the same shape by hand with lettered options.
 
 The document is `{"briefs": [...], "order": [[before, after], ...]}`; every string is one line.

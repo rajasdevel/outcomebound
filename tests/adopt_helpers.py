@@ -38,9 +38,7 @@ SHORT_DESCRIPTIONS = {
     "explorable": (
         "Use for interactive pages, learning by trying or options tried with own numbers."
     ),
-    "land-change": (
-        "Use when driving a pull or merge request through checks and review to landing."
-    ),
+    "land-change": ("Use when landing a pull or merge request through checks and review."),
     "run-acceptance": (
         "Use when preparing, running or recording acceptance by a person outside the build."
     ),
@@ -61,7 +59,8 @@ BOUNDARIES = {
     "review-findings": "Check each finding as a claim and give it a disposition.",
     "review-council": "Plan first; run only after the person's yes.",
     "explain-spec": (
-        "A design walk-through qualifies; test understanding with questions only when asked."
+        "A design walk-through qualifies; ask questions on it only when the person asks to test "
+        "their understanding."
     ),
     "slice-tickets": (
         "A declared ticket store (`.outcomebound/tickets.json`) is required; make a to-do list "
@@ -72,10 +71,6 @@ BOUNDARIES = {
         "directly."
     ),
     "explorable": "A decision page accompanies the decision brief, never replaces it.",
-    "land-change": (
-        "Covers handover, failed checks, every review comment, merge and authority limits on "
-        "others' reviews."
-    ),
     "run-acceptance": "The agent prepares and pre-runs; a person accepts.",
     "sync-tracker": "A write needs a grant naming its kind.",
 }

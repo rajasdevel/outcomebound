@@ -107,8 +107,9 @@ CONDITIONS = {
         "person granted"
     ),
     "gather-requirements": (
-        "before taking requirements from any source not yet settled into the work, or when "
-        "request readings give different results and nothing readable settles which"
+        "before taking requirements from any source not yet settled into the work (a "
+        "transcript, an export, a requirements note, a design file or a picture), or when two "
+        "readings of a request give different results and nothing readable settles which"
     ),
     "tests-worth-keeping": (
         "when changing money, date, limit or permission logic, when project tests fail before "
@@ -168,9 +169,7 @@ NATIVE_DESCRIPTIONS = {
     "explorable": (
         "Use for interactive pages, learning by trying or options tried with own numbers."
     ),
-    "land-change": (
-        "Use when driving a pull or merge request through checks and review to landing."
-    ),
+    "land-change": ("Use when landing a pull or merge request through checks and review."),
     "run-acceptance": (
         "Use when preparing, running or recording acceptance by a person outside the build."
     ),

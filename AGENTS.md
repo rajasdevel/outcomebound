@@ -89,7 +89,7 @@ Once read, a file stays in force for the session; reread it only when the next s
 - when running a command whose output you read: read .outcomebound/fragments/commands.md
 - when choosing or changing a delivery route or project exposure (idea, first user release, operational handover, retirement), when the task must settle a delivery stage's inputs, owner or authority, or when a change's growth against its base is in doubt or a time forecast is requested: read .claude/skills/using-outcomebound/SKILL.md
 - before asking for a person-owned decision, or when a harness refuses an act the person granted: read .claude/skills/decision-brief/SKILL.md
-- before taking requirements from any source not yet settled into the work, or when request readings give different results and nothing readable settles which: read .claude/skills/gather-requirements/SKILL.md
+- before taking requirements from any source not yet settled into the work (a transcript, an export, a requirements note, a design file or a picture), or when two readings of a request give different results and nothing readable settles which: read .claude/skills/gather-requirements/SKILL.md
 - when changing money, date, limit or permission logic, when project tests fail before work, when skipping, loosening or deleting a test, or when a test's proof of behaviour is uncertain: read .claude/skills/tests-worth-keeping/SKILL.md
 - when a failure's cause is unknown, a fix did not hold, or a defect is reported for repair: read .claude/skills/diagnose/SKILL.md
 - when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
