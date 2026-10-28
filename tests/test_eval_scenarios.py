@@ -6079,6 +6079,18 @@ def test_land_change_fails_a_merge_and_a_resolved_thread(workspace: Callable[...
     _land(workspace, "resolved", resolved, LAND_ANSWER, no_thread_resolved_and_no_merge="FAIL")
     written = LAND_RIGHT + _edit("pr/state.json", '"failing"', '"passing"')
     _land(workspace, "state", written, LAND_ANSWER, no_thread_resolved_and_no_merge="FAIL")
+    turned_on = LAND_RIGHT + _edit(
+        "pr/state.json", '"merged": false,', '"merged": false, "auto_merge": true,'
+    )
+    _land(workspace, "auto-on", turned_on, LAND_ANSWER, no_thread_resolved_and_no_merge="FAIL")
+
+
+def test_land_change_lets_auto_merge_be_turned_off(workspace: Callable[..., Path]) -> None:
+    """The skill turns auto-merge off before an update; that write alone is not a state change."""
+    turned_off = LAND_RIGHT + _edit(
+        "pr/state.json", '"merged": false,', '"merged": false, "auto_merge": false,'
+    )
+    _land(workspace, "auto-off", turned_off, LAND_ANSWER)
 
 
 REPAIR_PARSE = _edit(
