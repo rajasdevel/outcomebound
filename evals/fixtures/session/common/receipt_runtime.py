@@ -115,6 +115,10 @@ def observe(argv):
     print(done.stdout, end="")
     print(done.stderr, end="", file=sys.stderr)
     tests = re.search(r"Ran (\d+) tests?|(\d+) passed", done.stdout + done.stderr)
+    failures = re.search(r"FAILED \(failures=(\d+)|\b(\d+) failed\b", done.stdout + done.stderr)
+    errors = re.search(
+        r"FAILED \((?:failures=\d+, )?errors=(\d+)|\b(\d+) errors?\b", done.stdout + done.stderr
+    )
     observed_tests = (
         int(next(value for value in tests.groups() if value is not None)) if tests else 0
     )
@@ -130,6 +134,11 @@ def observe(argv):
         done.returncode if unchanged else "unknown",
         argv=argv,
         tests=observed_tests,
+        failures=int(next(value for value in failures.groups() if value)) if failures else 0,
+        # Errors raised inside a test count as its failure; a loader error does not. The output
+        # tail lets a grader tell them apart after the run.
+        errors=int(next(value for value in errors.groups() if value)) if errors else 0,
+        output=(done.stdout + done.stderr)[-65536:],
         inputs=content,
         digest=hashlib.sha256(json.dumps(content, sort_keys=True).encode()).hexdigest(),
     )

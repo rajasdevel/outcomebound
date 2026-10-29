@@ -1,9 +1,10 @@
 from copy import deepcopy
-from chatsvc.readiness import assess
 
 
 class ReadinessTest(unittest.TestCase):
     def test_snapshot_changes_fail_independently_without_mutation(self):
+        from chatsvc.readiness import assess
+
         catalog = {
             "routes": [
                 {
@@ -45,6 +46,8 @@ class ReadinessTest(unittest.TestCase):
             self.assertEqual(snapshot, before)
 
     def test_missing_evidence_refuses_every_claim(self):
+        from chatsvc.readiness import assess
+
         self.assertEqual(
             assess({}, "candidate", {}),
             {

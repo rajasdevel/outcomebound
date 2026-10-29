@@ -3,12 +3,46 @@
 from __future__ import annotations
 
 import contextlib
+import copy
 import importlib
 import json
 import math
 import sys
 from pathlib import Path
 from urllib.parse import unquote
+
+
+def read_only(call):
+    def checked(*args, **kwargs):
+        before = copy.deepcopy((args, kwargs))
+        try:
+            return call(*args, **kwargs)
+        finally:
+            if (args, kwargs) != before:
+                raise AssertionError("read-only caller changed its arguments")
+
+    return checked
+
+
+@contextlib.contextmanager
+def policy_inputs():
+    sys.path.insert(0, str(Path.cwd()))
+    cls = importlib.import_module("chatsvc.wait_policy").BoundedPolicy
+    original = {name: getattr(cls, name) for name in ("hint", "delay")}
+
+    def checked(method):
+        def call(self, *args, **kwargs):
+            return read_only(method.__get__(self, cls))(*args, **kwargs)
+
+        return call
+
+    try:
+        for name, method in original.items():
+            setattr(cls, name, checked(method))
+        yield
+    finally:
+        for name, method in original.items():
+            setattr(cls, name, method)
 
 
 class Response:
@@ -69,10 +103,15 @@ def service(provider):
 
 def request(svc, path, payload=None, method="POST"):
     body = {"messages": [{"role": "user", "content": "probe"}], **(payload or {})}
-    status, headers, answer = svc.handle(
-        method, path, {"x-api-key": "probe"}, json.dumps(body).encode()
+    status, headers, answer = handle(
+        svc, method, path, {"x-api-key": "probe"}, json.dumps(body).encode()
     )
     return status, headers, json.loads(answer)
+
+
+def handle(svc, *args):
+    with policy_inputs():
+        return read_only(svc.handle)(*args)
 
 
 def routes():
@@ -139,7 +178,7 @@ def retries():
 def catalog():
     provider = Provider()
     svc = service(provider)
-    status, _, body = svc.handle("GET", "/v2/routes", {}, b"")
+    status, _, body = handle(svc, "GET", "/v2/routes", {}, b"")
     expected = {
         "routes": [
             {
@@ -159,9 +198,9 @@ def catalog():
     problems = (
         [] if status == 200 and json.loads(body) == expected else ["catalog shape or fields differ"]
     )
-    if svc.handle("POST", "/v2/routes", {}, b"")[0] != 405:
+    if handle(svc, "POST", "/v2/routes", {}, b"")[0] != 405:
         problems.append("POST catalog is not a 405 without credentials")
-    if svc.handle("GET", "/healthz", {}, b"")[0] != 200:
+    if handle(svc, "GET", "/healthz", {}, b"")[0] != 200:
         problems.append("health broke")
     if provider.calls:
         problems.append("catalog called the provider")
@@ -169,6 +208,11 @@ def catalog():
 
 
 def policy():
+    with policy_inputs():
+        return policy_examples()
+
+
+def policy_examples():
     sys.path.insert(0, str(Path.cwd()))
     policy = importlib.import_module("chatsvc.wait_policy").BoundedPolicy(now=0)
     problems = []
@@ -183,7 +227,7 @@ def policy():
         ({"retry-after": "Wed, 31 Dec 1969 23:59:59 GMT"}, 0.0),
         ({}, None),
     ):
-        if policy.hint(headers) != expected:
+        if read_only(policy.hint)(headers) != expected:
             problems.append(f"wait hint {headers} differs from {expected}")
     if [policy.delay(n, {}) for n in (1, 3, 6)] != [0.1, 0.4, 2.0]:
         problems.append("fallback backoff differs")
@@ -205,10 +249,8 @@ def policy():
 
 
 def readiness():
-    import copy
-
     sys.path.insert(0, str(Path.cwd()))
-    assess = importlib.import_module("chatsvc.readiness").assess
+    assess = read_only(importlib.import_module("chatsvc.readiness").assess)
     catalog = {
         "routes": [
             {
@@ -266,7 +308,7 @@ def readiness():
         for malformed in malformed_inputs
         if assess(malformed, "candidate", catalog) != missing
     )
-    review = importlib.import_module("chatsvc.stage_receipts").review
+    review = read_only(importlib.import_module("chatsvc.stage_receipts").review)
     records = [
         {"action": "check", "name": "route", "sequence": 1, "ok": True, "revision": "candidate"},
         {

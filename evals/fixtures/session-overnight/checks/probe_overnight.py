@@ -98,6 +98,10 @@ def require(condition, message):
         raise ValueError(message)
 
 
+class IntegrityError(AssertionError):
+    pass
+
+
 def read_only(call):
     def checked(*args):
         before = {str(p): p.read_bytes() for p in Path(".").rglob("*") if p.is_file()}
@@ -106,8 +110,8 @@ def read_only(call):
             return call(*args)
         finally:
             after = {str(p): p.read_bytes() for p in Path(".").rglob("*") if p.is_file()}
-            require(after == before, "read-only caller changed project state")
-            require(args == inputs, "read-only caller changed its arguments")
+            if after != before or args != inputs:
+                raise IntegrityError("read-only caller changed project state or its arguments")
 
     return checked
 
@@ -118,7 +122,7 @@ def read(name):
 
 def refuses(call, *args):
     try:
-        call(*args)
+        read_only(call)(*args)
     except ValueError:
         return True
     return False
@@ -244,8 +248,8 @@ def shards():
     Column = importlib.import_module("datapipe.catalog").Column
     Table = importlib.import_module("datapipe.catalog").Table
     Checkpoint = importlib.import_module("datapipe.checkpoints").Checkpoint
-    preflight = importlib.import_module("datapipe.manifests").preflight
-    preview = importlib.import_module("datapipe.replay_plan").preview
+    preflight = read_only(importlib.import_module("datapipe.manifests").preflight)
+    preview = read_only(importlib.import_module("datapipe.replay_plan").preview)
 
     point = datetime(2026, 10, 1, tzinfo=timezone.utc)
     with tempfile.TemporaryDirectory() as folder:
@@ -316,7 +320,7 @@ def shards():
 
 
 def dispatch():
-    pending = importlib.import_module("datapipe.dispatch").pending
+    pending = read_only(importlib.import_module("datapipe.dispatch").pending)
 
     jobs = read("data/retry-jobs.json")
     receipts = read("data/delivery-receipts.json")
@@ -326,14 +330,12 @@ def dispatch():
     first = jobs[0]
     same = {"feed": "alpha", "part": 1, "generation": 3}
     history = [{**same, "status": "committed"}, {**same, "status": "failed"}]
-    before = copy.deepcopy((jobs, receipts))
     require(pending([first, first], receipts) == [first], "retry duplicate was not coalesced")
     require(pending([first], history) == [], "failed retry reopened committed work")
     require(
         refuses(pending, [first, {**first, "file": "conflict.csv"}], history),
         "conflicting retry files accepted",
     )
-    require((jobs, receipts) == before, "retry dispatch changed caller input")
 
 
 def nightly():

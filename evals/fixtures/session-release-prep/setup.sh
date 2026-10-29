@@ -37,5 +37,6 @@ cp docs/compatibility/cases.json "$stage/checks/compatibility.json"
 
 cp "$repo/evals/session_protocol.py" "$repo/evals/fixtures/session/common/"*.py "$stage/checks/"
 cp "$here/session.json" "$stage/checks/session.json"
+python3 -I -B "$stage/checks/delivered.py" "$stage/checks/seed-checks" --release
 
 python3 -I -B "$repo/evals/fixtures/session/common/instrument.py" hooks

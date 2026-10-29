@@ -20,6 +20,7 @@ cp "$here"/checks/*.py "$stage/checks/"
 cp "$here/session.json" "$here/person.json" "$stage/checks/"
 cp "$repo/evals/session_protocol.py" "$repo/evals/fixtures/session/common/"*.py "$stage/checks/"
 python3 -I -B "$stage/checks/long_checks.py" record
+python3 -I -B "$stage/checks/delivered.py" "$stage/checks/seed-checks"
 
 cp "$here/session.json" "$stage/checks/session.json"
 

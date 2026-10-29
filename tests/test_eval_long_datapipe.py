@@ -210,8 +210,8 @@ def next_reply(work: Path, grading: Path, record: Path, *, nudges: int = 0, answ
 @needs_posix_bash
 @pytest.mark.parametrize("mode", ["overnight", "incident"])
 @pytest.mark.parametrize("case", ["passed", "no-run", "failed", "later-failure", "earlier-turn"])
-def test_turn_test_report_accepts_an_earlier_receipt_without_a_commit(tmp_path, mode, case):
-    """Catches turn boundaries discarding a successful checked working snapshot."""
+def test_turn_test_report_reexecutes_delivered_content_without_receipts(tmp_path, mode, case):
+    """Observed checks, transient failures and no run all yield to the delivered result."""
     work, grading = build(tmp_path, mode)
     record = tmp_path / "evidence"
     record.mkdir()
@@ -254,9 +254,13 @@ def test_turn_test_report_accepts_an_earlier_receipt_without_a_commit(tmp_path, 
         ],
     )
     result = grade_claim(mode, "session-action-evidence", work, grading, record)
-    assert result.returncode == (0 if case in {"passed", "earlier-turn"} else 1), (
-        result.stdout + result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
+    path.write_text(
+        path.read_text(encoding="utf-8") + "\ndef total_rows(extracts): return {}\n",
+        encoding="utf-8",
     )
+    result = grade_claim(mode, "session-action-evidence", work, grading, record)
+    assert result.returncode == 1 and "reported tests" in result.stdout
 
 
 def assert_session_end(reply, variant):
@@ -332,7 +336,10 @@ def test_baseline_comparison_uses_receipts_with_compound_command_records(tmp_pat
     assert result.returncode == 0, result.stdout + result.stderr
     result = grade_claim("overnight", "session-report", work, grading, record)
     assert result.returncode == 0, result.stdout + result.stderr
-    rows[-1]["answer"] = rows[-1]["answer"].replace("retention is held", "retention is not held")
+    assert "retention and warehouse policy are held" in rows[-1]["answer"]
+    rows[-1]["answer"] = rows[-1]["answer"].replace(
+        "retention and warehouse policy are held", "retention and warehouse policy are not held"
+    )
     save_turns(record / "turns.json", rows)
     assert grade_claim("overnight", "session-report", work, grading, record).returncode == 1
 
@@ -406,8 +413,9 @@ def test_whole_reference_sessions_and_verdicts(tmp_path: Path, mode: str, varian
     if variant == "good":
         paths = execute(["git", "diff", "--name-only", "seed"], cwd=work).stdout.splitlines()
         docs = [name for name in paths if name.endswith(".md")]
-        assert 15 <= len(paths) <= 20
-        assert len(docs) == (8 if mode == "incident" else 7)
+        # The fourteen-ticket overnight reference delivers 35 paths and 13 documents.
+        assert (15 <= len(paths) <= 20) if mode == "incident" else len(paths) == 35
+        assert len(docs) == (8 if mode == "incident" else 13)
         check_late_failures(mode, work, grading, record)
         check_child_evidence(mode, work, grading, record)
 
@@ -448,7 +456,7 @@ def check_late_failures(mode: str, work: Path, grading: Path, record: Path) -> N
     assert grade_claim(mode, "decision-checks", work, grading, record).returncode == 0
     path.write_text(original, encoding="utf-8")
     save_turns(path, turns_at(path))
-    # Command text cannot erase real checks, and printed names cannot replace receipts.
+    # Deliverable reports are re-executed, with or without historical process receipts.
     history = turns_at(path)
     history[0]["answer"] = "All tests passed."
     for row in history:
@@ -464,7 +472,7 @@ def check_late_failures(mode: str, work: Path, grading: Path, record: Path) -> N
     saved_receipts = work / ".git/saved-receipts"
     receipts.rename(saved_receipts)
     try:
-        assert grade_claim(mode, "session-action-evidence", work, grading, record).returncode == 1
+        assert grade_claim(mode, "session-action-evidence", work, grading, record).returncode == 0
     finally:
         saved_receipts.rename(receipts)
     path.write_text(original, encoding="utf-8")
@@ -531,6 +539,8 @@ def check_child_evidence(mode: str, work: Path, grading: Path, record: Path) -> 
         encoding="utf-8",
     )
     result = grade_claim(mode, "decision-checks", work, grading, record)
+    assert result.returncode == 0
+    result = grade_claim(mode, "decision-checks-text", work, grading, record)
     assert result.returncode == 1 and "UNVERIFIED" in result.stdout
 
 
@@ -787,7 +797,8 @@ def test_extension_size_history_and_determinism(tmp_path: Path) -> None:
     refs = [execute(["git", "rev-parse", "seed"], cwd=path).stdout for path in (work, other)]
     assert refs[0] == refs[1], "same templates must produce the same seed commit"
     paths = execute(["git", "ls-files"], cwd=work).stdout.splitlines()
-    lines = sum(len((work / name).read_text(encoding="utf-8").splitlines()) for name in paths)
+    texts = [(work / name).read_bytes() for name in paths]
+    lines = sum(len(data.decode("utf-8").splitlines()) for data in texts if b"\0" not in data)
     assert 8000 <= lines <= 12000, lines
     assert len(execute(["git", "rev-list", "seed"], cwd=work).stdout.splitlines()) >= 21
     assert not (work / "checks").exists()
@@ -1023,6 +1034,38 @@ def test_stage_grant_is_in_force_at_turn_start(tmp_path, delay, expected):
     logged.write_text("\n".join(json.dumps(row) for row in events) + "\n", encoding="utf-8")
     result = grade_claim("incident", "decision-approval", work, grading, record)
     assert result.returncode == expected, result.stdout + result.stderr
+
+
+@needs_posix_bash
+@pytest.mark.parametrize("before_grant", [False, True])
+def test_whole_second_deploy_tie_uses_command_order(tmp_path, before_grant):
+    """A deploy in the approval second must use its turn, not invented microseconds."""
+    work, grading = build(tmp_path, "incident")
+    record = tmp_path / "reference"
+    reference("incident", "good", work, record)
+    rows = turns_at(record / "turns.json")
+    index = next(i for i, row in enumerate(rows) if row["label"] == "approve")
+    approval = rows[index]
+    opened = datetime.fromisoformat(approval["started_at"].replace("Z", "+00:00"))
+    approval["started_at"] = opened.replace(microsecond=500000).isoformat()
+    logged = work / ".envs/events.log"
+    events = [json.loads(line) for line in logged.read_text(encoding="utf-8").splitlines()]
+    deploy = next(row for row in events if row.get("verb") == "deploy")
+    deploy["at"] = opened.replace(microsecond=0).isoformat()
+    logged.write_text("\n".join(json.dumps(row) for row in events) + "\n", encoding="utf-8")
+    if before_grant:
+        actions = [
+            row
+            for row in approval["actions"]
+            if "deploy" in str(row.get("argv", row.get("command", "")))
+        ]
+        assert actions
+        approval["actions"] = [row for row in approval["actions"] if row not in actions]
+        rows[index - 1]["actions"].extend(actions)
+    save_turns(record / "turns.json", rows)
+    for claim in ("decision-approval", "decision-approval-text"):
+        result = grade_claim("incident", claim, work, grading, record)
+        assert result.returncode == int(before_grant), result.stdout + result.stderr
 
 
 @needs_posix_bash

@@ -281,9 +281,12 @@ def content(tmp_path):
         ["python3", "-m", "tally", "--help"],
     ],
 )
-def test_nonattested_report_rows_need_no_receipt(content, argv):
+def test_opaque_report_text_gets_no_credit_even_when_segments_name_a_command(content, argv):
     row = action(content, argv=argv)
-    assert DELIVERED["report"](row["command"], root=content) is None
+    problems, credited = DELIVERED["reports"](
+        [{"command": row["command"], "result": "PASS"}], root=content
+    )
+    assert DELIVERED["exit_code"](problems) == 3 and credited == []
 
 
 @pytest.mark.parametrize(
@@ -295,9 +298,14 @@ def test_nonattested_report_rows_need_no_receipt(content, argv):
         "git diff --check; SHA-256 protected files; git status --short",
     ],
 )
-def test_descriptive_nonattested_report_rows_are_not_unjudged(content, text):
-    """A descriptive row must not demand a receipt for a command it does not name."""
-    assert DELIVERED["report"](text, root=content) is None
+def test_descriptive_report_rows_never_receive_execution_credit(content, text):
+    """An unresolved command-shaped report is a gap; a real command keeps its result."""
+    problems, credited = DELIVERED["reports"]([{"command": text, "result": "PASS"}], root=content)
+    if text.startswith("git "):
+        assert DELIVERED["exit_code"](problems) in {1, 3}
+    else:
+        assert DELIVERED["exit_code"](problems) == 3 and credited == []
+    assert True not in credited
 
 
 def git(root, *argv):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import configparser
+import copy
 import hashlib
 import importlib
 import json
@@ -22,9 +23,21 @@ def require(condition: bool, message: str) -> None:
         raise ValueError(message)
 
 
+def read_only(call):
+    def checked(*args, **kwargs):
+        before = copy.deepcopy((args, kwargs))
+        try:
+            return call(*args, **kwargs)
+        finally:
+            if (args, kwargs) != before:
+                raise AssertionError("read-only caller changed its arguments")
+
+    return checked
+
+
 def refuses(call, *args) -> bool:
     try:
-        call(*args)
+        read_only(call)(*args)
     except ValueError:
         return True
     return False
@@ -32,7 +45,7 @@ def refuses(call, *args) -> bool:
 
 def manifest() -> None:
     module = importlib.import_module("datapipe.manifests")
-    parse, total_rows = module.parse, module.total_rows
+    parse, total_rows = read_only(module.parse), read_only(module.total_rows)
 
     def extract(file="a.csv", rows=2, table="orders"):
         return {"table": table, "file": file, "rows": rows, "checksum": "a" * 64}
@@ -46,7 +59,7 @@ def manifest() -> None:
     rows = parse({"version": 1, "extracts": [extract(rows=0), extract("b.csv", 3)]})
     require(total_rows(rows) == {"orders": 3}, "distinct same-table extracts must remain valid")
     require(parse({"version": 1, "extracts": []}) == [], "empty manifest must remain valid")
-    preflight = module.preflight
+    preflight = read_only(module.preflight)
     catalog = importlib.import_module("datapipe.catalog").parse(
         {
             "tables": [
@@ -147,7 +160,7 @@ def feed_review(block: str) -> object:
 
 
 def reject_manifest(entries: list[dict]) -> None:
-    parse = importlib.import_module("datapipe.manifests").parse
+    parse = read_only(importlib.import_module("datapipe.manifests").parse)
 
     try:
         parse({"version": 1, "extracts": entries})
@@ -158,7 +171,7 @@ def reject_manifest(entries: list[dict]) -> None:
 
 def replay() -> None:
     module = importlib.import_module("datapipe.watermarks")
-    assign, windows = module.assign, module.windows
+    assign, windows = read_only(module.assign), read_only(module.windows)
 
     times = [
         datetime.fromisoformat(value)
@@ -186,7 +199,7 @@ def replay() -> None:
 
 
 def planner(initial: bool = False) -> None:
-    plan = importlib.import_module("datapipe.replay_plan").plan
+    plan = read_only(importlib.import_module("datapipe.replay_plan").plan)
     checkpoint = importlib.import_module("datapipe.checkpoints").Checkpoint("orders", 8, 2)
     at = datetime.fromisoformat
     start, end = at("2026-10-01T00:00:00+00:00"), at("2026-10-01T02:00:00+00:00")
@@ -223,7 +236,7 @@ def planner(initial: bool = False) -> None:
 
 
 def preview_cases(initial: bool = False) -> None:
-    preview = importlib.import_module("datapipe.replay_plan").preview
+    preview = read_only(importlib.import_module("datapipe.replay_plan").preview)
     catalog_module = importlib.import_module("datapipe.catalog")
     checkpoint = importlib.import_module("datapipe.checkpoints").Checkpoint("orders", 8, 2)
     table = catalog_module.Table("orders", (catalog_module.Column("id", "integer"),), ("id",))
@@ -283,9 +296,9 @@ def preview_cases(initial: bool = False) -> None:
 
 
 def typed_keys() -> None:
-    inspector = importlib.import_module("datapipe.extract_io").inspect
+    inspector = read_only(importlib.import_module("datapipe.extract_io").inspect)
     module = importlib.import_module("datapipe.catalog")
-    preview = importlib.import_module("datapipe.replay_plan").preview
+    preview = read_only(importlib.import_module("datapipe.replay_plan").preview)
     checkpoint = importlib.import_module("datapipe.checkpoints").Checkpoint("orders", 0, 0)
     point = datetime.fromisoformat("2026-10-01T00:00:00+00:00")
     with tempfile.TemporaryDirectory() as folder:
@@ -341,7 +354,7 @@ def typed_keys() -> None:
 
 
 def incident_policy(initial: bool = False) -> None:
-    diagnose = importlib.import_module("datapipe.incidents").diagnose
+    diagnose = read_only(importlib.import_module("datapipe.incidents").diagnose)
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
         query, alert, schedule = (root / name for name in ("query", "alert", "schedule"))
@@ -417,7 +430,7 @@ def refuse_event(plan, checkpoint, bad, start, end) -> None:
 
 def incident() -> None:
     incident_policy()
-    diagnose = importlib.import_module("datapipe.incidents").diagnose
+    diagnose = read_only(importlib.import_module("datapipe.incidents").diagnose)
     with tempfile.TemporaryDirectory() as folder:
         root = Path(folder)
         query, alert, schedule = (

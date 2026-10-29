@@ -24,7 +24,9 @@ DOCUMENTS = {
 def probe(shared, name):
     with tempfile.TemporaryDirectory(prefix="overnight-probe-") as folder:
         root = Path(folder)
-        for item in ("datapipe", "config", "data", "tests", "docs", "tools"):
+        # The docs link to tickets/, so the copy carries it where the run has one.
+        found = ("tickets",) if (shared.workspace() / "tickets").is_dir() else ()
+        for item in ("datapipe", "config", "data", "tests", "docs", "tools", *found):
             shutil.copytree(
                 shared.workspace() / item, root / item, ignore=shutil.ignore_patterns("__pycache__")
             )

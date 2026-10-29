@@ -35,9 +35,10 @@ def _options(argv, valued):
 
 def _program(words):
     argv = list(words)
-    while argv and re.match(r"[A-Za-z_][A-Za-z_0-9]*=", argv[0]):
-        argv.pop(0)
     while argv:
+        if re.match(r"[A-Za-z_][A-Za-z_0-9]*=", argv[0]):
+            argv.pop(0)
+            continue
         name = Path(argv[0]).name
         if name == "env":
             argv = _options(argv[1:], {"-u", "--unset", "-C", "--chdir"})
@@ -48,8 +49,20 @@ def _program(words):
                 argv[argv.index("run") + 1 :],
                 {"--with", "--with-requirements", "--python", "--project"},
             )
-        elif name == "exec":
-            argv = argv[1:]
+        elif name in {"time", "command", "exec", "nice"}:
+            # A command lookup names no child invocation.
+            if name == "command" and set(argv[1:]) & {"-v", "-V"}:
+                return ()
+            argv = _options(
+                argv[1:],
+                {"-a"}
+                if name == "exec"
+                else {"-n", "--adjustment"}
+                if name == "nice"
+                else {"-f", "--format", "-o", "--output"}
+                if name == "time"
+                else set(),
+            )
         else:
             break
     return tuple(argv)

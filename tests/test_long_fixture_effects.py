@@ -101,7 +101,9 @@ def test_make_dry_run_does_not_hide_a_failure(instrumented, monkeypatch):
     ["git diff -- tools/docs_check.py", "ls tools/docs_check.py", "cat tests/test_example.py"],
 )
 def test_file_operand_is_never_an_executed_check(instrumented, text):
-    assert DELIVERED["report"](text, root=instrumented) is None
+    # The named read command is re-executed; its file operand grants no check receipt.
+    assert DELIVERED["report"](text, root=instrumented) is True
+    assert RECEIPTS["read"](instrumented) == []
 
 
 def test_integration_entry_is_still_observed(instrumented):

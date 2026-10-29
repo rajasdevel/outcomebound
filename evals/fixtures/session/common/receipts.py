@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import subprocess
 import tarfile
 from datetime import datetime
@@ -45,8 +46,20 @@ def before(rows, turn):
     ]
 
 
-@lru_cache(maxsize=32)
 def tree(root, revision):
+    done = subprocess.run(
+        ["git", "rev-parse", revision + "^{tree}"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    return archived_tree(root, done.stdout.strip()) if done.returncode == 0 else {}
+
+
+@lru_cache(maxsize=32)
+def archived_tree(root, revision):
     done = subprocess.run(["git", "archive", revision], cwd=root, capture_output=True, check=False)
     if done.returncode:
         return {}
@@ -70,12 +83,15 @@ def content(row, root=Path("."), revision=None):
     if not recorded(row):
         return False
     inputs = row["inputs"]
+    expected = tree(root.resolve(), revision) if revision else {}
+    if row.get("kind") == "process" and revision and set(inputs) != set(expected):
+        return False
     for name, digest in inputs.items():
         path = Path(name)
         if path.is_absolute() or ".." in path.parts:
             return False
         if revision:
-            if tree(root.resolve(), revision).get(name) != digest:
+            if expected.get(name) != digest:
                 return False
             continue
         try:
@@ -112,29 +128,62 @@ def same_files(root, revision, prefixes):
 
 def slow(rows):
     return any(
-        row["kind"] == "check"
-        and (
-            row["name"].startswith("tests/integration/") or "integration" in Path(row["name"]).name
+        (
+            row["kind"] == "check"
+            and (
+                row["name"].startswith("tests/integration/")
+                or "integration" in Path(row["name"]).name
+            )
+        )
+        or (
+            row["kind"] == "process"
+            and re.search(
+                r"(?m)^integration: (?:all stages ok|\w+ ok \([\d.]+s\)|\d+ of \d+ passed)",
+                str(row.get("output", "")),
+            )
         )
         for row in rows
     )
 
 
+def descendant_gaps(rows):
+    """The frozen observer suppresses every child receipt, including ref hooks."""
+    return [
+        "unjudged: observed process suppresses descendant receipts: "
+        + json.dumps(row.get("argv", []))
+        for row in rows
+        if row.get("kind") == "process"
+    ]
+
+
+def slow_problems(rows, label):
+    return [label] if slow(rows) else descendant_gaps(rows)
+
+
 def invocation(row):
     if row.get("kind") == "process":
         return row.get("argv", [])
-    # Older unittest rows observed exactly these runner arguments. They never credit a
-    # broader module or another class/method selection.
-    if row.get("kind") == "unit" and row.get("name") in {"unittest", "pytest"}:
-        return [row["name"], *row.get("argv", [])]
+    # Legacy unit rows omitted the interpreter and its options. They cannot prove
+    # an exact process invocation, even where the runner selection is available.
     return []
 
 
 def arguments(argv):
-    argv = list(argv)
-    if argv and Path(argv[0]).name.startswith(("python", "pypy")) and "-m" in argv:
-        argv = argv[argv.index("-m") + 1 :]
-    return argv
+    return list(argv)
+
+
+def runner(argv):
+    if argv and Path(argv[0]).name.startswith(("python", "pypy")):
+        args = iter(argv[1:])
+        for arg in args:
+            if arg == "-m":
+                return next(args, "")
+            if arg in {"-W", "-X"}:
+                next(args, None)
+            elif arg == "-c" or not arg.startswith("-") or arg == "-":
+                return ""
+        return ""
+    return Path(argv[0]).name if argv else ""
 
 
 def observed_failure(rows, argv, *, root=Path("."), revision=None):
@@ -147,15 +196,31 @@ def observed_failure(rows, argv, *, root=Path("."), revision=None):
         raise ValueError("unjudged: no content-bound observation of the exact baseline invocation")
     if not isinstance(candidates[-1].get("exit_code"), int):
         raise ValueError("unjudged: baseline process exit was not observed")
-    return candidates[-1]["exit_code"] != 0
+    row = candidates[-1]
+    if row["exit_code"] and not (row.get("failures", 0) or test_error(row)):
+        raise ValueError("unjudged: baseline did not observe the named test failure")
+    return row["exit_code"] != 0
+
+
+def test_error(row):
+    """An error raised inside a test, which fails it as an assertion does; never a loader or
+    startup error, which ran no test."""
+
+    output = str(row.get("output", ""))
+    return (
+        row.get("errors", 0) > 0
+        and row.get("tests", 0) > 0
+        and "unittest.loader._FailedTest" not in output
+        and "Failed to import test module" not in output
+    )
 
 
 def checked_before(rows, root, revision):
     return any(
         credited(row)
-        and recorded(row)
+        and content(row, root, revision)
         and (row.get("tests", 0) > 0 if row["kind"] == "process" else bool(row.get("modules")))
-        and arguments(invocation(row))[:1] in (["unittest"], ["pytest"])
+        and runner(invocation(row)) in {"unittest", "pytest"}
         for row in rows
     )
 

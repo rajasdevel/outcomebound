@@ -53,6 +53,54 @@ def test_original_claims_and_new_effects_pass_the_reference(completed):
             assert result.returncode == 0, (claim["name"], result.stdout, result.stderr)
 
 
+def test_retry_probe_rejects_an_in_place_receipt_filter(completed):
+    """The first successful call must detect mutation before later probes see the inputs."""
+    name, work, stage, evidence = completed
+    path = work / "datapipe/dispatch.py"
+    original = path.read_bytes()
+    try:
+        path.write_text(
+            original.decode().replace(
+                "def pending(jobs, receipts):",
+                "def pending(jobs, receipts):\n"
+                "    receipts[:] = [r for r in receipts if r['status'] == 'committed']",
+            ),
+            encoding="utf-8",
+        )
+        assert path.read_bytes() != original
+        result = stage_claim(work, stage, evidence, name, "deliverable-retry-identity")
+        assert result.returncode == 1 and "changed project state or its arguments" in result.stdout
+    finally:
+        path.write_bytes(original)
+    assert stage_claim(work, stage, evidence, name, "deliverable-retry-identity").returncode == 0
+
+
+@pytest.mark.parametrize("mutate", [True, False])
+@pytest.mark.parametrize("refusal", [True, False])
+def test_probe_checks_each_calls_inputs_even_when_it_refuses(
+    tmp_path, monkeypatch, mutate, refusal
+):
+    """A refusal handler may catch the API error, but never an integrity failure."""
+    probe = runpy.run_path(str(OVERNIGHT / "checks/probe_overnight.py"))
+    monkeypatch.chdir(tmp_path)
+    values = [{"value": 1}]
+
+    def call(items):
+        if mutate:
+            items[0]["value"] = 2
+        if refusal:
+            raise ValueError("expected refusal")
+        return 7
+
+    if mutate:
+        with pytest.raises(AssertionError, match="changed project state or its arguments"):
+            (probe["refuses"](call, values) if refusal else probe["read_only"](call)(values))
+    elif refusal:
+        assert probe["refuses"](call, values)
+    else:
+        assert probe["read_only"](call)(values) == 7
+
+
 @pytest.mark.parametrize("completed", ["session-overnight"], indirect=True)
 @pytest.mark.parametrize("item,claim,reason", EXTRA)
 def test_plausible_wrong_answer_fails_its_own_effect(completed, item, claim, reason):

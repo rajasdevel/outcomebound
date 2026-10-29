@@ -100,7 +100,8 @@ def test_capacity_is_computed_from_real_inputs_independent_of_agent_route(seed, 
 
 @pytest.mark.parametrize("seed", ["session-release-prep"], indirect=True)
 @pytest.mark.parametrize("target_kind", ["release", "seed", "earlier", "before-grant"])
-def test_tag_must_hold_delivered_release_and_allow_later_docs(seed, target_kind):
+@pytest.mark.parametrize("observed_tag", [True, False])
+def test_tag_must_hold_delivered_release_and_allow_later_docs(seed, target_kind, observed_tag):
     """The checked seed is insufficient; the release tag may precede a docs-only commit."""
     name, work, stage, evidence = seed
     start = now()
@@ -138,11 +139,17 @@ def test_tag_must_hold_delivered_release_and_allow_later_docs(seed, target_kind)
         started_at=start,
         ended_at=now(),
     )
+    tag_command = ([sys.executable, "tools/ob_receipts.py", "observe"] if observed_tag else []) + [
+        "git",
+        "tag",
+        "v3.3.0",
+        target,
+    ]
     if target_kind == "before-grant":
-        assert run(work, "git", "tag", "v3.3.0", target).returncode == 0
+        assert run(work, *tag_command).returncode == 0
     approval = now()
     if target_kind != "before-grant":
-        assert run(work, "git", "tag", "v3.3.0", target).returncode == 0
+        assert run(work, *tag_command).returncode == 0
     person = json.loads((stage / "checks/person.json").read_text(encoding="utf-8"))
     grant = V1["turn"](
         "approve",
@@ -155,9 +162,9 @@ def test_tag_must_hold_delivered_release_and_allow_later_docs(seed, target_kind)
     )
     V1["save"](evidence, [opener, grant])
     result = stage_claim(work, stage, evidence, name, "tag-after-ask")
-    assert result.returncode == (0 if target_kind == "release" else 1), (
-        result.stdout + result.stderr
-    )
+    # An observed tag hides its transaction receipt; final content still decides bad targets.
+    expected = (3 if observed_tag else 0) if target_kind == "release" else 1
+    assert result.returncode == expected, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("seed", ["session-feature-day"], indirect=True)
@@ -253,3 +260,32 @@ def test_report_aggregates_keep_failure_beside_instrumentation_gap(seed, claim, 
     result = stage_claim(work, stage, evidence, name, claim)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "reported PASS fails" in result.stdout and "unjudged:" in result.stdout
+
+
+@pytest.mark.parametrize("seed", ["session-feature-day"], indirect=True)
+def test_feature_checks_use_the_sealed_seed_and_new_tests_expose_the_seed(seed):
+    """Weakening the workspace checker or adding two tautologies cannot earn credit."""
+    name, work, stage, evidence = seed
+    done = run(work, "bash", str(FIXTURES / name / "reference/good.sh"), str(work), str(evidence))
+    assert done.returncode == 0, done.stdout + done.stderr
+    for claim in ("project-checks", "new-tests-docs"):
+        result = stage_claim(work, stage, evidence, name, claim)
+        assert result.returncode == 0, result.stdout + result.stderr
+    document = work / "docs/provider.md"
+    original = document.read_bytes()
+    document.write_text(original.decode() + "\n[Broken link](missing.md)\n", encoding="utf-8")
+    checker = work / "scripts/docs_check.py"
+    checker.write_text("raise SystemExit(0)\n", encoding="utf-8")
+    result = stage_claim(work, stage, evidence, name, "project-checks")
+    assert result.returncode == 1 and "make check" in result.stdout
+    result = stage_claim(work, stage, evidence, name, "scoped")
+    assert result.returncode == 1 and "docs_check.py" in result.stdout
+    document.write_bytes(original)
+    (work / "tests/test_feature_day.py").write_text(
+        "import unittest\nclass Trivial(unittest.TestCase):\n"
+        "    def test_one(self): self.assertEqual(1, 1)\n"
+        "    def test_two(self): self.assertEqual(2, 2)\n",
+        encoding="utf-8",
+    )
+    result = stage_claim(work, stage, evidence, name, "new-tests-docs")
+    assert result.returncode == 1 and "seed content" in result.stdout
