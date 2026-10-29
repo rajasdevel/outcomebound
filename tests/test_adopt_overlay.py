@@ -12,6 +12,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 from outcomebound_tools import adopt, identity, overlay, textio, workspace
 from tests.adopt_helpers import GIT, Capture, manifest, repo, run, snapshot, states
 from tests.portable import write
@@ -172,6 +174,92 @@ def test_a_worktree_without_an_overlay_prints_no_overlay_line(
     assert "overlay" not in out
 
 
+@pytest.mark.parametrize(
+    "record",
+    [b"{", b"[]", b'{"format_version": 1}', b'{"format_version": 1, "artifacts": []}', b"\xff"],
+)
+def test_check_refuses_a_malformed_overlay_record(
+    tmp_path: Path, capsys: Capture, record: bytes
+) -> None:
+    """Breaks if unreadable overlay state is treated as an absent overlay and passes check."""
+
+    main = project(tmp_path, capsys)
+    code, _, err = overlay_on(capsys, main)
+    assert code == 0, err
+    (main / overlay.RECORD).write_bytes(record)
+    before = snapshot(main)
+
+    code, _, err = run(capsys, str(main), "--check")
+
+    assert code == 1
+    assert f"cannot read {overlay.RECORD}" in err
+    assert snapshot(main) == before
+
+
+@pytest.mark.parametrize("host", ["CLAUDE.md", ".claude/CLAUDE.md"])
+def test_overlay_refresh_refuses_new_project_claude_guidance(
+    tmp_path: Path, capsys: Capture, host: str
+) -> None:
+    """Breaks if a refresh excludes newly added project text or writes before it refuses."""
+
+    main = project(tmp_path, capsys, files={"CLAUDE.md": "", ".claude/CLAUDE.md": ""})
+    code, _, err = overlay_on(capsys, main)
+    assert code == 0, err
+    with (main / host).open("a", encoding="utf-8") as handle:
+        handle.write("Never publish from this checkout.\n")
+    before = snapshot(main)
+
+    code, _, err = overlay_on(capsys, main, "--force")
+
+    assert code == 1
+    assert host in err and "project text" in err
+    assert snapshot(main) == before
+
+
+@pytest.mark.parametrize("host", ["CLAUDE.md", ".claude/CLAUDE.md"])
+@pytest.mark.parametrize("force", [False, True])
+def test_project_claude_guidance_is_refused_before_any_overlay_write(
+    tmp_path: Path, capsys: Capture, host: str, force: bool
+) -> None:
+    """Breaks if excluding either host hides project text, even with --force."""
+
+    main = project(tmp_path, capsys, files={host: "Never publish from this checkout.\n"})
+    before = snapshot(main)
+
+    code, _, err = overlay_on(capsys, main, *(("--force",) if force else ()))
+
+    assert code == 1
+    assert host in err and "project text" in err and "nothing was written" in err
+    assert snapshot(main) == before
+
+
+@pytest.mark.parametrize("recorded", [False, True])
+def test_managed_markers_do_not_make_project_claude_text_safe_to_hide(
+    tmp_path: Path, capsys: Capture, recorded: bool
+) -> None:
+    """Breaks if markers alone let an unrecorded block or an edited import be excluded."""
+
+    main = project(tmp_path, capsys, files={"CLAUDE.md": ""})
+    host = main / "CLAUDE.md"
+    if recorded:
+        text = host.read_text(encoding="utf-8").replace(
+            "@AGENTS.md", "@AGENTS.md\nNever publish from this checkout."
+        )
+    else:
+        text = (
+            "<!-- outcomebound:begin id=project-note v=1.0.0 -->\n"
+            "Never publish from this checkout.\n"
+            "<!-- outcomebound:end id=project-note -->\n"
+        )
+    write(host, text)
+    before = snapshot(main)
+
+    code, _, err = overlay_on(capsys, main, "--force")
+
+    assert code == 1 and "project text" in err
+    assert snapshot(main) == before
+
+
 def test_the_other_worktree_lines_and_the_audit_name_the_mode(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -245,7 +333,7 @@ def test_the_claude_md_host_case_writes_an_absolute_exclusion_merged_into_local_
     """Breaks if the exclusion is relative, replaces a key the file holds, or is removed with
     anything else than its own entry."""
 
-    main = project(tmp_path, capsys, files={"CLAUDE.md": "# Notes\n"})
+    main = project(tmp_path, capsys, files={"CLAUDE.md": ""})
     tree = linked(main, "a")
     settings = tree / ".claude" / "settings.local.json"
     start = {"permissions": {"allow": ["Bash(ls)"]}, "claudeMdExcludes": ["/elsewhere/CLAUDE.md"]}
@@ -273,7 +361,7 @@ def test_the_claude_md_host_case_writes_an_absolute_exclusion_merged_into_local_
 
 
 def test_a_settings_file_the_overlay_made_goes_with_it(tmp_path: Path, capsys: Capture) -> None:
-    main = project(tmp_path, capsys, files={"CLAUDE.md": "# Notes\n"})
+    main = project(tmp_path, capsys, files={"CLAUDE.md": ""})
     tree = linked(main, "a")
     before = snapshot(tree)
 
@@ -285,6 +373,38 @@ def test_a_settings_file_the_overlay_made_goes_with_it(tmp_path: Path, capsys: C
     run(capsys, str(tree), "--full", "--local")
 
     assert snapshot(tree) == before
+
+
+@pytest.mark.parametrize("removal", [("--full", "--local"), ("--remove",)])
+def test_matching_preexisting_exclusions_are_never_owned(
+    tmp_path: Path, capsys: Capture, removal: tuple[str, ...]
+) -> None:
+    """Breaks if install or refresh claims an existing exclusion and removal deletes it."""
+
+    main = project(tmp_path, capsys, files={"CLAUDE.md": "", ".claude/CLAUDE.md": ""})
+    settings = main / overlay.SETTINGS
+    preexisting = (main / "CLAUDE.md").as_posix()
+    added = (main / ".claude/CLAUDE.md").as_posix()
+    start = {overlay.EXCLUDES: [preexisting], "env": {"KEEP": "yes"}}
+    original = json.dumps(start, indent=2) + "\n"
+    write(settings, original)
+
+    for _ in range(2):
+        code, _, err = overlay_on(capsys, main)
+        assert code == 0, err
+        held = json.loads((main / overlay.RECORD).read_text(encoding="utf-8"))
+        assert [
+            entry["entry"] for entry in held["artifacts"] if entry["kind"] == overlay.EXCLUDE
+        ] == [added]
+        assert json.loads(settings.read_text(encoding="utf-8")) == {
+            overlay.EXCLUDES: [preexisting, added],
+            "env": {"KEEP": "yes"},
+        }
+
+    code, _, err = run(capsys, str(main), *removal)
+
+    assert code == 0, err
+    assert settings.read_text(encoding="utf-8") == original
 
 
 def test_other_harnesses_are_refused_before_a_write(tmp_path: Path, capsys: Capture) -> None:

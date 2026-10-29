@@ -29,7 +29,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from outcomebound_tools import discovery, fileplan, textio
+from outcomebound_tools import discovery, fileplan, identity, textio
 
 if TYPE_CHECKING:
     from outcomebound_tools.adopt import Settings
@@ -73,6 +73,7 @@ def _parse_record(raw: bytes) -> list[dict[str, Any]]:
         not isinstance(document, dict)
         or document.get("format_version") != FORMAT_VERSION
         or not isinstance(entries, list)
+        or not entries
     ):
         raise ValueError(f"{RECORD} is not an overlay record of format {FORMAT_VERSION}")
     for entry in entries:
@@ -202,10 +203,41 @@ def _set_excludes(settings: Settings, add: list[str], drop: list[str]) -> None:
 
 
 def _hosts(target: Path) -> list[str]:
-    """The absolute path of each CLAUDE.md the worktree holds, which Claude Code would load beside
-    `CLAUDE.local.md`."""
+    """The Claude hosts safe to exclude: only unchanged, recorded blocks and whitespace.
 
-    return [(target / host).as_posix() for host in HOSTS if os.path.lexists(target / host)]
+    Refuse project text instead of moving it to a different file, where relative imports can
+    mean something else. Even --force cannot grant hiding that guidance.
+    """
+
+    from outcomebound_tools import adopt
+
+    recorded = {
+        (entry["path"], entry["id"]): entry["sha256"]
+        for entry in adopt.load_manifest(target).own
+        if entry["kind"] in ("block", "pointer")
+    }
+    hosts = []
+    for host in HOSTS:
+        raw = _read(target, host)
+        if raw is None:
+            continue
+        try:
+            text = textio.universal(textio.decode(raw))
+            blocks = identity.find_managed_blocks(text)
+        except (UnicodeDecodeError, identity.IdentityError) as error:
+            _refuse(f"{host}: {textio.plain(str(error))}; cannot exclude it; nothing was written")
+        rest = text
+        for block in reversed(blocks):
+            start, end = block.begin_offset, block.end_offset
+            if _sha(text[start:end].encode("utf-8")) == recorded.get((host, block.id)):
+                rest = rest[:start] + rest[end:]
+        if rest.strip():
+            _refuse(
+                f"{host} holds project text or an unrecorded or edited block; excluding it "
+                "would hide project guidance, so nothing was written"
+            )
+        hosts.append((target / host).as_posix())
+    return hosts
 
 
 # --- Install ----------------------------------------------------------------------------------
@@ -297,6 +329,8 @@ def _exclusion_changes(
         return {}, [], []
     before = _read(target, SETTINGS)
     settings = _settings(before)
+    existing = _excludes(settings)
+    owned = {entry["entry"] for entry in old}
     _set_excludes(settings, hosts, [e["entry"] for e in old if e["entry"] not in hosts])
     created = before is None or any(entry.get("created") for entry in old)
     settings.removable = created
@@ -305,6 +339,7 @@ def _exclusion_changes(
     records = [
         _entry(EXCLUDE, SETTINGS, host.encode("utf-8"), entry=host, created=created)
         for host in hosts
+        if host not in existing or host in owned
     ]
     notes: Notes = []
     if hosts:
@@ -473,7 +508,7 @@ def check(target: Path, source: Path) -> list[str]:
     """Print the worktree's overlay mode and the state of each part (`current`, `edited`, `stale`
     or `missing`), and return the states. Prints nothing where the worktree has no overlay."""
 
-    held = _tolerant(target)
+    held = read_record(target)
     if not held:
         return []
     mode = worktree_mode(target)
