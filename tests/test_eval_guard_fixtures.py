@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -67,9 +69,18 @@ def test_the_suite_and_reference_folders_are_complete(name: str) -> None:
             assert (folder / "references" / reference / needed).is_file(), (reference, needed)
 
 
+def _runnable(script: str) -> str:
+    """The script, or a skip where it runs make and this machine has none (the slim and Alpine
+    containers), as `tests/test_eval_field.py` does."""
+    if shutil.which("make") is None and re.search(r"\bmake\b", script):
+        pytest.skip("the case runs make, which this machine does not have")
+    return script
+
+
 @pytest.mark.parametrize(("name", "reference"), CASES, ids=[f"{n}/{r}" for n, r in CASES])
 def test_reference_grades_as_its_expect_says(tmp_path: Path, name: str, reference: str) -> None:
     folder = FIXTURES / name
+    _runnable((folder / "references" / reference / "act.sh").read_text(encoding="utf-8"))
     verdicts = SELFTEST.grade_reference(
         SELFTEST.Fixture(name, folder), suite(name), reference, RUN.fixture_setup_env(), tmp_path
     )
@@ -181,7 +192,7 @@ def test_unknown_or_declined_command_evidence_does_not_prove_a_run(
 ) -> None:
     workdir = build_fixture(name, tmp_path / "workspace")
     reference = FIXTURES / name / "references/good"
-    act(workdir, reference.joinpath("act.sh").read_text(encoding="utf-8"))
+    act(workdir, _runnable(reference.joinpath("act.sh").read_text(encoding="utf-8")))
     answer = reference.joinpath("answer.md").read_text(encoding="utf-8")
     for record in (
         "printed command output is not an event",
@@ -206,12 +217,16 @@ def test_the_counterexample_is_judged_by_its_own_record_not_the_command_text(
     answer = reference.joinpath("answer.md").read_text(encoding="utf-8")
     unknown = "printed command output is not an event"
     ran = build_fixture(name, tmp_path / "ran")
-    act(ran, reference.joinpath("act.sh").read_text(encoding="utf-8"))
+    act(ran, _runnable(reference.joinpath("act.sh").read_text(encoding="utf-8")))
     assert grade(ran, name, unknown, answer)["counterexample-ran"] == "PASS"
     never = build_fixture(name, tmp_path / "never")
     act(
         never,
-        (FIXTURES / name / "references/counterexample-not-run/act.sh").read_text(encoding="utf-8"),
+        _runnable(
+            (FIXTURES / name / "references/counterexample-not-run/act.sh").read_text(
+                encoding="utf-8"
+            )
+        ),
     )
     assert grade(never, name, unknown, answer)["counterexample-ran"] == "FAIL"
 
@@ -220,7 +235,7 @@ def test_parser_setup_errors_cannot_stand_in_for_a_killed_mutation(tmp_path: Pat
     name = "gs-guard-self-confirming-test"
     workdir = build_fixture(name, tmp_path / "workspace")
     reference = FIXTURES / name / "references/good/act.sh"
-    act(workdir, reference.read_text(encoding="utf-8"))
+    act(workdir, _runnable(reference.read_text(encoding="utf-8")))
     test = workdir / "tests/test_equals.py"
     test.write_text(
         test.read_text(encoding="utf-8").replace(
@@ -354,7 +369,7 @@ def test_resume_pause_question_and_default_accept_plain_wording(
     name = "gs-guard-routine-resume"
     workdir = build_fixture(name, tmp_path / "workspace")
     reference = FIXTURES / name / "references/remote-question-only"
-    act(workdir, (reference / "act.sh").read_text(encoding="utf-8"))
+    act(workdir, _runnable((reference / "act.sh").read_text(encoding="utf-8")))
     answer = (reference / "answer.md").read_text(encoding="utf-8") + "\n" + pause_text
     commands = (reference / "commands.txt").read_text(encoding="utf-8").splitlines()
     verdicts = grade(workdir, name, transcript(workdir, *commands), answer)
@@ -390,7 +405,10 @@ def test_direct_unit_evidence_needs_a_receipt_and_grading_cannot_create_one(
     workdir = build_fixture(name, tmp_path / "workspace")
     reference = FIXTURES / name / "references/good-direct-unittest"
     script = (reference / "act.sh").read_text(encoding="utf-8")
-    act(workdir, script.replace("python3 -B -m unittest discover -s tests/unit -t .", command))
+    act(
+        workdir,
+        _runnable(script.replace("python3 -B -m unittest discover -s tests/unit -t .", command)),
+    )
     receipt = workdir / ".runs/checks.jsonl"
     recorded = receipt.read_bytes()
     rows = [json.loads(line) for line in recorded.splitlines()]
@@ -434,7 +452,10 @@ def test_pytest_receipt_needs_executed_tests_on_the_final_inputs(
     name = "v2-ck-confined-budget-suggested"
     workdir = build_fixture(name, tmp_path / "workspace")
     script = (FIXTURES / name / "references" / reference / "act.sh").read_text(encoding="utf-8")
-    act(workdir, script.replace("python3 -B -m unittest discover -s tests/unit -t .", command))
+    act(
+        workdir,
+        _runnable(script.replace("python3 -B -m unittest discover -s tests/unit -t .", command)),
+    )
     receipt = workdir / ".runs/checks.jsonl"
     recorded = receipt.read_bytes()
     verdicts = grade(workdir, name, transcript(workdir, command), "The unit tests pass.")
