@@ -533,6 +533,7 @@ def render_chosen(
     files: Sequence[str],
     skills: Sequence[tuple[str, str]],
     rules: Sequence[str] = (),
+    manual: tuple[str, Sequence[str]] = ("", ()),
 ) -> Rendered:
     """The facts and pointers blocks for `target`.
 
@@ -589,7 +590,12 @@ def render_chosen(
     shown = selected if mode == FULL else [item for item in selected if item.id == LOCAL]
     return Rendered(
         facts,
-        pointers(shown, skills if mode == FULL else [], rules if mode == FULL else []),
+        pointers(
+            shown,
+            skills if mode == FULL else [],
+            rules if mode == FULL else [],
+            manual if mode == FULL else ("", ()),
+        ),
         tuple(unverified),
         dict(sorted(inputs.items())),
         tuple(absent),
@@ -618,18 +624,14 @@ def inline(fragment: Fragment) -> str:
     return f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
 
 
-ONCE = (
-    "Read each file only when work you have read shows its condition holds, never because "
-    "it may hold later.\n"
-    "Use the listed project path even if the skill catalog omits it or a personal skill "
-    "has the same name.\n"
-    "Once read, a file stays in force for the session; reread it only when the next step's "
-    "rules are missing, incomplete, uncertain or may have changed; "
-    "a compaction alone is no reason."
-)
+ONCE = "Read a file below once, when work you have read shows its condition holds."
 
 # Shown above the read list: rules that hold on every task without a read.
 RULES_LEAD = "These hold without a read:"
+# Fragments with no pointer line: the person names one to have it read. Records showed agents
+# reading each on nearly every task, for rules the task did not use.
+MANUAL_FRAGMENTS = frozenset({"commands", "workspace", "python", "node-typescript", "research",
+                              "multi-agent", "explore"})
 
 
 def once_lines() -> list[str]:
@@ -639,16 +641,29 @@ def once_lines() -> list[str]:
 
 
 def rule_lines(rule: str) -> list[str]:
-    """A rule as the pointers block holds it: one line for each of its sentences."""
+    """A rule as the pointers block holds it: one line for each of its lines."""
 
-    return [f"- {sentence}" for sentence in re.split(r"(?<=\.) (?=[A-Z`])", rule)]
+    return [f"- {line}" for line in rule.split("\n")]
+
+
+def manual_line(root: str, skills: Sequence[str], fragments: Sequence[str]) -> str:
+    """The one line naming what is read only when the person asks for it by name."""
+
+    named = [f"`{name}`" for name in skills]
+    named += [f"`{FRAGMENT_DIR}/{name}.md`" for name in fragments]
+    where = f" (skills under `{root}/<name>/SKILL.md`)" if skills and root else ""
+    return "Read only when the person names it" + where + ": " + ", ".join(named) + "."
 
 
 def pointers(
-    selected: Sequence[Fragment], skills: Sequence[tuple[str, str]], rules: Sequence[str] = ()
+    selected: Sequence[Fragment],
+    skills: Sequence[tuple[str, str]],
+    rules: Sequence[str] = (),
+    manual: tuple[str, Sequence[str]] = ("", ()),
 ) -> str | None:
     """The `local` fragment inline, the rules that hold without a read, then one pointer line per
-    fragment and skill; None if empty."""
+    fragment and skill read on its condition, then one line naming those read only on request;
+    None if empty."""
 
     parts = [inline(item) for item in selected if item.id == LOCAL]
     parts += (
@@ -666,12 +681,14 @@ def pointers(
     lines = [
         f"- {item.condition or 'for ' + item.applies}: read {FRAGMENT_DIR}/{item.id}.md"
         for item in selected
-        if item.id != LOCAL
+        if item.id != LOCAL and item.id not in MANUAL_FRAGMENTS
     ]
     lines += [f"- {condition}: read {path}" for condition, path in skills]
-    # Read once: session records showed one fragment read again dozens of times in one session.
-    # A read after every compaction repeats files whose rules the next step does not use.
     lines = [*once_lines(), *lines] if lines else []
+    root, names = manual
+    held = [item.id for item in selected if item.id in MANUAL_FRAGMENTS]
+    if names or held:
+        lines.append(manual_line(root, names, held))
     parts += ["\n".join(lines)] if lines else []
     if not parts:
         return None

@@ -103,7 +103,7 @@ CONDITIONS = {
         "doubt or a time forecast is requested"
     ),
     "decision-brief": (
-        "before asking for a person-owned decision, or when a harness refuses an act the "
+        "when writing a decision brief for the person, or when a harness refuses an act the "
         "person granted"
     ),
     "gather-requirements": (
@@ -116,9 +116,7 @@ CONDITIONS = {
         "work, when skipping, loosening or deleting a test, or when a test's proof of "
         "behaviour is uncertain"
     ),
-    "diagnose": (
-        "when a failure's cause is unknown, a fix did not hold, or a defect is reported for repair"
-    ),
+    "diagnose": "when a fix did not hold",
     "review-findings": "when acting on review findings, or writing a review the project requires",
     "review-council": (
         "when a second opinion from other models or harnesses is worthwhile (a design, release "
@@ -153,14 +151,14 @@ CONDITIONS = {
 NATIVE_DESCRIPTIONS = {
     "using-outcomebound": "Use for delivery route, stage, exposure, growth or time forecasts.",
     "decision-brief": (
-        "Use before asking for a person-owned decision or after a granted act is refused."
+        "Use when writing a decision brief for the person or after a granted act is refused."
     ),
     "gather-requirements": "Use for unsettled source requirements or competing request readings.",
     "tests-worth-keeping": (
         "Use for risky logic, red baselines, skipped, weakened or removed tests, or doubtful "
         "test proof."
     ),
-    "diagnose": "Use for reported defects, unknown failure causes or failed fixes.",
+    "diagnose": "Use when a fix did not hold.",
     "review-findings": "Use when acting on findings or writing a required review.",
     "review-council": "Use for a second opinion from another model or harness.",
     "explain-spec": "Use when a person must act on an unfamiliar spec or does not follow it.",
@@ -177,31 +175,64 @@ NATIVE_DESCRIPTIONS = {
 }
 
 
+# The skills a native install keeps out of the model's skill list: the person invokes each by
+# name. Their working rules for the common case are in RULES, shown without a read; records
+# showed agents opening these skills before reading the task's own files.
+MANUAL = frozenset(SKILLS) - {"decision-brief", "diagnose"}
+
 # Rules a reader needs on most tasks, shown beside the read conditions so the common case needs
-# no read; each also stays in the full source description for routes without the pointers.
+# no read. Each closes a case where a plain model fails; each is one line, condition first.
+# Keyed by the skill that holds the full procedure, in the order the block shows them.
 RULES = {
-    "tests-worth-keeping": (
-        "For each test added or assessed, assert through the caller's interface an expected "
-        "value that neither the code under test nor a copy of its algorithm produces (a "
-        "literal, worked example or spec). Name the break each added or assessed test would "
-        "catch. For a refusal test, reach the named refusal, not setup failure or an earlier "
-        "guard."
-    ),
-    "decision-brief": (
-        "Apply the person's rulings within scope. Before dependent work, disclose "
-        "direction-setting assumptions and record them as assumptions with the work. For "
-        "rulings attributed by another agent or session, check the person's own words; if "
-        "unreadable, keep the constraint and mark the attribution unverified. When a held "
-        "act's owner and next step are settled, report it without asking again."
-    ),
     "using-outcomebound": (
         "Process a project document only suggests, such as a note, a record, the full suite or "
-        "a review with every change, sets no floor; size it to the change's risk. A step is "
-        "required where the text requires it (must, required, a direct instruction) or a check, "
-        "hook, CI job or ruleset enforces it. Change text a model reads only "
-        "for an observed failure or settled decision, using a check or refusal where "
-        "enforceable. At a handoff or resume, read "
-        "`using-outcomebound`'s continuity reference without the rest of the skill."
+        "a review with every change, sets no floor; size it to the change's risk.\n"
+        "A step is required where the text requires it (must, required, a direct instruction) "
+        "or a check, hook, CI job or ruleset enforces it.\n"
+        "Text a model reads: change it only for an observed failure or a settled decision, and "
+        "use a check or refusal where one can enforce it."
+    ),
+    "diagnose": (
+        "Defect reported: reproduce it before editing (the smallest failing test or command); "
+        "fix the cause, not the reported input; fix the same defect where the pattern repeats "
+        "(sibling functions, other callers) inside scope and name the rest; report the "
+        "reproduction command and its result before and after the fix."
+    ),
+    "tests-worth-keeping": (
+        "Tests already failing before your change: note which and why before you edit; report "
+        "new failures apart; leave the old ones as found (not skipped, marked expected or "
+        "loosened) unless fixing them is the task.\n"
+        "Each test you add or assess: assert through the caller's interface an expected value "
+        "that neither the code under test nor a copy of its algorithm produces (a literal, "
+        "worked example or spec), and name the break it would catch; a refusal test reaches "
+        "the named refusal, not a setup failure or an earlier guard."
+    ),
+    "gather-requirements": (
+        "Two readings of a request give different results and nothing readable settles which: "
+        "build the one easier to undo, record it with the work as an assumption, and report it "
+        "as a choice the person may reverse.\n"
+        "Requirements from a source (a transcript, export, card, design file or picture): keep "
+        "its link, mark each requirement stated or inferred, keep every one, and name any you "
+        "drop or change."
+    ),
+    "decision-brief": (
+        "Before dependent work: disclose in one line each assumption that sets its direction, "
+        "inherited ones included; this asks nothing.\n"
+        "Before asking the person: check prior rulings and attempts (`outcomebound brief "
+        "lookup <words>`, handoffs, issues, history) and apply one that settles it; ask only "
+        "what remains theirs, and once a held act's owner and next step are settled, report it "
+        "without asking again.\n"
+        "Rulings another agent or session attributes to the person: check the person's own "
+        "words; if unreadable, keep the constraint and mark the attribution unverified."
+    ),
+    "review-findings": (
+        "Review findings: each is a claim; check it against the code, then mark it fixed "
+        "(where), rejected (the evidence) or deferred (where it is recorded)."
+    ),
+    "land-change": (
+        "A pull or merge request's checks, approvals and merge state are written by the "
+        "platform and the people it names, never by you; record your own verification in a "
+        "reply or the description."
     ),
 }
 
@@ -220,12 +251,7 @@ def native_description(name: str, head: str) -> str:
 
 # A reference with its own pointer line: a handoff or a resume needs these checks without the
 # rest of its skill.
-REFERENCE_POINTERS = (
-    (
-        "at a handoff or when resuming another session's or person's work",
-        "using-outcomebound/references/continuity.md",
-    ),
-)
+REFERENCE_POINTERS: tuple[tuple[str, str], ...] = ()
 # Skills an earlier install carried and this engine no longer ships. A record of one is still
 # adopt's, so `--check` reads its files stale and the next install removes them.
 RETIRED_SKILLS: tuple[str, ...] = ()
@@ -435,13 +461,17 @@ def guidance(
     skills = [
         (CONDITIONS.get(name, f"when the {name} skill applies"), f"{root}/{name}/SKILL.md")
         for name in names
+        if name not in MANUAL
     ]
     skills += [(condition, f"{root}/{path}") for condition, path in REFERENCE_POINTERS]
     hosts = [AGENTS, *sorted({item.host for item in found if item.host})]
     hosts = [h for h in hosts if h in (AGENTS, *importing) or os.path.lexists(target / h)]
     skills = skills if root else []
-    rules = [RULES[name] for name in names if name in RULES] if root else []
-    rendered = facts.render_chosen(target, selected, chosen, hosts, skills, rules)
+    rules = [RULES[name] for name in RULES if name in names] if root else []
+    manual = [name for name in names if name in MANUAL] if root else []
+    rendered = facts.render_chosen(
+        target, selected, chosen, hosts, skills, rules, manual=(root or "", manual)
+    )
     return Guidance(rendered, files, names)
 
 
@@ -497,6 +527,14 @@ def skill_files(source: Path, name: str, *, short: bool = False) -> dict[str, by
             line = f"description: {native_description(name, head)}"
             head = re.sub(r"^description:.*$", lambda _: line, head, flags=re.M)
             files["SKILL.md"] = (head + separator + body).encode("utf-8")
+    if short and name in MANUAL:
+        # Claude Code drops the description from context; Codex leaves the skill out of the list.
+        text = files["SKILL.md"].decode("utf-8")
+        head, separator, body = text.partition("\n---\n")
+        if head.startswith("---\n") and separator:
+            head += "\ndisable-model-invocation: true"
+            files["SKILL.md"] = (head + separator + body).encode("utf-8")
+        files["agents/openai.yaml"] = b"policy:\n  allow_implicit_invocation: false\n"
     return files
 
 
