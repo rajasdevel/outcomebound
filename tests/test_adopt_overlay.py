@@ -237,7 +237,8 @@ def test_project_claude_guidance_is_refused_before_any_overlay_write(
 def test_managed_markers_do_not_make_project_claude_text_safe_to_hide(
     tmp_path: Path, capsys: Capture, recorded: bool
 ) -> None:
-    """Breaks if markers alone let an unrecorded block or an edited import be excluded."""
+    """Breaks if markers alone let project text be hidden. An edited import reaches adopt's
+    render refusal; an unrecorded block reaches the overlay's host refusal."""
 
     main = project(tmp_path, capsys, files={"CLAUDE.md": ""})
     host = main / "CLAUDE.md"
@@ -256,7 +257,12 @@ def test_managed_markers_do_not_make_project_claude_text_safe_to_hide(
 
     code, _, err = overlay_on(capsys, main, "--force")
 
-    assert code == 1 and "project text" in err
+    expected = (
+        "CLAUDE.md (pointer-claude-md) differs from what adopt wrote"
+        if recorded
+        else "project text"
+    )
+    assert code == 1 and expected in err
     assert snapshot(main) == before
 
 
