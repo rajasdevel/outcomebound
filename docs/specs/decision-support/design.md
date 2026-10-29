@@ -29,10 +29,14 @@ The question and what waits on it come first, then the context the person needs 
 a picture where it carries
 meaning, and each option with when to choose it and its downside, the recommendation marked on its
 option. How: the `decision-brief` skill, which
-carries the procedure. An agent reaches it through the skill's always-loaded description, the
-pointer line that `adopt` writes, and the contract (`OutcomeBound.md`); the kernel names the
-brief and not the skill. Also: `outcomebound brief --help`, `decision_brief.py`, `surfaces.py` and
-`adapters/surfaces.json`.
+carries the procedure. A full native install uses the trigger `Use when a decision compares
+several options, a brief or page is asked for, or a granted act is refused.` Its pointer condition
+is `when a decision compares several options, the person asks for a brief or a page, or a harness
+refuses an act the person granted`. Source and generic copies keep their full source
+descriptions. Inline rules cover routine decisions, including whether they can be undone; they
+need no skill read. The contract (`OutcomeBound.md`) also gives the routine and full-brief
+forms; the kernel names the brief and not the skill. Also: `outcomebound brief --help`,
+`decision_brief.py`, `surfaces.py` and `adapters/surfaces.json`.
 
 ### The explorable
 

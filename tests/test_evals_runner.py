@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from evals.harnesses import CallResult, Request
-from tests.adopt_helpers import MANUAL_SKILLS, assert_native_skill
+from tests.adopt_helpers import ACT_READS, MANUAL_SKILLS, assert_native_skill
 from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
 from tests.portable import needs_posix_bash
 
@@ -540,9 +540,14 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     pointer = "before planning work here"
     if arm in RUN.INSTALLED:
         assert pointer not in note and "id=project-facts" in note, note
-        for skill in ("using-outcomebound", "slice-tickets"):
-            assert f": read .agents/skills/{skill}/SKILL.md" not in note
-            assert f"`{skill}`" in note.split("Read only when the person names it", 1)[1]
+        assert ": read .agents/skills/using-outcomebound/SKILL.md" not in note
+        manual = note.split("Read only when the person names it", 1)[1]
+        assert "`using-outcomebound`" in manual
+        assert "`slice-tickets`" not in manual
+        assert (
+            "- before publishing tickets to the ticket store: "
+            "read .agents/skills/slice-tickets/SKILL.md"
+        ) in note.splitlines()
         assert "- when a fix did not hold: read .agents/skills/diagnose/SKILL.md" in note
         assert "read .outcomebound/fragments/tickets.md" in note
         assert seed_note == note
@@ -900,6 +905,7 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
     assert condition in adopt_text and facts_text.count(read_guidance) == 1
     assert adopt_text.count(b'\nif __name__ == "__main__":') == 1
     ref_rules = b'\nRULES = {name: "A ref rule for " + name + "." for name in RULES}\n'
+    ref_acts = b'ACTS = {name: "a ref act for " + name for name in ACTS}\n'
     ref_references = (
         b'REFERENCE_POINTERS = (("a ref reference condition", '
         b'"using-outcomebound/references/ref-only.md"),)\n'
@@ -911,7 +917,7 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
                 condition, b"a ref's own condition"
             ).replace(
                 b'\nif __name__ == "__main__":',
-                ref_rules + ref_references + b'\nif __name__ == "__main__":',
+                ref_rules + ref_acts + ref_references + b'\nif __name__ == "__main__":',
             ),
             "outcomebound_tools/facts.py": facts_text.replace(
                 read_guidance,
@@ -936,6 +942,14 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         assert "a ref's own condition" in notes
         assert "a ref's own reread.\nA ref's own listed path." in notes
         assert adopt.CONDITIONS["diagnose"] not in notes
+        assert (
+            "- a ref act for review-council: read .agents/skills/review-council/SKILL.md"
+        ) in notes.splitlines()
+        assert (
+            "- a ref act for land-change: read .agents/skills/land-change/SKILL.md"
+        ) in notes.splitlines()
+        for act_condition in ACT_READS.values():
+            assert f"- {act_condition}: read " not in notes
         assert all(line not in notes for line in facts.once_lines())
         assert "A ref rules lead:" in notes and facts.RULES_LEAD not in notes
         for skill, rule in adopt.RULES.items():
@@ -1022,7 +1036,9 @@ def test_an_older_engine_without_manual_routing_keeps_its_rule_order(
     )
 
 
-@pytest.mark.parametrize("skill", ["tests-worth-keeping", "decision-brief", "using-outcomebound"])
+@pytest.mark.parametrize(
+    "skill", ["tests-worth-keeping", "decision-brief", "using-outcomebound", "land-change"]
+)
 def test_dropping_a_skill_removes_its_rule_and_reference_pointers(
     tmp_path: Path, skill: str
 ) -> None:

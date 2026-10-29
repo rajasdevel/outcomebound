@@ -217,7 +217,7 @@ RULES = {
         "Remove only what this task made and no longer needs; where the task lacks disk, a "
         "tool's rebuildable cache or this project's dangling images may go too; name each "
         "removal in the report.\n"
-        'Resuming another session\'s or person\'s work (a handoff, "carry on"): before new '
+        "Resuming another session's or person's work (a handoff, \"carry on\"): before new "
         "work, report the inventory (worktrees; staged, unstaged and untracked changes; open "
         "handoff items); where a worktree holds uncommitted work and nothing landed since the "
         "last handoff, ask whether the pause was deliberate and state the default you take; "

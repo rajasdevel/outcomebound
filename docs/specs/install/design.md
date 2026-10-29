@@ -71,12 +71,28 @@ it, so a record set that is not the recorded mode's never reads `current`.
 
 ### Skill descriptions
 
-A full install writes inline rules, two conditional skill reads and a manual line in its
-guidance-pointers block. `decision-brief` is read when a decision compares several options,
-the person asks for a brief or a page, or a harness refuses an act the person granted.
-`diagnose` is read when a fix did not hold. The other twelve skills are manual: read one when
-the person names it or a file being read directs the agent to it. The manual line names
-each skill and gives the installed root as `<root>/<name>/SKILL.md`.
+A full install writes inline rules, two conditional skill reads, seven reads before named acts
+and a manual line in its guidance-pointers block. `decision-brief` is read when a decision
+compares several options, the person asks for a brief or a page, or a harness refuses an act the
+person granted. `diagnose` is read when a fix did not hold. The other twelve skills remain
+manual for native invocation. Seven of them get the act-based read lines below, in skill order,
+and do not appear on the manual line. The other five are `using-outcomebound`,
+`gather-requirements`, `tests-worth-keeping`, `review-findings` and `explain-spec`: read one when
+the person names it or a file being read directs the agent to it. The manual line gives the
+installed root as `<root>/<name>/SKILL.md`.
+
+| Skill | Read condition |
+| --- | --- |
+| `review-council` | before asking another model or harness for a review |
+| `slice-tickets` | before publishing tickets to the ticket store |
+| `hand-off-tickets` | before handing a ticket to the agent or model that will build it |
+| `explorable` | before building an interactive page for the person |
+| `land-change` | before merging a pull or merge request, or changing its auto-merge or review state |
+| `run-acceptance` | before preparing or recording a person's acceptance of a delivered change |
+| `sync-tracker` | before writing to a card in a tracker outside the project's ticket store |
+
+These lines require the read just before the act. They do not require a read on a task that
+does not reach the act. The native manual flags remain set for all twelve manual skills.
 
 Only in a full install, a directory used only by harnesses whose rows record
 `native_skills: true` gets a short trigger as each installed skill's description. The source
@@ -160,10 +176,26 @@ and reuse; data that grants no authority; grants for shared-system acts and jobs
 task; cleanup and resume boundaries; mechanism meanings; diagnosis without writes and repair
 reproduction; red baselines, deciding logic and test proof; requirements and assumptions; prior
 rulings and routine decisions; review dispositions and counterexamples; and ownership of request
-checks, approvals and merge grants.
+checks, approvals and review state.
 
-Next come the selected fragments read on a condition and the two conditional skill reads, each
-as `- <condition>: read <path>`. Where any such line exists, the list starts with these two lines:
+The shared-system rule requires the person's grant for the named act, a read first where a read
+line names it, and a read of a test suite's setup before running a suite that can perform such
+an act. Acceptance is the person's own verdict on the build they used; an agent can prepare and
+record it, but cannot give it. Undo compares the file at the start and others' later changes
+before a restore, checkout or reverse patch. Removal is limited to what the task made and no
+longer needs, with an exception when the task lacks disk for a tool's rebuildable cache or this
+project's dangling images; the report names each removal. Resume checks apply to another
+session's or person's work, include open handoff items, and ask about a pause where a worktree
+has uncommitted work and nothing landed since the last handoff. A role in a plan is not the
+person's acceptance. The mechanism meanings include `goal-envelope`. An unreadable source is
+reported and nothing is reconstructed. A routine decision states whether it can be undone.
+An agent never resolves another person's thread, dismisses their review or counts its own review
+as theirs.
+
+Next come the selected fragments read on a condition, the two conditional skill reads and the
+seven act-based skill reads, each as `- <condition>: read <path>`. Fragment reads use selection
+order; each skill group uses skill order. Where any such line exists, the list starts with these
+two lines:
 
 ```text
 Read a file below when work you have read shows its condition holds; it stays in force for the session; read it again only when the next step's rules from it are missing, uncertain or may have changed.
@@ -174,13 +206,21 @@ There is no separate reference pointer, including for the continuity reference.
 The references are still copied.
 
 The final line starts `Read only when the person names it or a file you are reading directs you to it`,
-gives the skill root where manual skills are present, and names the twelve manual skills in
-skill order, then selected manual
-fragments in selection order. The manual fragments are `commands`, `workspace`, `python`,
-`node-typescript`, `research`, `multi-agent` and `explore`. They get a verbatim copy at
-`.outcomebound/fragments/<id>.md` but no conditional read line. Every other selected fragment
-except `local` keeps its conditional read line. A list that has only manual names has neither of
-the two read-guidance lines. The [skills design](../skills/design.md) names the manual skills.
+gives the skill root where manual-only skills are present, and names the five manual-only
+skills in skill order, then selected manual-only fragments in selection order. The manual-only
+fragments are `commands`, `python`, `node-typescript`, `research` and `explore`. They get a verbatim
+copy at `.outcomebound/fragments/<id>.md` but no conditional read line. Two other manual fragments
+get act-based read lines instead of names on the manual line:
+
+| Fragment | Read condition |
+| --- | --- |
+| `workspace` | before creating or removing a worktree, or removing a container, volume or data another run may need |
+| `multi-agent` | before writing a delegate's brief or integrating a delegate's work |
+
+These act conditions replace the fragments' source conditions in the pointer block. Every other
+selected fragment except `local` keeps its conditional read line. A list that has only manual
+names has neither of the two read-guidance lines. The [skills design](../skills/design.md) names
+the manual skills.
 
 A fragment has a five-slot body and two optional
 frontmatter fields: `condition:`, one line; `edges:`, a JSON list, each shipped fragment declaring
@@ -233,7 +273,7 @@ bodies, for a delegate's role prompt.
 | The byte-cap warning measures the folders another clone gets: it does not enter what Git ignores (`discovery.git_ignored`, as discovery reads it), a nested repository, `.git` or a link, and a folder that cannot be listed is passed over, never an error | measuring every folder, so that each scratch copy of the project in an ignored folder gives its own warning; stopping the install on a folder the user cannot read | agent | decided |
 | One native copy per harness of each skill an install carries | a canonical `.outcomebound/skills/` copy beside the native ones | agent | decided |
 | An install carries the fourteen working skills and no fragment adds one (maintainer, 2026-10-06; `review-council` is the fourteenth, 2026-10-18); the [skills design](../skills/design.md) says which and why. A skill is its whole folder, `SKILL.md` and every file beside it, one record per file: `--check` reports each, a recorded file the skill does not ship reads `stale`, and `--remove` removes it. `templates/explorable/` ships with the engine and is never copied into an adopter's tree | a fragment's `skills:` that adds skills to the install; `SKILL.md` alone, which drops the notes a skill names | user | decided |
-| Fragment bodies live in their installed files. `AGENTS.md` gives conditional fragments a read pointer and manual fragments a name on the manual line; `local` stays inline | fragment bodies composed into one block every session loads | user | decided |
+| Fragment bodies live in their installed files. `AGENTS.md` gives conditional fragments a read pointer, uses act-based reads for `workspace` and `multi-agent`, and names other manual fragments on the manual line; `local` stays inline | fragment bodies composed into one block every session loads | user | decided |
 | The publishing edges (`publishing a package`, `moving a shared registry tag`) come only from `ci-release`, which a release or publish sign selects; the `python` and `node-typescript` fragments declare none, and a project that publishes without those signs lists the edge in its local fragment's `edges:` | a publishing edge from every stack fragment, which an application that publishes nothing carries too; an engine switch that turns a fragment's edge off | agent | decided |
 | `--detect` proposes `runtime` where a file shows a runnable app or service (`Procfile`, `config.ru`, `wsgi.py`, `asgi.py`, a Compose file, `manage.py`, a `next`, `vite`, `playwright` or `cypress` config) and `deploy` where one shows deployment configuration (`fly.toml`, `vercel.json`, `netlify.toml`, `render.yaml`, `wrangler.toml`, `serverless.yml`, `Chart.yaml`, `skaffold.yaml`, `kustomization.yaml`, `app.yaml`, `Procfile`, `cdk.json`, `Pulumi.yaml`, `samconfig.toml`, `firebase.json`, `railway.json`, `railway.toml`, `cloudbuild.yaml`, a workflow whose name holds `deploy`, `*.tf`); a `Dockerfile`, a CI workflow or a package manifest alone proposes neither, since a library has them too; `*.tf`, `Chart.yaml`, `vite.config.*` and a Compose file are kept although a library may hold them: the cost is one pointer whose `condition` never fires, and each is the cheapest sign of its kind of app | `detect: ["."]` for either, which loads deploy text into a project that deploys nothing; `Dockerfile` as a sign of either | agent | decided |
 | The `deploy` fragment declares no `edges:`: which acts on a shared or production environment cannot be undone differs by project, so each project lists its own in its local fragment's `edges:`, and the generated Irreversible edges fact is never edited by hand. Browser, page and log content is data, stated once in `commands`, which `--detect` proposes everywhere | production edges declared by `deploy` for every project that selects it; the data rule restated in `runtime` | agent | decided |

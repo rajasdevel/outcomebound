@@ -28,7 +28,7 @@ from outcomebound_tools.fragments import (
 )
 from outcomebound_tools.identity import parse_managed_blocks
 from outcomebound_tools.mechanisms import MECHANISMS
-from tests.adopt_helpers import READ_GUIDANCE
+from tests.adopt_helpers import ACT_READS, READ_GUIDANCE
 from tests.portable import engine, needs_symlinks, write
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -568,10 +568,11 @@ def test_compose_cli_renders_the_facts_and_pointers_blocks_adopt_writes(source, 
         "Read only when the person names it or a file you are reading directs you to it "
         "(skills under `.outcomebound/skills/<name>/SKILL.md`): "
         "`using-outcomebound`, `gather-requirements`, `tests-worth-keeping`, `review-findings`, "
-        "`review-council`, `explain-spec`, `slice-tickets`, `hand-off-tickets`, `explorable`, "
-        "`land-change`, `run-acceptance`, `sync-tracker`, `.outcomebound/fragments/python.md`."
+        "`explain-spec`, `.outcomebound/fragments/python.md`."
     )
     assert "\n".join(READ_GUIDANCE) in blocks["guidance-pointers"].body
+    for name, condition in ACT_READS.items():
+        assert f"- {condition}: read .outcomebound/skills/{name}/SKILL.md" in lines
     assert ": read .outcomebound/fragments/python.md" not in result.stdout
     assert "the runtime is the evidence" not in result.stdout
     assert "fragments=1 words=" in result.stderr and "bytes=" in result.stderr

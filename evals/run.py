@@ -654,6 +654,8 @@ def earlier_engine(request: dict[str, Any]) -> Any:
         "              'references': getattr(adopt, 'REFERENCE_POINTERS', ())}\n"
         "    if hasattr(adopt, 'MANUAL'):\n"
         "        answer['manual'] = sorted(adopt.MANUAL)\n"
+        "    if hasattr(adopt, 'ACTS'):\n"
+        "        answer['acts'] = adopt.ACTS\n"
         "    for name in fragments.SKILLS if hasattr(adopt, 'NATIVE_DESCRIPTIONS') else ():\n"
         "        try:\n"
         "            made = adopt.skill_files(Path(sys.argv[1]), name, short=True)\n"
@@ -941,6 +943,7 @@ def load_arm(
             "rules": adopt.RULES,
             "references": adopt.REFERENCE_POINTERS,
             "manual": adopt.MANUAL,
+            "acts": adopt.ACTS,
         }
     )
     try:
@@ -973,12 +976,20 @@ def load_arm(
         files.update(
             {f"{facts.FRAGMENT_DIR}/{item.id}.md": adopt._fragment_bytes(item) for item in chosen}
         )
-        pointers = tuple(
-            (guidance["conditions"][skill], f"{route.skills}/{skill}/SKILL.md")
-            for skill in carried
-            if skill not in guidance.get("manual", ())
-        ) + tuple(
-            (condition, f"{route.skills}/{path}") for condition, path in guidance["references"]
+        pointers = (
+            tuple(
+                (guidance["conditions"][skill], f"{route.skills}/{skill}/SKILL.md")
+                for skill in carried
+                if skill not in guidance.get("manual", ())
+            )
+            + tuple(
+                (guidance["acts"][skill], f"{route.skills}/{skill}/SKILL.md")
+                for skill in carried
+                if skill in guidance.get("acts", {})
+            )
+            + tuple(
+                (condition, f"{route.skills}/{path}") for condition, path in guidance["references"]
+            )
         )
         # Before manual routing, adopt rendered rules in skill order. Keep that ref's order.
         order = carried if name == EARLIER and "manual" not in guidance else guidance["rules"]
@@ -989,7 +1000,11 @@ def load_arm(
         )
         manual = (
             route.skills,
-            tuple(skill for skill in carried if skill in guidance.get("manual", ())),
+            tuple(
+                skill
+                for skill in carried
+                if skill in guidance.get("manual", ()) and skill not in guidance.get("acts", {})
+            ),
         )
     except (adopt.AdoptError, fragments.FragmentError) as error:
         raise SystemExit(f"run: the current arm cannot read what adopt installs: {error}") from None
@@ -1471,7 +1486,7 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
             fragment = f"{facts.FRAGMENT_DIR}/{item}.md"
             expect(f"{element}'s file", arm.keeps(element), (workdir / fragment).is_file())
             line = f"- x: read {fragment}"
-            manual = item in facts.MANUAL_FRAGMENTS
+            manual = item in facts.MANUAL_FRAGMENTS and item not in facts.FRAGMENT_ACTS
             expect(
                 f"{element}'s pointer line",
                 not manual and _line_kept(arm, line),
@@ -1486,7 +1501,7 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
             present = any((workdir / root / item).exists() for root in SKILL_ROOTS)
             expect(f"{element}'s folder", arm.keeps(element), present)
             line = f"- x: read {SKILL_ROOTS[-1]}{item}/SKILL.md"
-            manual = item in adopt.MANUAL
+            manual = item in adopt.MANUAL and item not in adopt.ACTS
             expect(
                 f"{element}'s pointer line",
                 not manual and _line_kept(arm, line),

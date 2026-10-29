@@ -8,6 +8,7 @@ import pytest
 
 from outcomebound_tools import adopt
 from tests.adopt_helpers import (
+    ACT_READS,
     BOUNDARIES,
     CONDITIONAL_READS,
     INSTALLED_RULES,
@@ -130,7 +131,10 @@ def test_full_native_install_has_short_catalog_conditional_reads_and_manual_name
         f"(skills under `{root}/<name>/SKILL.md`): "
     ) in agents
     for name in adopt.SKILLS:
-        if name in MANUAL_SKILLS:
+        if name in ACT_READS:
+            assert f"- {ACT_READS[name]}: read {root}/{name}/SKILL.md" in agents.splitlines()
+            assert f"`{name}`" not in agents.split("Read only when the person names it", 1)[1]
+        elif name in MANUAL_SKILLS:
             assert f": read {root}/{name}/SKILL.md" not in agents
             assert f"`{name}`" in agents.split("Read only when the person names it", 1)[1]
         else:
@@ -246,7 +250,10 @@ def test_native_and_non_native_routes_sharing_a_directory_keep_full_descriptions
         installed = target / ".agents/skills" / name
         assert (installed / "SKILL.md").read_bytes() == (shipped / "SKILL.md").read_bytes()
         pointer = f": read .agents/skills/{name}/SKILL.md"
-        assert (pointer in agents) is (name not in MANUAL_SKILLS)
+        if name in ACT_READS:
+            assert f"- {ACT_READS[name]}{pointer}" in agents.splitlines()
+        else:
+            assert (pointer in agents) is (name not in MANUAL_SKILLS)
         assert not (installed / "agents/openai.yaml").exists()
         for reference in (shipped / "references").glob("*.md"):
             assert (
@@ -287,8 +294,8 @@ def test_native_upgrade_and_mode_switches_render_and_check_the_selected_descript
 def test_manual_skills_have_both_native_flags_and_auto_skills_have_neither(
     tmp_path: Path, capsys: Capture, harness: str, root: str
 ) -> None:
-    """Catches either missing manual flag, accidental disabling of an auto skill, a manual
-    read pointer, or --check looking for a generated policy file in the source skill."""
+    """Catches missing manual flags, disabled auto skills, lost or broadened act reads,
+    or --check looking for a generated policy file in the source skill."""
 
     target = repo(tmp_path / "project")
     code, _, err = run(capsys, str(target), "--harness", harness)
@@ -300,7 +307,10 @@ def test_manual_skills_have_both_native_flags_and_auto_skills_have_neither(
         assert (target / root / name / "agents/openai.yaml").read_text("utf-8") == (
             "policy:\n  allow_implicit_invocation: false\n"
         )
-        assert f": read {root}/{name}/SKILL.md" not in agents
+        if name in ACT_READS:
+            assert f"- {ACT_READS[name]}: read {root}/{name}/SKILL.md" in agents.splitlines()
+        else:
+            assert f": read {root}/{name}/SKILL.md" not in agents
     for name in ("decision-brief", "diagnose"):
         fm, _ = _frontmatter(target / root / name / "SKILL.md")
         assert "disable-model-invocation" not in fm

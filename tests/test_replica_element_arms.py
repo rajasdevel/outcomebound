@@ -22,6 +22,7 @@ import pytest
 
 from evals.harnesses import CallResult
 from evals.harnesses import codex as codex_harness
+from tests.adopt_helpers import READ_GUIDANCE
 from tests.eval_helpers import RUN
 from tests.portable import needs_posix_bash
 
@@ -539,6 +540,60 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
         "Makefile",
     ]
     _clean(workdir)
+
+
+@pytest.mark.parametrize(
+    "element,pointer,manual",
+    [
+        (
+            "fragment:workspace",
+            "- before creating or removing a worktree, or removing a container, volume or data "
+            "another run may need: read .outcomebound/fragments/workspace.md",
+            "Read only when the person names it or a file you are reading directs you to it: "
+            "`.outcomebound/fragments/workspace.md`.",
+        ),
+        (
+            "fragment:multi-agent",
+            "- before writing a delegate's brief or integrating a delegate's work: "
+            "read .outcomebound/fragments/multi-agent.md",
+            "Read only when the person names it or a file you are reading directs you to it: "
+            "`.outcomebound/fragments/multi-agent.md`.",
+        ),
+        (
+            "skill:run-acceptance",
+            "- before preparing or recording a person's acceptance of a delivered change: "
+            "read .agents/skills/run-acceptance/SKILL.md",
+            "Read only when the person names it or a file you are reading directs you to it "
+            "(skills under `.agents/skills/<name>/SKILL.md`): `run-acceptance`.",
+        ),
+    ],
+    ids=["workspace", "multi-agent", "run-acceptance"],
+)
+def test_an_act_based_element_keeps_its_read_and_refuses_missing_or_extra_guidance(
+    tmp_path: Path, fake: dict[str, Path], element: str, pointer: str, manual: str
+) -> None:
+    """Catches absent act reads, extra manual names or an isolation check accepting either."""
+
+    (RUN.FIXTURES / "replica-fake" / "install.json").write_text(
+        json.dumps({**INSTALL, "fragments": ["commands", "workspace", "multi-agent"]}),
+        encoding="utf-8",
+    )
+    arm = _arm("replica-fake", "none", RUN.Elements(added=(element,)))
+    workdir, _protected, _prompt = _build("replica-fake", arm, tmp_path / "w")
+    note = workdir / "AGENTS.md"
+    text = note.read_text("utf-8")
+    block = text.split("\n\n", 1)[0].splitlines()
+    assert block[1:] == [
+        *READ_GUIDANCE,
+        pointer,
+        "<!-- outcomebound:end id=guidance-pointers -->",
+    ]
+    assert RUN.element_problems(workdir, arm) == []
+    _clean(workdir)
+    note.write_text(text.replace(pointer, ""), encoding="utf-8")
+    assert RUN.element_problems(workdir, arm) == [f"{element}'s pointer line missing"]
+    note.write_text(text.replace(pointer, pointer + "\n" + manual), encoding="utf-8")
+    assert RUN.element_problems(workdir, arm) == [f"{element}'s manual name present"]
 
 
 def test_a_manual_skill_added_without_its_block_keeps_only_its_name_and_files(

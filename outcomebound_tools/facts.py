@@ -649,6 +649,7 @@ FRAGMENT_ACTS = {
     "multi-agent": "before writing a delegate's brief or integrating a delegate's work",
 }
 
+
 def once_lines() -> list[str]:
     """The read-once text as the pointers block holds it: one block line each."""
 

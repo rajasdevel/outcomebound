@@ -14,6 +14,7 @@ import pytest
 
 from outcomebound_tools import facts, textio
 from outcomebound_tools.fragments import Fragment, load_all
+from tests.adopt_helpers import READ_GUIDANCE
 from tests.portable import needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -49,7 +50,7 @@ def test_rule_lines_split_only_at_explicit_newlines() -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["commands", "workspace", "python", "node-typescript", "research", "multi-agent", "explore"],
+    ["commands", "python", "node-typescript", "research", "explore"],
 )
 def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) -> None:
     """Catches a missing person-or-file trigger, an automatic read or a lost fragment path."""
@@ -59,6 +60,30 @@ def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) ->
     assert rendered.splitlines()[1:-1] == [
         "Read only when the person names it or a file you are reading directs you to it: "
         f"`.outcomebound/fragments/{name}.md`."
+    ]
+
+
+@pytest.mark.parametrize(
+    "name,condition",
+    [
+        (
+            "workspace",
+            "before creating or removing a worktree, or removing a container, volume or data "
+            "another run may need",
+        ),
+        ("multi-agent", "before writing a delegate's brief or integrating a delegate's work"),
+    ],
+)
+def test_guarded_fragment_renders_its_act_read_instead_of_a_manual_name(
+    name: str, condition: str
+) -> None:
+    """Catches a missing or broadened act trigger, a duplicate manual name or lost read guidance."""
+
+    rendered = facts.pointers([load_all(ROOT)[name]], [])
+    assert rendered is not None
+    assert rendered.splitlines()[1:-1] == [
+        *READ_GUIDANCE,
+        f"- {condition}: read .outcomebound/fragments/{name}.md",
     ]
 
 

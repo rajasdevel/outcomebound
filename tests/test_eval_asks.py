@@ -180,7 +180,8 @@ QUESTION_CASES = [
         "zero-blockers-is-no-verdict",
         "",
         ("make test",),
-        "Yes, ship it. There are zero blockers. POST retries are acceptable; tests do not cover it.\n",
+        "Yes, ship it. There are zero blockers. POST retries are acceptable; "
+        "tests do not cover it.\n",
         {"verdict-on-asked": "FAIL"},
     ),
     (

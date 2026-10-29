@@ -24,6 +24,7 @@ import pytest
 from outcomebound_tools import adopt, facts, fileplan, fragments, identity, paths
 from outcomebound_tools.declared_tests import PYTEST
 from tests.adopt_helpers import (
+    ACT_READS,
     CONDITIONAL_READS,
     GIT,
     INSTALLED_RULES,
@@ -239,11 +240,13 @@ def skill_pointer_lines(root: str, names: tuple[str, ...] = adopt.SKILLS) -> lis
         "- " + line for name in INSTALLED_RULES if name in names for line in INSTALLED_RULES[name]
     ]
     automatic = [name for name in names if name not in MANUAL_SKILLS]
-    manual = [f"`{name}`" for name in names if name in MANUAL_SKILLS]
+    acts = [name for name in names if name in ACT_READS]
+    manual = [f"`{name}`" for name in names if name in MANUAL_SKILLS and name not in ACT_READS]
     return [
         *(["These hold without a read:", *rules, ""] if rules else []),
-        *(READ_GUIDANCE if automatic else []),
+        *(READ_GUIDANCE if automatic or acts else []),
         *(f"- {CONDITIONAL_READS[name]}: read {root}/{name}/SKILL.md" for name in automatic),
+        *(f"- {ACT_READS[name]}: read {root}/{name}/SKILL.md" for name in acts),
         *(
             [
                 "Read only when the person names it or a file you are reading directs you to it "
@@ -1969,7 +1972,7 @@ def test_the_commands_fragment_installs_a_manual_name_and_copy_and_removes_both(
     )
     guidance = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert pointer not in guidance
-    assert "`sync-tracker`, `.outcomebound/fragments/commands.md`." in guidance
+    assert "`explain-spec`, `.outcomebound/fragments/commands.md`." in guidance
     assert run(capsys, str(target), "--remove")[0] == 0
     assert snapshot(target) == before
 
@@ -2142,7 +2145,7 @@ def test_manual_fragment_has_no_read_line_and_local_stays_inline(
     inline, rules, pointers = body.rsplit("\n\n", 2)
     assert inline == f"**local** (setup) — {local.applies}\n\n{local.body}"
     expected = skill_pointer_lines(".agents/skills")
-    once_lines = facts.ONCE.splitlines()
+    once_lines = READ_GUIDANCE
     once = expected.index(once_lines[0])
     assert rules.splitlines() == expected[: once - 1]
     assert pointers.splitlines() == [
@@ -2209,6 +2212,8 @@ def test_remove_takes_out_the_blocks_and_fragment_files_and_keeps_the_projects_o
 def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragment(
     tmp_path: Path, capsys: Capture
 ) -> None:
+    """Catches missing ticket act reads, a broad trigger, or a duplicate manual-only name."""
+
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
     before = snapshot(target)
 
@@ -2225,8 +2230,8 @@ def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragmen
             else:
                 assert data == file.read_bytes()
         path = f".claude/skills/{name}/SKILL.md"
-        assert f": read {path}" not in agents
-        assert f"`{name}`" in agents
+        assert f"- {ACT_READS[name]}: read {path}" in agents.splitlines()
+        assert f"`{name}`" not in agents.split("Read only when the person names it", 1)[1]
     assert len(list((ROOT / "skills/slice-tickets").rglob("*.md"))) > 1
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0
@@ -2333,7 +2338,7 @@ def test_the_research_fragment_installs_the_same_bytes_in_any_directory(
     assert snapshot(first) == snapshot(second)
     guidance = (first / "AGENTS.md").read_text(encoding="utf-8")
     assert f"read {shipped}" not in guidance
-    assert "`sync-tracker`, `.outcomebound/fragments/research.md`." in guidance
+    assert "`explain-spec`, `.outcomebound/fragments/research.md`." in guidance
     assert "pushing to the research repository" in guidance
 
 
