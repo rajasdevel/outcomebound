@@ -49,6 +49,8 @@
     "empty",
     "incomplete",
     "overbuilt",
-    "stopped"
+    "stopped",
+    "good-cache-miss",
+    "over-band-despite-misses"
   ]
 }

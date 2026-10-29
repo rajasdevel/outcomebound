@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from evals.codex_events import (
+    cache_misses,
     command_transcript,
     item_types,
     parse_events,
@@ -259,6 +260,7 @@ class CodexHarness:
             unknown_item_types=unknown_types(events),
             tokens_used=tokens_used(transcript),
             session_tokens=session_tokens(session, events),
+            cache_misses=cache_misses(session),
             catalog=catalog(session),
             identity_checks=checks,
             local_listener=request.local_listener,

@@ -19,7 +19,7 @@ from typing import Any
 
 import pytest
 
-from evals.codex_events import session_tokens
+from evals.codex_events import cache_misses, session_tokens
 from evals.harnesses import CallResult, Request
 from evals.harnesses import codex as codex_harness
 from outcomebound_tools import adopt
@@ -645,6 +645,52 @@ def test_runner_a_sessions_cost_is_its_last_running_total() -> None:
         "source": "stream",
     }
     assert session_tokens([], [{"type": "turn.completed", "usage": usage}]) is None
+
+
+def _call(sent: int, cached: int, running: int) -> dict[str, Any]:
+    usage = {"output_tokens": 1, "reasoning_output_tokens": 0}
+    info = {
+        "last_token_usage": {"input_tokens": sent, "cached_input_tokens": cached, **usage},
+        "total_token_usage": {"input_tokens": running, "cached_input_tokens": 0, **usage},
+    }
+    return {"type": "event_msg", "payload": {"type": "token_count", "info": info}}
+
+
+def test_runner_cache_misses_are_input_already_sent_that_was_not_cached() -> None:
+    """Breaks if a call's growth counts as a miss, if the repeated last count is read as a call,
+    or if a session with no call's usage reads as no misses."""
+
+    records = [
+        _call(18000, 12000, 18000),
+        _call(19000, 17900, 37000),  # 100 of the 18000 resent not cached
+        _call(24000, 12000, 61000),  # 7000 of the 19000 resent not cached
+        _call(24500, 24400, 85500),  # 0: the prefix was cached, the 500 is new
+        _call(24500, 24400, 85500),  # codex repeats the last count
+    ]
+    assert cache_misses(records) == 100 + 7000
+    assert cache_misses(records[:1]) == 0
+    assert cache_misses([_count(TOKENS)]) is None
+    assert cache_misses(None) is None
+
+
+def test_runner_a_regrade_reads_misses_from_the_native_copy_where_the_budget_kept_none(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a kept codex budget without misses is judged again without the misses its
+    native copy shows, or if a budget that recorded them, or another harness's, is changed."""
+
+    native = tmp_path / "f.native.jsonl"
+    native.write_text(
+        "".join(json.dumps(r) + "\n" for r in (_call(100, 0, 100), _call(150, 40, 250))),
+        encoding="utf-8",
+    )
+    budget = {"stopped": None, "input": 250, "uncached": 210, "output": 2, "seconds": 1.0}
+    meta = {"harness": "codex", "budget": budget}
+    assert RUN.kept_records(meta, native).budget == {**budget, "misses": 60}
+    assert RUN.kept_records(meta).budget == budget
+    kept = {**budget, "misses": 5}
+    assert RUN.kept_records({**meta, "budget": kept}, native).budget == kept
+    assert RUN.kept_records({**meta, "harness": "claude-code"}, native).budget == budget
 
 
 SUMMARY = {
