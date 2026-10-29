@@ -13,7 +13,8 @@ person.
 
 Whenever an agent needs a person's judgment, or needs a person to understand or answer something,
 the person can do it quickly and do it well. Two instruments serve this. The decision brief puts
-every decision in text, always. The explorable adds a page, only where text serves the person
+every decision in text, always: a routine one in plain words, a choice between several options in
+the drawn form. The explorable adds a page, only where text serves the person
 badly.
 
 ### The decision brief

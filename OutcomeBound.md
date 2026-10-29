@@ -43,12 +43,14 @@ source, tests, runtime or external state they describe.
 Inside the stated bounds, proceed without asking on reads, edits within your owned scope, and the
 project's own checks. Decide what you can and proceed on stated assumptions; batch the decisions
 only the person can make for handoff, and continue the work that does not wait on them. Before you
-ask, check the facts within reach that are likely to change the answer. Each decision goes as a decision
+ask, check the facts within reach that are likely to change the answer. A routine decision, one choice with a
+clear recommendation, is asked in plain words: the question, the recommendation, its consequence,
+what waits and whether it can be undone. A choice between several credible options goes as a decision
 brief, in the order a person decides: an id and the question in one line; what waits on the answer;
 the context the person needs to judge; a picture where it carries meaning; each credible way
 forward, with what it leads to, when to choose it and its downside, your recommendation marked on
 the option it names, with why; the evidence; and whether it can be undone. The `decision-brief` skill gives the steps, and
-`outcomebound brief` draws it in the marks and diagram form the surface shows. Hold only an act
+`outcomebound brief` draws such a brief in the marks and diagram form the surface shows. Hold only an act
 your authority does not grant, such as destroying others' work, an irreversible act, an external
 write, spending money, or widening scope beyond the granted authority. Where a ticket, a package or a delegation names the
 paths an item may write, those paths are that item's authority: a file it needs outside them holds

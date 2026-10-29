@@ -640,6 +640,14 @@ MANUAL_FRAGMENTS = frozenset(
     {"commands", "workspace", "python", "node-typescript", "research", "multi-agent", "explore"}
 )
 
+# Manual fragments read just before the act their condition names, never on other tasks.
+FRAGMENT_ACTS = {
+    "workspace": (
+        "before creating or removing a worktree, or removing a container, volume or data another "
+        "run may need"
+    ),
+    "multi-agent": "before writing a delegate's brief or integrating a delegate's work",
+}
 
 def once_lines() -> list[str]:
     """The read-once text as the pointers block holds it: one block line each."""
@@ -692,14 +700,17 @@ def pointers(
         else []
     )
     lines = [
-        f"- {item.condition or 'for ' + item.applies}: read {FRAGMENT_DIR}/{item.id}.md"
+        f"- {FRAGMENT_ACTS.get(item.id) or item.condition or 'for ' + item.applies}: "
+        f"read {FRAGMENT_DIR}/{item.id}.md"
         for item in selected
-        if item.id != LOCAL and item.id not in MANUAL_FRAGMENTS
+        if item.id != LOCAL and (item.id not in MANUAL_FRAGMENTS or item.id in FRAGMENT_ACTS)
     ]
     lines += [f"- {condition}: read {path}" for condition, path in skills]
     lines = [*once_lines(), *lines] if lines else []
     root, names = manual
-    held = [item.id for item in selected if item.id in MANUAL_FRAGMENTS]
+    held = [
+        item.id for item in selected if item.id in MANUAL_FRAGMENTS and item.id not in FRAGMENT_ACTS
+    ]
     if names or held:
         lines.append(manual_line(root, names, held))
     parts += ["\n".join(lines)] if lines else []
