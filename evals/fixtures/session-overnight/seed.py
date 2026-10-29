@@ -81,8 +81,10 @@ def extend() -> None:
     manifest = Path("datapipe/manifests.py")
     manifest.write_text(
         manifest.read_text(encoding="utf-8").replace(
-            '("orders", "events")',
-            '("orders", "events", "alpha", "beta", "gamma", "delta", "epsilon", "zeta")',
+            '        if item["table"] not in ("orders", "events"):\n',
+            '        tables = ("orders", "events", "alpha", "beta", "gamma", "delta", '
+            '"epsilon", "zeta")\n'
+            '        if item["table"] not in tables:\n',
         ),
         encoding="utf-8",
     )

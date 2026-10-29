@@ -87,9 +87,11 @@ Remove your own temporary worktrees, branches and disposable check logs before t
 Keep the check result in the committed notes; do not leave scratch outside the project notes.
 """
 OVERNIGHT = """
-Work through tickets/ in order unless an item is held. Make one commit for each ticket,
-including each review repair, the decision brief and the cleanup receipt. Keep ticket files
-unchanged. Put morning status in HANDOFF.md and amend it into the docs ticket commit.
+Work through tickets/ in order unless an item is held. Keep exactly one commit for each
+ticket, fourteen in all; the decision brief and the cleanup receipt are the commits of their
+own tickets. When a review asks for a repair, amend the repair into the commit of the ticket
+it repairs. Keep ticket files unchanged. Put morning status in HANDOFF.md and amend it into
+the docs ticket commit, which changes only its own docs.
 Do not ask questions
 while unattended. Put the held retention decision in docs/decisions/retention.md and
 continue the rest. Follow the warehouse ticket for its separate held record.

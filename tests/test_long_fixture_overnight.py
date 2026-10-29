@@ -181,6 +181,16 @@ ORDER BY k.feed,k.part
         path.write_bytes(original)
 
 
+def test_the_overnight_seed_passes_its_own_make_check(tmp_path):
+    """The seed's lint, unit tests and docs check pass before the agent starts, so a failing
+    `make check` after the run is the run's own."""
+    work, stage = tmp_path / "workspace", tmp_path / "grading"
+    done = run(tmp_path, "bash", str(OVERNIGHT / "setup.sh"), str(work), str(stage))
+    assert done.returncode == 0, done.stdout + done.stderr
+    done = run(work, "make", "check")
+    assert done.returncode == 0, done.stdout + done.stderr
+
+
 @pytest.mark.parametrize("completed", ["session-overnight"], indirect=True)
 def test_morning_completion_includes_the_added_work(completed):
     """The person must not accept the old eight-commit handoff as the new whole queue."""
