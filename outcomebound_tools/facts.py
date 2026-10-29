@@ -501,15 +501,16 @@ class Rendered:
 
 
 class Chosen(NamedTuple):
-    """What the adopter chose for the facts block: the Done commands, in run order, the style
+    """What the adopter chose for the facts and pointers: the Done commands, in run order, the style
     for text a person reads, a key of `STYLES`, or none, and the Setup commands, in run order,
     which adopt records as the person's fact and never runs; and the install mode, `FULL` or
-    `FACTS_ONLY`."""
+    `FACTS_ONLY`; and the manual skill root and names selected for the pointers."""
 
     done: Sequence[str]
     style: Sequence[str] = ()
     setup: Sequence[str] = ()
     mode: str = FULL
+    manual: tuple[str, Sequence[str]] = ("", ())
 
 
 def render(
@@ -533,7 +534,6 @@ def render_chosen(
     files: Sequence[str],
     skills: Sequence[tuple[str, str]],
     rules: Sequence[str] = (),
-    manual: tuple[str, Sequence[str]] = ("", ()),
 ) -> Rendered:
     """The facts and pointers blocks for `target`.
 
@@ -546,7 +546,7 @@ def render_chosen(
     a pointers block with the `local` fragment alone.
     """
 
-    done, style, setup, mode = chosen
+    done, style, setup, mode, manual = chosen
     lines: list[str] = []
     unverified: list[str] = []
     inputs = {f"{FRAGMENT_DIR}/{item.id}.md": item.digest for item in selected}
@@ -630,8 +630,9 @@ ONCE = "Read a file below once, when work you have read shows its condition hold
 RULES_LEAD = "These hold without a read:"
 # Fragments with no pointer line: the person names one to have it read. Records showed agents
 # reading each on nearly every task, for rules the task did not use.
-MANUAL_FRAGMENTS = frozenset({"commands", "workspace", "python", "node-typescript", "research",
-                              "multi-agent", "explore"})
+MANUAL_FRAGMENTS = frozenset(
+    {"commands", "workspace", "python", "node-typescript", "research", "multi-agent", "explore"}
+)
 
 
 def once_lines() -> list[str]:

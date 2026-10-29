@@ -1,6 +1,7 @@
 ---
 name: tests-worth-keeping
-description: Use for risky logic, red baselines, skipped, weakened or removed tests, or doubtful test proof.
+description: Use for risky logic, red baselines, skipped, weakened or removed tests, or doubtful test proof. For each test added or assessed, assert through the caller's interface an expected value that neither the code under test nor a copy of its algorithm produces (a literal, worked example or spec). Name the break each added or assessed test would catch. For a refusal test, reach the named refusal, not setup failure or an earlier guard.
+disable-model-invocation: true
 ---
 
 # Tests worth keeping

@@ -1,6 +1,7 @@
 ---
 name: review-council
 description: Use for a second opinion from another model or harness. Plan first; run only after the person's yes.
+disable-model-invocation: true
 ---
 
 # Review council

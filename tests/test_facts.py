@@ -25,13 +25,40 @@ def test_common_rules_render_on_separate_lines_with_their_exceptions() -> None:
     rendered = facts.pointers(
         [],
         [],
-        ["When a check fails, report it; never hide it. Rerun only after its inputs change."],
+        [
+            "When a check fails, report it; never hide it. Rerun only after its inputs change.\n"
+            "When a refusal is tested, reach that refusal."
+        ],
     )
 
     assert rendered is not None
     assert (
-        "- When a check fails, report it; never hide it.\n- Rerun only after its inputs change.\n"
+        "- When a check fails, report it; never hide it. Rerun only after its inputs change.\n"
+        "- When a refusal is tested, reach that refusal.\n"
     ) in rendered
+
+
+def test_rule_lines_split_only_at_explicit_newlines() -> None:
+    """Catches sentence splitting, including a second sentence that starts with a code span."""
+
+    assert facts.rule_lines("Keep this rule. Its exception stays here.\nNext rule. `x` stays.") == [
+        "- Keep this rule. Its exception stays here.",
+        "- Next rule. `x` stays.",
+    ]
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["commands", "workspace", "python", "node-typescript", "research", "multi-agent", "explore"],
+)
+def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) -> None:
+    """Catches a manual fragment reverting to a conditional read or losing its manual name."""
+
+    rendered = facts.pointers([load_all(ROOT)[name]], [])
+    assert rendered is not None
+    assert rendered.splitlines()[1:-1] == [
+        f"Read only when the person names it: `.outcomebound/fragments/{name}.md`."
+    ]
 
 
 PYTHON = """\

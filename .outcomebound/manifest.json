@@ -6,14 +6,15 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "f2a187ea087e251106400759641cb6c5da2886408d4de25f581903d04c60f3f6"
+      "sha256": "44b7fdae054a82c8cfc21aa47588131347711313a9aa602dc9d7507b391900c4"
     },
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "project-facts",
       "harnesses": [
-        "claude-code"
+        "claude-code",
+        "codex"
       ],
       "fragments": [
         "multi-agent",
@@ -46,8 +47,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "0b5d64148f264f59d954ec00c1338cf069d1e7d2886c4fa63a87e39e9f0b7dab",
-      "sha256": "7a31b94ea835da1bbf03992720062ed73f4fa6cee5e7d2c4756be9234734269e"
+      "frame": "8d3424f10129cf2e6296c91b7cb2400838816f8d31f38fc59e16ed1f55585789",
+      "sha256": "fb0352ec54593a945a589b0487cbac672e0f81f15f8be394ba61e0fe58231df6"
     },
     {
       "kind": "fragment",
@@ -87,12 +88,372 @@
     },
     {
       "kind": "skill",
+      "path": ".agents/skills/decision-brief/SKILL.md",
+      "id": "decision-brief",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "8a65d950308d11201cd2411196876983380ddfd45ff57cc3311cbf2eac6c8c7f"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/decision-brief/references/ask-tool.md",
+      "id": "decision-brief",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "2f2776f7c70581e1b621e5282dfa6c15a557fdba41ffbd9c7a179163e492d121"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/decision-brief/references/presentation.md",
+      "id": "decision-brief",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "37b43fbc70fa35603dbebd10c356e6581659d833a458e7ffd764d20e828924d1"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/decision-brief/references/refusal.md",
+      "id": "decision-brief",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "8b2000ebf699a93bd923ebf1b00617c4752d0313197bd55d1c4da864dfac861a"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/diagnose/SKILL.md",
+      "id": "diagnose",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "57da97762fc64394bbd886237c5b357f7d8eafbb7cabb6b0792e336d642cf797"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/diagnose/references/narrowing.md",
+      "id": "diagnose",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "4a90cc56fad6095ee14cbee1870f7cedfeb28cc8d5fca4723f278de3fb22105d"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/explain-spec/SKILL.md",
+      "id": "explain-spec",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "ead10baba147dd9c2bc3e86308d17dbe5dfe655feac1ab467f326e004f5740bd"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/explain-spec/agents/openai.yaml",
+      "id": "explain-spec",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/explorable/SKILL.md",
+      "id": "explorable",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "e9648a17db98d128a57a087f7a480fb39ec82107ca0a0bdab740acb08533ac2c"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/explorable/agents/openai.yaml",
+      "id": "explorable",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/explorable/references/runtime.md",
+      "id": "explorable",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "5fc9987f8a01f3915bc6bd3aa94105150905b52f94102d1128c02a555cf84a69"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/gather-requirements/SKILL.md",
+      "id": "gather-requirements",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "715bd8077f1fd6d27057bbe5b01dc31c8531071ff6877bc0961529a30debae88"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/gather-requirements/agents/openai.yaml",
+      "id": "gather-requirements",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/gather-requirements/references/examples.md",
+      "id": "gather-requirements",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "d824148434ca598b6205ef721966f11c6a7aaf89355ee5593fd86d85e469efe8"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/gather-requirements/references/interview.md",
+      "id": "gather-requirements",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "30b35b036867eac3a651398899b0642c3da86bd27a6bd50e16d0eae6e0414f53"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/gather-requirements/references/scaffold.md",
+      "id": "gather-requirements",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "50313dadb97da798363775b2dffe69a2587b383f6644b0989bc2308a5c181011"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/gather-requirements/references/source-kinds.md",
+      "id": "gather-requirements",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "f3f62f35ffee623edea84cd65a8fb8bee466dfc6fb685d0fa80efbb54eb12ff3"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/hand-off-tickets/SKILL.md",
+      "id": "hand-off-tickets",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "0f8d32dfcc80e368d5340294bb3a69c85a31a617d0b74f1dc7f8fa8e8ea17415"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/hand-off-tickets/agents/openai.yaml",
+      "id": "hand-off-tickets",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/land-change/SKILL.md",
+      "id": "land-change",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "4b361e2598d6965a997010e9bffd97048bc1aa821d2e8c3a6b2ba760e8a59344"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/land-change/agents/openai.yaml",
+      "id": "land-change",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/review-council/SKILL.md",
+      "id": "review-council",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "e3175b8f04be01502675c8eeaa815d185c460309e7e50f6da00676719f4ea99b"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/review-council/agents/openai.yaml",
+      "id": "review-council",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/review-findings/SKILL.md",
+      "id": "review-findings",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "696f3805d1aca22dcc997309de052a0a6987b40e0a894579a2b0325889b52840"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/review-findings/agents/openai.yaml",
+      "id": "review-findings",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/run-acceptance/SKILL.md",
+      "id": "run-acceptance",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "048a0cd5688a77c98f6a7962d31bc8fe01e5b8ab06788e38567aaa510d186077"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/run-acceptance/agents/openai.yaml",
+      "id": "run-acceptance",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/slice-tickets/SKILL.md",
+      "id": "slice-tickets",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "7593be5ffb9cde285c9acac3591c0be3266f161bed0b87a7853ecfcf34211eef"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/slice-tickets/agents/openai.yaml",
+      "id": "slice-tickets",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/slice-tickets/references/github.md",
+      "id": "slice-tickets",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "6c5911671e3f65e6eecdf2f0153c3ac91f2be26f2b8e736a61fe0034cb3e6401"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/sync-tracker/SKILL.md",
+      "id": "sync-tracker",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "efd18a368fc3ae1401aa8be82434f579f1854f35c50d655ee13979e44a9b3067"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/sync-tracker/agents/openai.yaml",
+      "id": "sync-tracker",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/tests-worth-keeping/SKILL.md",
+      "id": "tests-worth-keeping",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "ae247d1da513349f0c80e0c8aa4b59eac46f36f37024a761e528efdb93567dd2"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/tests-worth-keeping/agents/openai.yaml",
+      "id": "tests-worth-keeping",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/tests-worth-keeping/references/examples.md",
+      "id": "tests-worth-keeping",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "f06b059ed49d06d0b426c99a1d012c497c04ae688a5149b9873106d89d6ba8b5"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/using-outcomebound/SKILL.md",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "61746ff7b2b85eb52636bf5de299624e161e175de9f56ade6d90534c7d03135b"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/using-outcomebound/agents/openai.yaml",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/using-outcomebound/references/continuity.md",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "292f71a359c84668eb499db20a1a9c648e5c01bb31012dee2c967349dce488d9"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/using-outcomebound/references/lifecycle.md",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "4f2afbbd560d540a05bd870566aed2095259606d41d7e3e6980bb256a3350050"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/using-outcomebound/references/new-project.md",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "ab311fdb93c94414b47b38976a45e8a1b00a61808393890987a5df4b92bddf76"
+    },
+    {
+      "kind": "skill",
       "path": ".claude/skills/decision-brief/SKILL.md",
       "id": "decision-brief",
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "bdcb1d07a2c03355a999b5ed8829a5c632612619d4bca80d7ff9a6996caaef00"
+      "sha256": "8a65d950308d11201cd2411196876983380ddfd45ff57cc3311cbf2eac6c8c7f"
     },
     {
       "kind": "skill",
@@ -128,7 +489,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "341c1b60b9ec28f695c674f9f12af4af18632de552cd24ae1fcfd58123e76766"
+      "sha256": "57da97762fc64394bbd886237c5b357f7d8eafbb7cabb6b0792e336d642cf797"
     },
     {
       "kind": "skill",
@@ -146,7 +507,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "365e91497c3c4875757ea608c423dd4cb54da7a76e8f38683b62ed7053a952ca"
+      "sha256": "ead10baba147dd9c2bc3e86308d17dbe5dfe655feac1ab467f326e004f5740bd"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/explain-spec/agents/openai.yaml",
+      "id": "explain-spec",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -155,7 +525,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "ce5a26cfa11677f6d628701568853495e39a38ca3677806618d8404836b4f108"
+      "sha256": "e9648a17db98d128a57a087f7a480fb39ec82107ca0a0bdab740acb08533ac2c"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/explorable/agents/openai.yaml",
+      "id": "explorable",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -173,7 +552,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "8e2baa84fb38586cdc5522cfcb02b8e92e3ce7a298c0b751653b9f51aaace33e"
+      "sha256": "715bd8077f1fd6d27057bbe5b01dc31c8531071ff6877bc0961529a30debae88"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/gather-requirements/agents/openai.yaml",
+      "id": "gather-requirements",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -218,7 +606,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "d0ccc01f66629aaaf370718a3cd1b7e7398ea6ad8c897bc640244765b2ab50c0"
+      "sha256": "0f8d32dfcc80e368d5340294bb3a69c85a31a617d0b74f1dc7f8fa8e8ea17415"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/hand-off-tickets/agents/openai.yaml",
+      "id": "hand-off-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -227,7 +624,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "26914932479ec3c5f07f1b7d6ec8de7b69873b7f6ce7488cf01d1e575a2d5825"
+      "sha256": "4b361e2598d6965a997010e9bffd97048bc1aa821d2e8c3a6b2ba760e8a59344"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/land-change/agents/openai.yaml",
+      "id": "land-change",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -236,7 +642,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "1d1c9d5f712b721d225664b38d16f9e8f7fd9f79e83b751daa41a33676025b63"
+      "sha256": "e3175b8f04be01502675c8eeaa815d185c460309e7e50f6da00676719f4ea99b"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/review-council/agents/openai.yaml",
+      "id": "review-council",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -245,7 +660,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "a6a44da627c71376f442e508e45dd4a44b71d96ce58aeb7990b46809bed3706a"
+      "sha256": "696f3805d1aca22dcc997309de052a0a6987b40e0a894579a2b0325889b52840"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/review-findings/agents/openai.yaml",
+      "id": "review-findings",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -254,7 +678,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "d02c75ec966ce8527e880b6e98aa95a8ac51d0ae7e1566fdbe3a58408391a0a2"
+      "sha256": "048a0cd5688a77c98f6a7962d31bc8fe01e5b8ab06788e38567aaa510d186077"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/run-acceptance/agents/openai.yaml",
+      "id": "run-acceptance",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -263,7 +696,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "9f484169543695a2625703511c2fd8e883b20673b4fbf1b2e9055bd7434da24a"
+      "sha256": "7593be5ffb9cde285c9acac3591c0be3266f161bed0b87a7853ecfcf34211eef"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/slice-tickets/agents/openai.yaml",
+      "id": "slice-tickets",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -281,7 +723,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "b8d3e385130be7159d9a65f26b0f47b7daa911eb6a3b34c3b3094ff1f218216b"
+      "sha256": "efd18a368fc3ae1401aa8be82434f579f1854f35c50d655ee13979e44a9b3067"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/sync-tracker/agents/openai.yaml",
+      "id": "sync-tracker",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -290,7 +741,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "78d51e1d13257d8c95ba3fbf7ac36b5013bf760b346ead1be206198f8f82a985"
+      "sha256": "ae247d1da513349f0c80e0c8aa4b59eac46f36f37024a761e528efdb93567dd2"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/tests-worth-keeping/agents/openai.yaml",
+      "id": "tests-worth-keeping",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -308,7 +768,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "4e1e491435b4495dfa75aeac947668b26cc192383b057c02461eb678581a9a39"
+      "sha256": "61746ff7b2b85eb52636bf5de299624e161e175de9f56ade6d90534c7d03135b"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/using-outcomebound/agents/openai.yaml",
+      "id": "using-outcomebound",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",

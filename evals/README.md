@@ -553,12 +553,15 @@ What stays `UNVERIFIED` until that probe runs:
     adopt wrote the skill and fragment files the arm's record names, byte for byte, and the meta
     records `arm_adopted`. `unsized` and `earlier` keep the install described above on these
     fixtures too, and every fixture without an `install.json` keeps it under `current`.
-  - The `AGENTS.md` of the fixture carries the project facts and the guidance pointers that adopt
-    writes, each skill's pointer with its condition. They replace the line of the note that sends
-    the model to the core skill.
-- `unsized`: `current` without the sizing paragraph of the kernel, the one that opens "Satisfy all
-  four completely". Against `current`, it measures whether that paragraph changes what a model
-  does. Every install loads that paragraph.
+  - The `AGENTS.md` of the fixture carries the project facts, inline rules, conditional reads
+    and manual names that adopt writes. Only `decision-brief` and `diagnose` get conditional
+    skill reads. The other twelve skills and selected manual fragments share the manual line.
+    These replace the note's pointer to the core skill. Element arms keep or remove each manual
+    name with its skill or fragment, even though the names share one line.
+- `unsized`: `current` without the single kernel line that opens
+  `- Size every step to the changed risk:`. Every other line stays, including the separate
+  reuse and underengineering rules. Against `current`, it measures whether the sizing rule
+  changes what a model does.
 - `none`: the task alone. It has no kernel, no skill and no launcher. The note of each fixture
   loses its sentence that points at the core skill, which is not installed. Against `current`, it
   measures what the text of OutcomeBound adds at all.

@@ -470,7 +470,7 @@ def guidance(
     rules = [RULES[name] for name in RULES if name in names] if root else []
     manual = [name for name in names if name in MANUAL] if root else []
     rendered = facts.render_chosen(
-        target, selected, chosen, hosts, skills, rules, manual=(root or "", manual)
+        target, selected, chosen._replace(manual=(root or "", manual)), hosts, skills, rules
     )
     return Guidance(rendered, files, names)
 
@@ -2047,7 +2047,7 @@ def _skill_forms(source: Path, record: Record, own: Sequence[Record]) -> tuple[b
     files = skill_files(source, name, short=short)
     if relative not in files:
         raise AdoptError(f"this engine ships no {relative} in the {name} skill")
-    full = skill_files(source, name)[relative] if short else None
+    full = skill_files(source, name).get(relative) if short else None
     return files[relative], full
 
 

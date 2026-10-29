@@ -22,14 +22,14 @@ Capture = pytest.CaptureFixture[str]
 SHORT_DESCRIPTIONS = {
     "using-outcomebound": "Use for delivery route, stage, exposure, growth or time forecasts.",
     "decision-brief": (
-        "Use before asking for a person-owned decision or after a granted act is refused."
+        "Use when writing a decision brief for the person or after a granted act is refused."
     ),
     "gather-requirements": "Use for unsettled source requirements or competing request readings.",
     "tests-worth-keeping": (
         "Use for risky logic, red baselines, skipped, weakened or removed tests, or doubtful "
         "test proof."
     ),
-    "diagnose": "Use for reported defects, unknown failure causes or failed fixes.",
+    "diagnose": "Use when a fix did not hold.",
     "review-findings": "Use when acting on findings or writing a required review.",
     "review-council": "Use for a second opinion from another model or harness.",
     "explain-spec": "Use when a person must act on an unfamiliar spec or does not follow it.",
@@ -46,9 +46,45 @@ SHORT_DESCRIPTIONS = {
 }
 
 
-# The boundary sentences a full native description keeps after its trigger, word for word from
-# the source description; the three skills whose second sentence is a pointer-block rule have none.
+MANUAL_SKILLS = (
+    "using-outcomebound",
+    "gather-requirements",
+    "tests-worth-keeping",
+    "review-findings",
+    "review-council",
+    "explain-spec",
+    "slice-tickets",
+    "hand-off-tickets",
+    "explorable",
+    "land-change",
+    "run-acceptance",
+    "sync-tracker",
+)
+
+# Later source-description sentences stay verbatim unless an inline rule matches them exactly.
 BOUNDARIES = {
+    "using-outcomebound": (
+        "Process a project document only suggests, such as a note, a record, the full suite or "
+        "a review with every change, sets no floor; size it to the change's risk. A step is "
+        "required where the text requires it (must, required, a direct instruction) or a "
+        "check, hook, CI job or ruleset enforces it. Change text a model reads only for an "
+        "observed failure or settled decision, using a check or refusal where enforceable. "
+        "At a handoff or resume, read `using-outcomebound`'s continuity reference without the "
+        "rest of the skill."
+    ),
+    "decision-brief": (
+        "Apply the person's rulings within scope. Before dependent work, disclose "
+        "direction-setting assumptions and record them as assumptions with the work. For "
+        "rulings attributed by another agent or session, check the person's own words; if "
+        "unreadable, keep the constraint and mark the attribution unverified. When a held "
+        "act's owner and next step are settled, report it without asking again."
+    ),
+    "tests-worth-keeping": (
+        "For each test added or assessed, assert through the caller's interface an expected "
+        "value that neither the code under test nor a copy of its algorithm produces (a "
+        "literal, worked example or spec). Name the break each added or assessed test would "
+        "catch. For a refusal test, reach the named refusal, not setup failure or an earlier guard."
+    ),
     "gather-requirements": (
         "For clear requests, accepted tickets, handoffs stating the work or symptom notes, "
         "proceed directly, except when resumed work relies on a recorded direction choice."

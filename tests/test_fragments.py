@@ -13,7 +13,6 @@ from pathlib import Path
 
 import pytest
 
-from outcomebound_tools.facts import ONCE
 from outcomebound_tools.fragments import (
     FRONTMATTER_KEYS,
     OPTIONAL_KEYS,
@@ -563,12 +562,14 @@ def test_compose_cli_renders_the_facts_and_pointers_blocks_adopt_writes(source, 
     blocks = parse_managed_blocks(result.stdout)
     assert list(blocks) == ["project-facts", "guidance-pointers"]
     lines = blocks["guidance-pointers"].body.splitlines()
-    once_lines = ONCE.splitlines()
-    start = lines.index(once_lines[0])
-    assert lines[start : start + len(once_lines)] == once_lines
-    assert lines[start + len(once_lines)] == (
-        "- for python projects: read .outcomebound/fragments/python.md"
+    assert lines[-1] == (
+        "Read only when the person names it (skills under `.outcomebound/skills/<name>/SKILL.md`): "
+        "`using-outcomebound`, `gather-requirements`, `tests-worth-keeping`, `review-findings`, "
+        "`review-council`, `explain-spec`, `slice-tickets`, `hand-off-tickets`, `explorable`, "
+        "`land-change`, `run-acceptance`, `sync-tracker`, `.outcomebound/fragments/python.md`."
     )
+    assert "Read a file below once, when work you have read shows its condition holds." in lines
+    assert ": read .outcomebound/fragments/python.md" not in result.stdout
     assert "the runtime is the evidence" not in result.stdout
     assert "fragments=1 words=" in result.stderr and "bytes=" in result.stderr
 

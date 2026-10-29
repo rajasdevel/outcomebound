@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from evals.harnesses import CallResult, Request
-from tests.adopt_helpers import assert_native_skill
+from tests.adopt_helpers import MANUAL_SKILLS, assert_native_skill
 from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
 from tests.portable import needs_posix_bash
 
@@ -319,11 +319,20 @@ def test_each_arm_is_its_kernel_file_or_the_block_adopt_installs() -> None:
     assert prompt == RUN.kernel("current") + "\n\nTask:\nFix it.\n"
 
 
-def test_the_unsized_arm_is_the_current_arm_less_the_sizing_paragraph_alone() -> None:
+def test_the_unsized_arm_is_the_current_arm_less_the_sizing_rule_alone() -> None:
     current, unsized = RUN.load_arm("current"), RUN.load_arm(RUN.UNSIZED)
     assert RUN.SIZING in current.kernel and RUN.SIZING not in unsized.kernel
-    kept = [part for part in current.kernel.split("\n\n") if not part.startswith(RUN.SIZING)]
-    assert unsized.kernel == "\n\n".join(kept)
+    sizing = (
+        "- Size every step to the changed risk: specs, tickets, reviews, checks and records count; "
+        "the full suite only where that risk reaches it or the project requires it.\n"
+    )
+    assert current.kernel.count(sizing) == 1
+    assert unsized.kernel == current.kernel.replace(sizing, "")
+    assert "- Preserve unrelated work." in unsized.kernel
+    assert (
+        "- Underengineered: fragile, unchecked or uncertain where failure matters."
+        in unsized.kernel
+    )
     assert unsized.files == current.files and unsized.launcher == current.launcher
     with pytest.raises(SystemExit):
         RUN.without_sizing("a kernel with no such paragraph")
@@ -362,6 +371,12 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
     skills = table["codex"]["skill_install_path"].rstrip("/")
     current = RUN.load_arm("current")
     expected, files = _folders(skills, adopt.SKILLS), dict(current.files)
+    expected.update(
+        {
+            f"{skills}/{name}/agents/openai.yaml": b"policy:\n  allow_implicit_invocation: false\n"
+            for name in MANUAL_SKILLS
+        }
+    )
     for path in [path for path in expected if path.endswith("/SKILL.md")]:
         assert_native_skill(files.pop(path), path.split("/")[-2])
         del expected[path]
@@ -386,7 +401,10 @@ def test_the_current_arm_carries_every_installs_skills_and_the_fixtures_fragment
     skills = table["codex"]["skill_install_path"].rstrip("/")
     selected = RUN.load_arm("current", ("tickets",))
     fragment = ".outcomebound/fragments/tickets.md"
-    assert set(selected.files) - {fragment} == set(_folders(skills, adopt.SKILLS))
+    expected = set(_folders(skills, adopt.SKILLS)) | {
+        f"{skills}/{name}/agents/openai.yaml" for name in MANUAL_SKILLS
+    }
+    assert set(selected.files) - {fragment} == expected
     assert selected.files[fragment] == adopt._fragment_bytes(fragments.load_all(ROOT)["tickets"])
     assert f"{skills}/slice-tickets/references/github.md" in selected.files
     assert (selected.kernel, selected.launcher) == (RUN.kernel("current"), ROOT / LAUNCHER)
@@ -500,8 +518,6 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     facts-only arm lacks the facts or holds a pointer; or if the bare arm keeps any note; the
     other arms keep the note as the fixture wrote it."""
 
-    from outcomebound_tools import adopt
-
     arguments = ("--arm", arm, "--model", "gpt-6-sol", "--fixtures", "slice-a-spec")
     _done, out = _invoke(tmp_path, arguments, action=":")
     meta = _meta(out, "slice-a-spec")
@@ -525,7 +541,9 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     if arm in RUN.INSTALLED:
         assert pointer not in note and "id=project-facts" in note, note
         for skill in ("using-outcomebound", "slice-tickets"):
-            assert f"- {adopt.CONDITIONS[skill]}: read .agents/skills/{skill}/SKILL.md" in note
+            assert f": read .agents/skills/{skill}/SKILL.md" not in note
+            assert f"`{skill}`" in note.split("Read only when the person names it", 1)[1]
+        assert "- when a fix did not hold: read .agents/skills/diagnose/SKILL.md" in note
         assert "read .outcomebound/fragments/tickets.md" in note
         assert seed_note == note
     elif arm in (RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS):
@@ -804,9 +822,7 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
         capture_output=True,
         check=True,
     ).stdout
-    changed = template.replace(
-        b"neither underengineer nor overengineer", b"a variant's own words", 1
-    )
+    changed = template.replace(b"the core work the outcome requires", b"a variant's own words", 1)
     assert changed != template
     # The whole folder of a skill goes, as a variant would drop it.
     tree = subprocess.run(
@@ -866,10 +882,10 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
 
     from outcomebound_tools import adopt, facts
 
-    condition = adopt.CONDITIONS["review-findings"].encode()
+    condition = adopt.CONDITIONS["diagnose"].encode()
     adopt_text = at_head("outcomebound_tools/adopt.py")
     facts_text = at_head("outcomebound_tools/facts.py")
-    reread = b"a compaction alone is no reason."
+    reread = b"Read a file below once, when work you have read shows its condition holds."
     assert condition in adopt_text and facts_text.count(reread) == 1
     assert adopt_text.count(b'\nif __name__ == "__main__":') == 1
     ref_rules = b'\nRULES = {name: "A ref rule for " + name + "." for name in RULES}\n'
@@ -904,16 +920,12 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         assert done.returncode == 0, done.stdout + done.stderr
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
         assert "a ref's own condition" in notes and "a ref's own reread." in notes
-        assert adopt.CONDITIONS["review-findings"] not in notes and facts.ONCE not in notes
+        assert adopt.CONDITIONS["diagnose"] not in notes and facts.ONCE not in notes
         assert "A ref rules lead:" in notes and facts.RULES_LEAD not in notes
         for skill, rule in adopt.RULES.items():
             assert f"- A ref rule for {skill}." in notes
             assert rule not in notes
-        ordered_rules = [
-            notes.index(f"- A ref rule for {skill}.")
-            for skill in reversed(adopt.SKILLS)
-            if skill in adopt.RULES
-        ]
+        ordered_rules = [notes.index(f"- A ref rule for {skill}.") for skill in adopt.RULES]
         assert ordered_rules == sorted(ordered_rules)
         assert (
             "- a ref reference condition: read "
@@ -968,6 +980,32 @@ def test_the_current_arm_without_install_json_has_the_full_installs_pointers(
     assert manual == full
 
 
+def test_an_older_engine_without_manual_routing_keeps_its_rule_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catches imposing the new rule order on an earlier engine that rendered in skill order."""
+
+    monkeypatch.setattr(RUN, "EARLIER_REF", "synthetic")
+    monkeypatch.setattr(RUN, "earlier_source", lambda: ROOT)
+    monkeypatch.setattr(
+        RUN,
+        "earlier_engine",
+        lambda request: {
+            "skills": ["diagnose", "decision-brief"],
+            "conditions": {"diagnose": "old diagnosis", "decision-brief": "old brief"},
+            "rules": {
+                "decision-brief": "An older brief rule.",
+                "diagnose": "An older diagnosis rule.",
+            },
+            "references": [],
+        },
+    )
+    assert RUN.load_arm("earlier").rules == (
+        "An older diagnosis rule.",
+        "An older brief rule.",
+    )
+
+
 @pytest.mark.parametrize("skill", ["tests-worth-keeping", "decision-brief", "using-outcomebound"])
 def test_dropping_a_skill_removes_its_rule_and_reference_pointers(
     tmp_path: Path, skill: str
@@ -993,6 +1031,8 @@ def test_dropping_a_skill_removes_its_rule_and_reference_pointers(
     for line in facts.rule_lines(adopt.RULES[skill]):
         assert f"{line}\n" not in text
     assert f": read .agents/skills/{skill}/" not in text
+    if skill in MANUAL_SKILLS:
+        assert f"`{skill}`" not in text.split("Read only when the person names it", 1)[1]
     for kept, rule in adopt.RULES.items():
         if kept != skill:
             for line in facts.rule_lines(rule):

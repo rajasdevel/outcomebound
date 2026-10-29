@@ -1,6 +1,7 @@
 ---
 name: land-change
 description: Use when landing a pull or merge request through checks and review.
+disable-model-invocation: true
 ---
 
 # Land a change

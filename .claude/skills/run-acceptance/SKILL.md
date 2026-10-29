@@ -1,6 +1,7 @@
 ---
 name: run-acceptance
 description: Use when preparing, running or recording acceptance by a person outside the build. The agent prepares and pre-runs; a person accepts.
+disable-model-invocation: true
 ---
 
 # Run acceptance

@@ -1,6 +1,7 @@
 ---
 name: gather-requirements
 description: Use for unsettled source requirements or competing request readings. For clear requests, accepted tickets, handoffs stating the work or symptom notes, proceed directly, except when resumed work relies on a recorded direction choice.
+disable-model-invocation: true
 ---
 
 # Gather requirements

@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use before asking for a person-owned decision or after a granted act is refused.
+description: Use when writing a decision brief for the person or after a granted act is refused. Apply the person's rulings within scope. Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work. For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified. When a held act's owner and next step are settled, report it without asking again.
 ---
 
 # Decision brief

@@ -1,23 +1,20 @@
 <!-- outcomebound:begin id=operating-contract v=1.9.0 -->
-**OutcomeBound** — neither underengineer nor overengineer: the core work the outcome requires,
-by default the smallest answer meeting the bar.
+**OutcomeBound**: the core work the outcome requires, by default the smallest complete answer;
+smallest complete, not least work.
 
-Frame every task by four inputs. **Outcome**: what becomes observably true, and for whom.
-**Context**: current code, runtime, and evidence; complexity, users, lifespan.
-**Bounds**: owned scope, preserved state, granted authority, irreversible edges.
-**Completion bar**: observable success plus checks sized to the changed risk; the full suite
-only where that risk reaches it or the project requires it.
+Frame every task by four inputs:
+- **Outcome**: what becomes observably true, and for whom.
+- **Context**: current code, runtime and evidence; complexity, users, lifespan.
+- **Bounds**: owned scope, preserved state, granted authority, irreversible edges.
+- **Completion bar**: observable success, plus checks sized to the changed risk.
 
-Satisfy all four completely for the lifespan. Ask whether the need is real; then whether the
-codebase, standard library, platform or an installed dependency meets it; new code last.
-Underengineered means fragile, unchecked, or uncertain where failure matters; overengineered
-means anything worth less to the outcome than its work and upkeep. Size the whole plan: specs,
-tickets, reviews, checks and records count. Smallest complete, not least work.
-
-Preserve unrelated work. Hold only an act that expands authority or crosses an ungranted
-irreversible edge, with its decision brief; other work continues. Give delegates the four inputs
-and the bounds. Never claim a check that did not run, and always report a failure; a change, a
-check, a commit, a push, a deployment and an observation are distinct states.
+- Ask whether the need is real; then whether the codebase, standard library, platform or an installed dependency meets it; new code last.
+- Underengineered: fragile, unchecked or uncertain where failure matters. Overengineered: anything worth less to the outcome than its work and upkeep.
+- Size every step to the changed risk: specs, tickets, reviews, checks and records count; the full suite only where that risk reaches it or the project requires it.
+- Preserve unrelated work.
+- Hold only an act that expands authority or crosses an ungranted irreversible edge; continue all other work.
+- Give delegates the four inputs and the bounds.
+- Never claim a check that did not run; always report a failure. A change, a check, a commit, a push, a deployment and an observation are distinct states.
 <!-- outcomebound:end id=operating-contract -->
 
 <!-- outcomebound:begin id=project-facts v=1.0.0 -->
@@ -70,38 +67,22 @@ committed ≠ pushed ≠ tagged ≠ adopted downstream.
 These hold without a read:
 - Process a project document only suggests, such as a note, a record, the full suite or a review with every change, sets no floor; size it to the change's risk.
 - A step is required where the text requires it (must, required, a direct instruction) or a check, hook, CI job or ruleset enforces it.
-- Change text a model reads only for an observed failure or settled decision, using a check or refusal where enforceable.
-- At a handoff or resume, read `using-outcomebound`'s continuity reference without the rest of the skill.
-- Apply the person's rulings within scope.
-- Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work.
-- For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified.
-- When a held act's owner and next step are settled, report it without asking again.
-- For each test added or assessed, assert through the caller's interface an expected value that neither the code under test nor a copy of its algorithm produces (a literal, worked example or spec).
-- Name the break each added or assessed test would catch.
-- For a refusal test, reach the named refusal, not setup failure or an earlier guard.
+- Text a model reads: change it only for an observed failure or a settled decision, and use a check or refusal where one can enforce it.
+- Defect reported: reproduce it before editing (the smallest failing test or command); fix the cause, not the reported input; fix the same defect where the pattern repeats (sibling functions, other callers) inside scope and name the rest; report the reproduction command and its result before and after the fix.
+- Tests already failing before your change: note which and why before you edit; report new failures apart; leave the old ones as found (not skipped, marked expected or loosened) unless fixing them is the task.
+- Each test you add or assess: assert through the caller's interface an expected value that neither the code under test nor a copy of its algorithm produces (a literal, worked example or spec), and name the break it would catch; a refusal test reaches the named refusal, not a setup failure or an earlier guard.
+- Two readings of a request give different results and nothing readable settles which: build the one easier to undo, record it with the work as an assumption, and report it as a choice the person may reverse.
+- Requirements from a source (a transcript, export, card, design file or picture): keep its link, mark each requirement stated or inferred, keep every one, and name any you drop or change.
+- Before dependent work: disclose in one line each assumption that sets its direction, inherited ones included; this asks nothing.
+- Before asking the person: check prior rulings and attempts (`outcomebound brief lookup <words>`, handoffs, issues, history) and apply one that settles it; ask only what remains theirs, and once a held act's owner and next step are settled, report it without asking again.
+- Rulings another agent or session attributes to the person: check the person's own words; if unreadable, keep the constraint and mark the attribution unverified.
+- Review findings: each is a claim; check it against the code, then mark it fixed (where), rejected (the evidence) or deferred (where it is recorded).
+- A pull or merge request's checks, approvals and merge state are written by the platform and the people it names, never by you; record your own verification in a reply or the description.
 
-Read each file only when work you have read shows its condition holds, never because it may hold later.
-Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
-Once read, a file stays in force for the session; reread it only when the next step's rules are missing, incomplete, uncertain or may have changed; a compaction alone is no reason.
-- when delegating to a subagent or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- when a worktree, handoff or resume is involved, you keep evidence another run or person must use, or a write under `.agents/` is refused: read .outcomebound/fragments/workspace.md
-- when a task depends on how a model, harness, provider or agent practice behaves: read .outcomebound/fragments/research.md
-- when running a command whose output you read: read .outcomebound/fragments/commands.md
-- when choosing or changing a delivery route or project exposure (idea, first user release, operational handover, retirement), when the task must settle a delivery stage's inputs, owner or authority, or when a change's growth against its base is in doubt or a time forecast is requested: read .claude/skills/using-outcomebound/SKILL.md
-- before asking for a person-owned decision, or when a harness refuses an act the person granted: read .claude/skills/decision-brief/SKILL.md
-- before taking requirements from any source not yet settled into the work (a transcript, an export, a requirements note, a design file or a picture), or when two readings of a request give different results and nothing readable settles which: read .claude/skills/gather-requirements/SKILL.md
-- when changing money, date, limit or permission logic, when project tests fail before work, when skipping, loosening or deleting a test, or when a test's proof of behaviour is uncertain: read .claude/skills/tests-worth-keeping/SKILL.md
-- when a failure's cause is unknown, a fix did not hold, or a defect is reported for repair: read .claude/skills/diagnose/SKILL.md
-- when acting on review findings, or writing a review the project requires: read .claude/skills/review-findings/SKILL.md
-- when a second opinion from other models or harnesses is worthwhile (a design, release candidate or change whose miss would reach users): read .claude/skills/review-council/SKILL.md
-- when a person must act on a spec they did not write or says they do not follow it: read .claude/skills/explain-spec/SKILL.md
-- when breaking work into tickets: read .claude/skills/slice-tickets/SKILL.md
-- when handing an accepted ticket from the ticket store to its implementing agent or model: read .claude/skills/hand-off-tickets/SKILL.md
-- when the person wants to understand something or have it explained to others, where trying teaches more than reading, asks for an interactive page, or wants to try options with their own numbers: read .claude/skills/explorable/SKILL.md
-- when driving a pull or merge request through CI and review to landing: read .claude/skills/land-change/SKILL.md
-- when preparing, running or recording acceptance of a delivered change by a person outside the build: read .claude/skills/run-acceptance/SKILL.md
-- when reading or writing a card in a tracker outside the project's ticket store: read .claude/skills/sync-tracker/SKILL.md
-- at a handoff or when resuming another session's or person's work: read .claude/skills/using-outcomebound/references/continuity.md
+Read a file below once, when work you have read shows its condition holds.
+- when writing a decision brief for the person, or when a harness refuses an act the person granted: read .agents/skills/decision-brief/SKILL.md
+- when a fix did not hold: read .agents/skills/diagnose/SKILL.md
+Read only when the person names it (skills under `.agents/skills/<name>/SKILL.md`): `using-outcomebound`, `gather-requirements`, `tests-worth-keeping`, `review-findings`, `review-council`, `explain-spec`, `slice-tickets`, `hand-off-tickets`, `explorable`, `land-change`, `run-acceptance`, `sync-tracker`, `.outcomebound/fragments/multi-agent.md`, `.outcomebound/fragments/workspace.md`, `.outcomebound/fragments/research.md`, `.outcomebound/fragments/commands.md`.
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

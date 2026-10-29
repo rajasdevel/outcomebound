@@ -56,7 +56,7 @@ INSTALL = {"done": ["make check", "make test"], "fragments": ["commands"], "sand
 # arm plus any element has none of them.
 UNOWNED = {".agents/.gitignore", ".outcomebound/.gitignore", ".outcomebound/manifest.json"}
 DATE = re.compile(rb"\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?")
-KERNEL_CLAUSE = " Smallest complete, not least work."
+KERNEL_CLAUSE = "smallest complete, not least work."
 
 
 def _fixture(root: Path, install: dict[str, Any] | None = INSTALL) -> Path:
@@ -186,10 +186,7 @@ def test_the_current_arm_less_a_fragment_is_the_current_tree_less_its_file_and_l
     less, _protected, _prompt = _build("replica-batch", arm, tmp_path / "l")
     expected = _files(current)
     del expected[".outcomebound/fragments/commands.md"]
-    line = (
-        b"\n- when running a command whose output you read: "
-        b"read .outcomebound/fragments/commands.md"
-    )
+    line = b", `.outcomebound/fragments/commands.md`"
     assert expected["AGENTS.md"].count(line) == 1
     expected["AGENTS.md"] = expected["AGENTS.md"].replace(line, b"")
     assert _files(less) == expected
@@ -521,19 +518,16 @@ def test_the_none_arm_plus_the_launcher_reaches_it_and_nothing_else(
     _clean(workdir)
 
 
-def test_a_pointer_line_added_without_its_block_keeps_the_markers_and_read_once_line(
+def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
     tmp_path: Path, fake: dict[str, Path]
 ) -> None:
-    from outcomebound_tools import facts
-
     arm = _arm("replica-fake", "none", RUN.Elements(added=("fragment:commands",)))
     workdir, _protected, _prompt = _build("replica-fake", arm, tmp_path / "w")
     note = (workdir / "AGENTS.md").read_text("utf-8")
     block = note.split("\n\n", 1)[0].splitlines()
     assert block[0].startswith("<!-- outcomebound:begin id=guidance-pointers ")
     assert block[1:] == [
-        *facts.once_lines(),
-        "- when running a command whose output you read: read .outcomebound/fragments/commands.md",
+        "Read only when the person names it: `.outcomebound/fragments/commands.md`.",
         "<!-- outcomebound:end id=guidance-pointers -->",
     ]
     assert sorted(_files(workdir)) == [
@@ -542,6 +536,40 @@ def test_a_pointer_line_added_without_its_block_keeps_the_markers_and_read_once_
         "Makefile",
     ]
     _clean(workdir)
+
+
+def test_a_manual_skill_added_without_its_block_keeps_only_its_name_and_files(
+    tmp_path: Path, fake: dict[str, Path]
+) -> None:
+    """Catches a missing manual name, a name for another skill, either missing native flag,
+    or an isolation check that cannot detect a removed manual name."""
+
+    arm = _arm("replica-fake", "none", RUN.Elements(added=("skill:explain-spec",)))
+    workdir, protected, prompt = _build("replica-fake", arm, tmp_path / "w")
+    note = workdir / "AGENTS.md"
+    block = note.read_text("utf-8").split("\n\n", 1)[0].splitlines()
+    manual = (
+        "Read only when the person names it (skills under `.agents/skills/<name>/SKILL.md`): "
+        "`explain-spec`."
+    )
+    assert block[1:] == [manual, "<!-- outcomebound:end id=guidance-pointers -->"]
+    assert sorted(arm.files) == [
+        ".agents/skills/explain-spec/SKILL.md",
+        ".agents/skills/explain-spec/agents/openai.yaml",
+    ]
+    assert (workdir / ".agents/skills/explain-spec/agents/openai.yaml").read_text("utf-8") == (
+        "policy:\n  allow_implicit_invocation: false\n"
+    )
+    assert "disable-model-invocation: true\n" in (
+        workdir / ".agents/skills/explain-spec/SKILL.md"
+    ).read_text("utf-8")
+    assert ".agents/skills/explain-spec/SKILL.md" in protected
+    assert RUN.element_problems(workdir, arm) == []
+    rules = {row[0]: row[1] for row in RUN.isolation(arm, workdir, prompt, "", tmp_path)}
+    assert rules["elements"] == "PASS" and rules["no-outcomebound-text"] == "PASS"
+    _clean(workdir)
+    note.write_text(note.read_text("utf-8").replace(manual, ""), encoding="utf-8")
+    assert RUN.element_problems(workdir, arm) == ["skill:explain-spec's manual name missing"]
 
 
 # --- the catalog and the summary ----------------------------------------------------------------

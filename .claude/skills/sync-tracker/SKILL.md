@@ -1,6 +1,7 @@
 ---
 name: sync-tracker
 description: Use when reading or writing a card outside the project's ticket store. A write needs a grant naming its kind.
+disable-model-invocation: true
 ---
 
 # Sync a tracker

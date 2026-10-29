@@ -17,7 +17,7 @@ what `outcomebound adopt --harness codex` installs from this checkout: the kerne
 adopt renders it, at codex's skill path the whole folder of each skill that install carries
 (the fourteen every install carries), and this
 checkout's launcher first on the call's PATH; `unsized`, the current arm without the kernel's
-sizing paragraph, which asks whether that paragraph earns its place; and `none`, no kernel,
+sizing rule, which asks whether that rule earns its place; and `none`, no kernel,
 skill or launcher, each fixture's note without its pointer to the core skill. The `earlier`
 arm can also be the install of a Git ref (`--earlier-ref`), made by that ref's own engine as an
 adopter of that release has it, or another guidance set's own files
@@ -220,9 +220,9 @@ _VERBATIM: dict[str, tuple[str, dict[str, bytes]]] = {}
 _FIXTURE_FILES: dict[Path, frozenset[str]] = {}
 # The kernel-off arm: the task alone, in a fixture that carries no OutcomeBound text.
 NONE = "none"
-# The current arm less the kernel's sizing paragraph, the one that opens with this phrase.
+# The current arm less the kernel's sizing rule.
 UNSIZED = "unsized"
-SIZING = "Satisfy all four completely"
+SIZING = "- Size every step to the changed risk:"
 # Where a fixture's skill copies live: the path its note names, Claude Code's skill path and
 # codex's skill path (the last stays last: element checks name a pointer line under it).
 SKILL_ROOTS = (".outcomebound/skills/", ".claude/skills/", ".agents/skills/")
@@ -652,12 +652,17 @@ def earlier_engine(request: dict[str, Any]) -> Any:
         "    answer = {'skills': fragments.SKILLS, 'conditions': adopt.CONDITIONS,\n"
         "              'rules': getattr(adopt, 'RULES', {}),\n"
         "              'references': getattr(adopt, 'REFERENCE_POINTERS', ())}\n"
+        "    if hasattr(adopt, 'MANUAL'):\n"
+        "        answer['manual'] = sorted(adopt.MANUAL)\n"
         "    for name in fragments.SKILLS if hasattr(adopt, 'NATIVE_DESCRIPTIONS') else ():\n"
         "        try:\n"
         "            made = adopt.skill_files(Path(sys.argv[1]), name, short=True)\n"
         "        except adopt.AdoptError:\n"
         "            continue\n"
         "        answer.setdefault('short', {})[name] = made['SKILL.md'].decode('utf-8')\n"
+        "        answer.setdefault('extra', {})[name] = {path: data.decode('utf-8')\n"
+        "            for path, data in made.items()\n"
+        "            if path not in adopt.skill_files(Path(sys.argv[1]), name)}\n"
         "else:\n"
         "    root = Path(sys.argv[1])\n"
         "    chosen = fragments.select(fragments.load_all(root), ask['selected'])"
@@ -665,8 +670,12 @@ def earlier_engine(request: dict[str, Any]) -> Any:
         "    skills = [tuple(pair) for pair in ask['skills']]\n"
         "    render = getattr(facts, 'render_chosen', facts.render)\n"
         "    selection = facts.Chosen(ask['done']) if render is not facts.render else ask['done']\n"
+        "    if hasattr(selection, 'manual'):\n"
+        "        selection = selection._replace(manual=ask.get('manual', ('', ())))\n"
         "    rules = {'rules': ask['rules']} if 'rules' in inspect.signature(render).parameters"
         " else {}\n"
+        "    if 'manual' in inspect.signature(render).parameters:\n"
+        "        rules['manual'] = ask.get('manual', ('', ()))\n"
         "    out = render(Path(ask['target']), chosen, selection, ['AGENTS.md'], skills, **rules)\n"
         "    answer = {'facts': out.facts, 'pointers': out.pointers}\n"
         "json.dump(answer, sys.stdout)\n"
@@ -763,13 +772,13 @@ def kernel(arm: str) -> str:
 
 
 def without_sizing(text: str) -> str:
-    """The kernel with its sizing paragraph removed and every other byte kept."""
+    """The kernel with its sizing rule removed and every other byte kept."""
 
-    paragraphs = text.split("\n\n")
-    kept = [paragraph for paragraph in paragraphs if not paragraph.startswith(SIZING)]
-    if len(kept) != len(paragraphs) - 1:
-        raise SystemExit(f"run: the kernel has no one paragraph opening {SIZING!r} to remove")
-    return "\n\n".join(kept)
+    lines = text.splitlines(keepends=True)
+    kept = [line for line in lines if not line.startswith(SIZING)]
+    if len(kept) != len(lines) - 1:
+        raise SystemExit(f"run: the kernel has no one rule opening {SIZING!r} to remove")
+    return "".join(kept)
 
 
 class Edit(NamedTuple):
@@ -828,6 +837,7 @@ class Arm(NamedTuple):
     edits_sha256: str = ""
     kept_skills: tuple[str, ...] = ()
     rules: tuple[str, ...] = ()
+    manual: tuple[str, tuple[str, ...]] = ("", ())
 
     def shaped(self) -> bool:
         """Whether the arm is an element arm: the current install less some elements, the none
@@ -930,6 +940,7 @@ def load_arm(
             "conditions": adopt.CONDITIONS,
             "rules": adopt.RULES,
             "references": adopt.REFERENCE_POINTERS,
+            "manual": adopt.MANUAL,
         }
     )
     try:
@@ -946,6 +957,12 @@ def load_arm(
             found = adopt.skill_files(root, skill, short=native and name != EARLIER)
             if native and name == EARLIER and skill in shorts:
                 found["SKILL.md"] = shorts[skill].encode("utf-8")
+                found.update(
+                    {
+                        path: data.encode("utf-8")
+                        for path, data in guidance.get("extra", {}).get(skill, {}).items()
+                    }
+                )
             return found
 
         files = {
@@ -957,11 +974,23 @@ def load_arm(
             {f"{facts.FRAGMENT_DIR}/{item.id}.md": adopt._fragment_bytes(item) for item in chosen}
         )
         pointers = tuple(
-            (guidance["conditions"][skill], f"{route.skills}/{skill}/SKILL.md") for skill in carried
+            (guidance["conditions"][skill], f"{route.skills}/{skill}/SKILL.md")
+            for skill in carried
+            if skill not in guidance.get("manual", ())
         ) + tuple(
             (condition, f"{route.skills}/{path}") for condition, path in guidance["references"]
         )
-        rules = tuple(guidance["rules"][skill] for skill in carried if skill in guidance["rules"])
+        # Before manual routing, adopt rendered rules in skill order. Keep that ref's order.
+        order = carried if name == EARLIER and "manual" not in guidance else guidance["rules"]
+        rules = tuple(
+            guidance["rules"][skill]
+            for skill in order
+            if skill in guidance["rules"] and skill in carried
+        )
+        manual = (
+            route.skills,
+            tuple(skill for skill in carried if skill in guidance.get("manual", ())),
+        )
     except (adopt.AdoptError, fragments.FragmentError) as error:
         raise SystemExit(f"run: the current arm cannot read what adopt installs: {error}") from None
     return Arm(
@@ -974,6 +1003,7 @@ def load_arm(
         done=tuple(done),
         adopted=adopted and name in ("current", EARLIER),
         rules=rules,
+        manual=manual,
     )
 
 
@@ -1201,6 +1231,41 @@ def _pointer_element(line: str) -> str | None:
     return element_of(found.group(1)) if found else None
 
 
+def _manual_parts(line: str) -> tuple[str, list[str], list[str]] | None:
+    """The skill root, skill names and fragment ids of the install's manual line."""
+
+    found = re.fullmatch(
+        r"Read only when the person names it"
+        r"(?: \(skills under `([^`]+)/<name>/SKILL.md`\))?: (.+)\.",
+        line,
+    )
+    if found is None:
+        return None
+    names = re.findall(r"`([^`]+)`", found[2])
+    skills = [name for name in names if "/" not in name]
+    fragments = [Path(name).stem for name in names if name.startswith(".outcomebound/fragments/")]
+    return found[1] or "", skills, fragments
+
+
+def _guidance_kept(arm: Arm, element: str) -> bool:
+    owners = (arm.keeps(POINTERS_ELEMENT), arm.keeps(element))
+    return any(owners) if arm.name == NONE else all(owners)
+
+
+def _shaped_manual(line: str, arm: Arm) -> str | None:
+    """Filter each manual name by its element; None when no name stays."""
+
+    from outcomebound_tools import facts
+
+    parts = _manual_parts(line)
+    if parts is None:
+        return None
+    root, skills, fragments = parts
+    skills = [name for name in skills if _guidance_kept(arm, f"skill:{name}")]
+    fragments = [name for name in fragments if _guidance_kept(arm, f"fragment:{name}")]
+    return facts.manual_line(root, skills, fragments) if skills or fragments else None
+
+
 def _line_kept(arm: Arm, line: str) -> bool:
     """Whether the element arm keeps one line of the guidance-pointers block. A pointer line
     belongs to its fragment or skill and to the block whole: the current arm keeps it while it
@@ -1228,8 +1293,7 @@ def _line_kept(arm: Arm, line: str) -> bool:
         )
     if element is None:
         return arm.keeps(POINTERS_ELEMENT)
-    owners = (arm.keeps(POINTERS_ELEMENT), arm.keeps(element))
-    return any(owners) if arm.name == NONE else all(owners)
+    return _guidance_kept(arm, element)
 
 
 def shaped_note(text: str, arm: Arm) -> str:
@@ -1247,11 +1311,21 @@ def shaped_note(text: str, arm: Arm) -> str:
     if found is None:
         return text
     lines = found.decode("utf-8").split("\n")
-    kept = [line for line in lines[1:-1] if _line_kept(arm, line)]
-    if not arm.keeps(POINTERS_ELEMENT):
-        if not kept:
-            return adopt.cut(text, facts.POINTERS)
-        kept = [*facts.once_lines(), *kept]
+    kept = []
+    for line in lines[1:-1]:
+        if _manual_parts(line) is not None:
+            manual = _shaped_manual(line, arm)
+            if manual:
+                kept.append(manual)
+        elif line not in facts.once_lines() and _line_kept(arm, line):
+            kept.append(line)
+    has_reads = any(POINTER_LINE.match(line) for line in kept)
+    if not arm.keeps(POINTERS_ELEMENT) and not kept:
+        return adopt.cut(text, facts.POINTERS)
+    if has_reads:
+        # The read-once line follows the rules, immediately before the first read pointer.
+        first = next(index for index, line in enumerate(kept) if POINTER_LINE.match(line))
+        kept[first:first] = facts.once_lines()
     return text.replace(found.decode("utf-8"), "\n".join([lines[0], *kept, lines[-1]]), 1)
 
 
@@ -1369,6 +1443,13 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
     found = adopt.block_text(text, facts.POINTERS)
     lines = found.decode("utf-8").split("\n")[1:-1] if found else []
     pointed = {_pointer_element(line) for line in lines} - {None}
+    named = {
+        f"{kind}:{name}"
+        for line in lines
+        if (parts := _manual_parts(line)) is not None
+        for kind, names in (("skill", parts[1]), ("fragment", parts[2]))
+        for name in names
+    }
     problems = []
 
     def expect(what: str, wanted: bool, present: bool) -> None:
@@ -1390,12 +1471,32 @@ def element_problems(workdir: Path, arm: Arm) -> list[str]:
             fragment = f"{facts.FRAGMENT_DIR}/{item}.md"
             expect(f"{element}'s file", arm.keeps(element), (workdir / fragment).is_file())
             line = f"- x: read {fragment}"
-            expect(f"{element}'s pointer line", _line_kept(arm, line), element in pointed)
+            manual = item in facts.MANUAL_FRAGMENTS
+            expect(
+                f"{element}'s pointer line",
+                not manual and _line_kept(arm, line),
+                element in pointed,
+            )
+            expect(
+                f"{element}'s manual name",
+                manual and _guidance_kept(arm, element),
+                element in named,
+            )
         elif kind == "skill":
             present = any((workdir / root / item).exists() for root in SKILL_ROOTS)
             expect(f"{element}'s folder", arm.keeps(element), present)
             line = f"- x: read {SKILL_ROOTS[-1]}{item}/SKILL.md"
-            expect(f"{element}'s pointer line", _line_kept(arm, line), element in pointed)
+            manual = item in adopt.MANUAL
+            expect(
+                f"{element}'s pointer line",
+                not manual and _line_kept(arm, line),
+                element in pointed,
+            )
+            expect(
+                f"{element}'s manual name",
+                manual and _guidance_kept(arm, element),
+                element in named,
+            )
     # A rule spans several lines; it is named once however many of them differ.
     problems.extend(
         dict.fromkeys(
@@ -1468,6 +1569,7 @@ def as_installed(workdir: Path, arm: Arm) -> str:
             asked |= {"selected": list(arm.selected), "done": list(arm.done)}
             asked["skills"] = [list(pair) for pair in arm.skills]
             asked["rules"] = list(arm.rules)
+            asked["manual"] = arm.manual
             answer = earlier_engine(asked)
             written, pointing = answer["facts"], answer["pointers"]
         else:
@@ -1475,7 +1577,12 @@ def as_installed(workdir: Path, arm: Arm) -> str:
                 fragments.select(fragments.load_all(REPO), arm.selected) if arm.selected else []
             )
             rendered = facts.render_chosen(
-                workdir, chosen, facts.Chosen(arm.done), ["AGENTS.md"], arm.skills, arm.rules
+                workdir,
+                chosen,
+                facts.Chosen(arm.done, manual=arm.manual),
+                ["AGENTS.md"],
+                arm.skills,
+                arm.rules,
             )
             written, pointing = rendered.facts, rendered.pointers
         head = agents.read_text(encoding="utf-8").rstrip("\n") + "\n\n" if agents.is_file() else ""
@@ -3948,7 +4055,7 @@ def _parser() -> argparse.ArgumentParser:
         choices=ARMS,
         help=f"{EARLIER}: an earlier wording of the kernel; current: what adopt "
         f"installs for {HARNESS}, and the launcher on PATH; {UNSIZED}: current without the "
-        f"kernel's sizing paragraph; {NONE}: no kernel, skill or launcher; {FACTS_ONLY}: the "
+        f"kernel's sizing rule; {NONE}: no kernel, skill or launcher; {FACTS_ONLY}: the "
         f"facts-only install, and the launcher on PATH; {FACTS_ONLY_NOSKILLS}: {FACTS_ONLY} "
         f"without its skill files; {BARE}: {NONE} with no instruction file",
     )
@@ -4596,11 +4703,17 @@ def outside_elements(text: str, arm: Arm) -> str:
     if found is None:
         return text
     lines = found.decode("utf-8").split("\n")
-    left = [
-        line
-        for line in lines[1:-1]
-        if line not in facts.once_lines() and not arm.keeps(_pointer_element(line) or "")
-    ]
+    left = []
+    for line in lines[1:-1]:
+        parts = _manual_parts(line)
+        if parts is not None:
+            root, skills, fragments = parts
+            skills = [name for name in skills if not arm.keeps(f"skill:{name}")]
+            fragments = [name for name in fragments if not arm.keeps(f"fragment:{name}")]
+            if skills or fragments:
+                left.append(facts.manual_line(root, skills, fragments))
+        elif line.strip() and line not in facts.once_lines() and not _line_kept(arm, line):
+            left.append(line)
     if not left:
         return adopt.cut(text, facts.POINTERS)
     return text.replace(found.decode("utf-8"), "\n".join([lines[0], *left, lines[-1]]), 1)

@@ -1,6 +1,6 @@
 ---
 name: diagnose
-description: Use for reported defects, unknown failure causes or failed fixes. A declared stub failing as declared is no defect; handle the requested work directly.
+description: Use when a fix did not hold. A declared stub failing as declared is no defect; handle the requested work directly.
 ---
 
 # Diagnose a failure

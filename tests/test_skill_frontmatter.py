@@ -8,6 +8,8 @@ import pytest
 
 from outcomebound_tools import adopt
 from tests.adopt_helpers import (
+    BOUNDARIES,
+    MANUAL_SKILLS,
     ROOT,
     SHORT_DESCRIPTIONS,
     Capture,
@@ -108,24 +110,26 @@ def test_NEGATIVE_CONTROL_an_unquoted_colon_or_hash_in_a_value_is_reported():
         ("codex,claude-code", ".agents/skills"),
     ],
 )
-def test_full_native_install_has_short_catalog_and_complete_project_pointers(
+def test_full_native_install_has_short_catalog_conditional_reads_and_manual_names(
     tmp_path: Path, capsys: Capture, harness: str, root: str
 ) -> None:
-    """Catches losing pointer conditions or removing the exact-path fallback while
-    shortening the catalog. An omitted catalog entry or same-name personal skill still has
-    a complete project pointer. Bodies and references must not change with the catalog."""
+    """Catches missing conditional reads, manual names or the manual skill root, and changes
+    to skill bodies or references when the native catalog is shortened."""
 
     target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
     code, _, err = run(capsys, str(target), "--harness", harness)
     assert code == 0, err
     agents = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert set(SHORT_DESCRIPTIONS) == set(adopt.SKILLS)
-    assert (
-        "Use the listed project path even if the skill catalog omits it or a personal skill "
-        "has the same name." in agents
-    )
+    assert "Read a file below once, when work you have read shows its condition holds." in agents
+    assert f"Read only when the person names it (skills under `{root}/<name>/SKILL.md`): " in agents
     for name in adopt.SKILLS:
-        assert f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md" in agents
+        pointer = f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md"
+        if name in MANUAL_SKILLS:
+            assert pointer not in agents
+            assert f"`{name}`" in agents.split("Read only when the person names it", 1)[1]
+        else:
+            assert pointer in agents
         for native in adopt.routes(ROOT, harness.split(",")):
             data = (target / native.skills / name / "SKILL.md").read_bytes()
             assert_native_skill(data, name)
@@ -135,10 +139,10 @@ def test_full_native_install_has_short_catalog_and_complete_project_pointers(
                 assert (
                     target / native.skills / name / "references" / note.name
                 ).read_bytes() == note.read_bytes()
-    for condition, path in adopt.REFERENCE_POINTERS:
-        assert f"- {condition}: read {root}/{path}" in agents
+    assert ": read " + root + "/using-outcomebound/references/continuity.md" not in agents
     for rule in adopt.RULES.values():
-        assert rule in agents.replace("\n- ", " ")
+        for line in rule.splitlines():
+            assert "- " + line in agents.splitlines()
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
 
@@ -193,10 +197,9 @@ def test_other_install_routes_and_standalone_sources_keep_full_descriptions(
     for name in adopt.SKILLS:
         source = (ROOT / "skills" / name / "SKILL.md").read_bytes()
         full = adopt.description(source)
-        assert full.startswith(f"Use {adopt.CONDITIONS[name]}.")
         assert len(full) > len(SHORT_DESCRIPTIONS[name])
-        if name in adopt.RULES:
-            assert adopt.RULES[name] in full
+        if name in BOUNDARIES:
+            assert BOUNDARIES[name] in full
         # The unqualified source/standalone reader must never receive installed shortening.
         assert adopt.skill_file(ROOT, name) == source
         assert adopt.skill_files(ROOT, name)["SKILL.md"] == source
@@ -237,7 +240,9 @@ def test_native_and_non_native_routes_sharing_a_directory_keep_full_descriptions
         shipped = source / "skills" / name
         installed = target / ".agents/skills" / name
         assert (installed / "SKILL.md").read_bytes() == (shipped / "SKILL.md").read_bytes()
-        assert f": read .agents/skills/{name}/SKILL.md" in agents
+        pointer = f": read .agents/skills/{name}/SKILL.md"
+        assert (pointer in agents) is (name not in MANUAL_SKILLS)
+        assert not (installed / "agents/openai.yaml").exists()
         for reference in (shipped / "references").glob("*.md"):
             assert (
                 installed / "references" / reference.name
@@ -271,8 +276,33 @@ def test_native_upgrade_and_mode_switches_render_and_check_the_selected_descript
         assert code == 0 and set(states(out).values()) == {"current"}
 
 
-def test_each_reference_pointer_names_a_shipped_reference():
-    from outcomebound_tools import adopt
+@pytest.mark.parametrize(
+    "harness,root", [("codex", ".agents/skills"), ("claude-code", ".claude/skills")]
+)
+def test_manual_skills_have_both_native_flags_and_auto_skills_have_neither(
+    tmp_path: Path, capsys: Capture, harness: str, root: str
+) -> None:
+    """Catches either missing manual flag, accidental disabling of an auto skill, a manual
+    read pointer, or --check looking for a generated policy file in the source skill."""
 
-    for _, path in adopt.REFERENCE_POINTERS:
-        assert (Path("skills") / path).is_file(), path
+    target = repo(tmp_path / "project")
+    code, _, err = run(capsys, str(target), "--harness", harness)
+    assert code == 0, err
+    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+    for name in MANUAL_SKILLS:
+        fm, _ = _frontmatter(target / root / name / "SKILL.md")
+        assert "disable-model-invocation: true" in fm.splitlines()
+        assert (target / root / name / "agents/openai.yaml").read_text("utf-8") == (
+            "policy:\n  allow_implicit_invocation: false\n"
+        )
+        assert f": read {root}/{name}/SKILL.md" not in agents
+    for name in ("decision-brief", "diagnose"):
+        fm, _ = _frontmatter(target / root / name / "SKILL.md")
+        assert "disable-model-invocation" not in fm
+        assert not (target / root / name / "agents/openai.yaml").exists()
+    assert f"- when a fix did not hold: read {root}/diagnose/SKILL.md" in agents
+    assert (
+        "- when writing a decision brief for the person, or when a harness refuses an act "
+        f"the person granted: read {root}/decision-brief/SKILL.md"
+    ) in agents
+    assert run(capsys, str(target), "--check")[0] == 0

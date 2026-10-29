@@ -1,6 +1,7 @@
 ---
 name: explorable
 description: Use for interactive pages, learning by trying or options tried with own numbers. A decision page accompanies the decision brief, never replaces it.
+disable-model-invocation: true
 ---
 
 # Explorable
