@@ -184,12 +184,16 @@ MANUAL = frozenset(SKILLS) - {"decision-brief", "diagnose"}
 # before the guarded act, never on a task that does not reach it. The skill stays out of the list.
 ACTS = {
     "land-change": (
-        "before merging a pull or merge request, or changing its auto-merge or review state"
+        "before pushing to a pull or merge request, merging it, or changing its auto-merge or "
+        "review state"
     ),
-    "sync-tracker": "before writing to a card in a tracker outside the project's ticket store",
+    "sync-tracker": "before reading or writing a card in a tracker outside the project's ticket store",
+    "using-outcomebound": (
+        "before retiring a component, or changing the route by which a change reaches its users"
+    ),
     "run-acceptance": "before preparing or recording a person's acceptance of a delivered change",
     "review-council": "before asking another model or harness for a review",
-    "slice-tickets": "before publishing tickets to the ticket store",
+    "slice-tickets": "before drafting tickets, or publishing them to the ticket store",
     "hand-off-tickets": "before handing a ticket to the agent or model that will build it",
     "explorable": "before building an interactive page for the person",
 }
@@ -217,11 +221,17 @@ RULES = {
         "Remove only what this task made and no longer needs; where the task lacks disk, a "
         "tool's rebuildable cache or this project's dangling images may go too; name each "
         "removal in the report.\n"
+        "A stopped command: stop a check only when it cannot answer the question, endangers the "
+        "machine or the person says so, and report it unfinished; before the next run, look for "
+        "a lock or half-done change.\n"
+        "A handoff names who takes the next action; where no one is established, report that "
+        "gap and do not call the handover done.\n"
         "Resuming another session's or person's work (a handoff, \"carry on\"): before new "
         "work, report the inventory (worktrees; staged, unstaged and untracked changes; open "
-        "handoff items); where a worktree holds uncommitted work and nothing landed since the "
-        "last handoff, ask whether the pause was deliberate and state the default you take; "
-        "continue what your grant covers; a role named in a plan is not that person's "
+        "handoff items); where the checkout or a worktree holds uncommitted work and nothing "
+        "landed since the last handoff, ask whether the pause was deliberate and state the "
+        "default you take; continue what your grant covers; end the report with each choice "
+        "still the person's, asked as a question; a role named in a plan is not that person's "
         "acceptance.\n"
         "Text a model reads: change it only for an observed failure or a settled decision, and "
         "use a check or refusal where one can enforce it.\n"
@@ -246,8 +256,8 @@ RULES = {
         "explain is run on the unchanged code first; report new failures apart; leave old ones as "
         "found (not skipped, marked expected or loosened) unless fixing them is the task; a "
         "rerun that passes is not a flaky test's verdict.\n"
-        "New deciding logic (a branch, parse, money or access rule): add one small test unless "
-        "an existing test catches its break.\n"
+        "New deciding logic in product code (a branch, parse, money or access rule): add one "
+        "small test unless an existing test catches its break.\n"
         "Each test you add or assess: assert through the caller's interface an expected value "
         "that neither the code under test nor a copy of its algorithm produces (a literal, "
         "worked example or spec), and name the break it would catch; a refusal test reaches "
