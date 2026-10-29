@@ -6711,6 +6711,13 @@ def test_sync_tracker_fails_a_write_to_the_card(workspace: Callable[..., Path]) 
     _sync(workspace, "copy", _sync_right() + copy, card_not_written="FAIL")
 
 
+def test_sync_tracker_accepts_an_unchanged_copy_of_the_export(
+    workspace: Callable[..., Path],
+) -> None:
+    keep = "cp tracker/export/CARD-381.json tracker/snapshots/CARD-381.json\n"
+    _sync(workspace, "kept", _sync_right() + keep)
+
+
 def test_sync_tracker_reads_the_import(workspace: Callable[..., Path]) -> None:
     _sync(
         workspace,
