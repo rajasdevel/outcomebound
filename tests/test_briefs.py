@@ -99,12 +99,16 @@ def grade(target, name, said, answer):
             ["git", "rev-parse", "seed"], cwd=target, text=True, encoding="utf-8"
         ).strip(),
     }
+    # As the runner does: validation keeps its logs beside the plan, so a copy keeps them out
+    # of the shared fixture, where a test running beside this one would read them as a change.
+    plan = output / "post.plan.json"
+    shutil.copyfile(FIXTURES / name / "post.plan.json", plan)
     done = subprocess.run(
         [
             sys.executable,
             "-m",
             "outcomebound_tools.validation",
-            str(FIXTURES / name / "post.plan.json"),
+            str(plan),
             "--cwd",
             str(target),
         ],

@@ -3192,6 +3192,22 @@ def test_required_diagnostic_is_a_protocol_defect_before_any_grade(
 
 
 @needs_posix_bash
+def test_a_call_group_whose_members_all_exited_is_stopped_where_the_host_refuses_its_probe(
+    monkeypatch,
+):
+    """Catches a refused group probe, as macOS gives for a group of exited, unreaped members,
+    read as a failure to stop the call: the table shows no member running, so none is left."""
+    from evals import processes
+
+    def refused(group, sig):
+        raise PermissionError(1, "Operation not permitted")
+
+    monkeypatch.setattr(processes.os, "killpg", refused)
+    monkeypatch.setattr(processes, "_process_table", lambda: {4242: (1, "Z")})
+    monkeypatch.setattr(processes.os, "getpgid", lambda pid: 4242)
+    processes.stop_call_group(4242)
+
+
 def test_dead_runner_keeps_sources_sealed_until_its_live_call_has_ended(tmp_path):
     """Catches SIGKILL releasing a runner's lock while its call can still read sources."""
     from evals.session_permissions import source_access
