@@ -11,7 +11,9 @@ def check(root, owned, *, preserved=(), protected=None):
     root = Path(root)
 
     def git(*args):
-        done = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True)
+        done = subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8", check=True
+        )
         return done.stdout.splitlines()
 
     seed = set(git("ls-tree", "-r", "--name-only", "seed"))

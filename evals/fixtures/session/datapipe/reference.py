@@ -755,7 +755,7 @@ from datapipe.catalog import parse, changes
 
 result = {}
 for path in sorted(Path("data/contracts").glob("*.json")):
-    document = json.loads(path.read_text())
+    document = json.loads(path.read_text(encoding="utf-8"))
     old = next(iter(parse(document["previous_catalog"]).values()))
     new = next(iter(parse(document["catalog"]).values()))
     result[path.stem] = changes(old, new)

@@ -30,6 +30,7 @@ def run(root, *args):
         text=True,
         capture_output=True,
         check=False,
+        encoding="utf-8",
     )
 
 
@@ -194,6 +195,7 @@ def stage_claim(work, stage, evidence, name, claim):
         capture_output=True,
         text=True,
         check=False,
+        encoding="utf-8",
     )
 
 

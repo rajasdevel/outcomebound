@@ -117,6 +117,7 @@ def same_files(root, revision, prefixes):
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
         cwd=root,
         text=True,
+        encoding="utf-8",
     ).split("\0")
     actual = {
         name: hashlib.sha256((root / name).read_bytes()).hexdigest()

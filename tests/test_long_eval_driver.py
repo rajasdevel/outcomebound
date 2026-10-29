@@ -25,24 +25,14 @@ from evals.session_evidence import ActionLedger, contamination, decode_native, f
 from evals.session_permissions import sealed_roots
 from evals.session_shell import command_segments
 from evals.watch import watched_command
-from tests.eval_helpers import ROOT, RUN
+from tests.eval_helpers import ROOT, RUN, load
 from tests.portable import needs_posix_bash
 from tests.test_long_eval_protocol import FakeHarness, _count, _driver, _meta, _rows
 
 
-@pytest.fixture(autouse=True)
-def isolated_invocation_sources(tmp_path, monkeypatch, request):
-    if request.node.originalname not in {
-        "test_clean_commands_and_intact_seals_give_isolation_pass",
-        "test_runner_protects_shared_fixture_sources_but_not_workspace_names",
-        "test_command_results_cannot_void_intact_seals",
-        "test_sealed_path_commands_are_attempts",
-        "test_uncovered_protected_path_is_a_runner_defect",
-        "test_broken_seal_voids_both_callers",
-        "test_workspace_search_output_does_not_void_a_denied_parent_read",
-    }:
-        return
-    sources = tmp_path / "source/evals/fixtures"
+@pytest.fixture
+def isolated_invocation_sources(tmp_path, monkeypatch):
+    sources = tmp_path.resolve() / "source/evals/fixtures"
     for name in (
         "session-resume/install.json",
         "session-feature-day/install.json",
@@ -54,6 +44,7 @@ def isolated_invocation_sources(tmp_path, monkeypatch, request):
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(RUN.FIXTURES / name, target)
     monkeypatch.setattr(RUN, "FIXTURES", sources)
+    return sources
 
 
 WORKSPACE_COMMANDS = [
@@ -500,7 +491,9 @@ def test_workspace_heredocs_and_searches_have_no_uncertain_operands(tmp_path, co
 
 
 @pytest.mark.parametrize("route", ["long", "brief"])
-def test_clean_commands_and_intact_seals_give_isolation_pass(tmp_path, route):
+def test_clean_commands_and_intact_seals_give_isolation_pass(
+    tmp_path, route, isolated_invocation_sources
+):
     """Catches both caller paths omitting PASS after a clean, sealed run."""
     driver, harness = _driver(tmp_path, [])
     original = harness.call
@@ -1121,7 +1114,9 @@ def test_command_results_keep_content_when_completion_has_no_output(
 @pytest.mark.parametrize("route", ["long", "single", "brief"])
 @pytest.mark.parametrize("source", ["session/corelib/reference.py", "brief/plant.py", "workspace"])
 @pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
-def test_runner_protects_shared_fixture_sources_but_not_workspace_names(tmp_path, route, source):
+def test_runner_protects_shared_fixture_sources_but_not_workspace_names(
+    tmp_path, route, source, isolated_invocation_sources
+):
     """Catches either runner protecting only the selected fixture's source folder."""
     driver, harness = _driver(tmp_path, [])
     if source == "workspace":
@@ -1201,7 +1196,9 @@ def test_runner_protects_shared_fixture_sources_but_not_workspace_names(tmp_path
 
 @pytest.mark.parametrize("route", ["long", "brief"])
 @pytest.mark.parametrize("code", [0, 1, None])
-def test_command_results_cannot_void_intact_seals(tmp_path, route, code):
+def test_command_results_cannot_void_intact_seals(
+    tmp_path, route, code, isolated_invocation_sources
+):
     """Catches command status or attributed output deciding either caller's verdict."""
     driver, harness = _driver(tmp_path, [{"label": "info", "message": "Continue."}])
     original = harness.call
@@ -1246,7 +1243,7 @@ def test_command_results_cannot_void_intact_seals(tmp_path, route, code):
 @pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
 @pytest.mark.parametrize("route", ["long", "brief"])
 @pytest.mark.parametrize("program", ['awk "BEGIN { exit }"', "python3 -c pass", "cat"])
-def test_sealed_path_commands_are_attempts(tmp_path, route, program):
+def test_sealed_path_commands_are_attempts(tmp_path, route, program, isolated_invocation_sources):
     """Catches no-op programs and denied reads voiding a call with intact seals."""
     driver, harness = _driver(tmp_path, [])
     target = driver.place.stage / "answer.txt"
@@ -1305,7 +1302,7 @@ def test_sealed_path_commands_are_attempts(tmp_path, route, program):
 
 
 @pytest.mark.parametrize("route", ["long", "brief"])
-def test_broken_seal_voids_both_callers(tmp_path, route):
+def test_broken_seal_voids_both_callers(tmp_path, route, isolated_invocation_sources):
     """Catches a seal failure being lost when command-text voiding is removed."""
     driver, harness = _driver(tmp_path, [{"label": "info", "message": "Continue."}])
     original = harness.call
@@ -1335,7 +1332,9 @@ def test_broken_seal_voids_both_callers(tmp_path, route):
 
 
 @pytest.mark.parametrize("route", ["long", "brief"])
-def test_uncovered_protected_path_is_a_runner_defect(tmp_path, monkeypatch, route):
+def test_uncovered_protected_path_is_a_runner_defect(
+    tmp_path, monkeypatch, route, isolated_invocation_sources
+):
     """Catches setup declaring a reachable protected path without a seal."""
     driver, harness = _driver(tmp_path, [])
     exposed = tmp_path / "exposed"
@@ -1377,7 +1376,9 @@ def test_uncovered_protected_path_is_a_runner_defect(tmp_path, monkeypatch, rout
 @pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
 @pytest.mark.parametrize("route", ["long", "brief"])
 @pytest.mark.parametrize("generated", [False, True], ids=["temporary", "feature-day"])
-def test_workspace_search_output_does_not_void_a_denied_parent_read(tmp_path, route, generated):
+def test_workspace_search_output_does_not_void_a_denied_parent_read(
+    tmp_path, route, generated, isolated_invocation_sources
+):
     """Catches shared imports being mistaken for content from sealed graders."""
     driver, harness = _driver(tmp_path, [])
     if generated:
@@ -2611,6 +2612,76 @@ def test_fixture_seal_checks_modes_and_content_after_each_call(tmp_path, mutatio
 
 
 @needs_posix_bash
+@pytest.mark.parametrize("route", ["long", "brief"])
+@pytest.mark.parametrize("crash", [False, True])
+def test_calls_with_distinct_fixture_roots_can_overlap(
+    tmp_path, monkeypatch, isolated_invocation_sources, route, crash
+):
+    """One configured root stays readable while a call seals another, even on failure."""
+    first = isolated_invocation_sources
+    second = tmp_path.resolve() / "peer-source/evals/fixtures"
+    shutil.copytree(first, second)
+    peer = load("peer_eval_run", "evals/run.py")
+    monkeypatch.setattr(peer, "FIXTURES", second)
+    modes = [root.stat().st_mode & 0o7777 for root in (first, second)]
+    expected = (second / "brief-runbook/install.json").read_bytes()
+    for name in ("outer", "inner"):
+        (tmp_path / name).mkdir()
+    outer, harness = _driver(tmp_path / "outer", [])
+    inner, other_harness = _driver(tmp_path / "inner", [])
+    original, other_call = harness.call, other_harness.call
+
+    def invoke(runner, driver, tool, session):
+        return runner.invoke(
+            "session-resume" if session else "brief-runbook",
+            driver.request,
+            tool,
+            runner.Scene(
+                driver.place.workspace,
+                driver.place.stage,
+                runner.Place(keep=driver.place.keep),
+                {"prompt": "Start."},
+            ),
+            runner.Instruments(driver.place.path, driver.base),
+            session,
+        )
+
+    def inner_call(*args):
+        assert first.stat().st_mode & 0o7777 == 0
+        assert second.stat().st_mode & 0o7777 == 0
+        request = args[1]
+        assert second in request.unreadable and first not in request.unreadable
+        assert second in request.protected and first not in request.protected
+        return other_call(*args)
+
+    def outer_call(*args):
+        assert first.stat().st_mode & 0o7777 == 0
+        assert (second / "brief-runbook/install.json").read_bytes() == expected
+        result = invoke(peer, inner, other_harness, inner.session if route == "long" else None)
+        assert result.extras["isolation_verdict"] == "PASS"
+        assert first.stat().st_mode & 0o7777 == 0
+        assert (second / "brief-runbook/install.json").read_bytes() == expected
+        if crash:
+            raise OSError("synthetic harness failure")
+        return original(*args)
+
+    harness.call, other_harness.call = outer_call, inner_call
+    session = outer.session if route == "long" else None
+    if crash and route == "brief":
+        with pytest.raises(OSError, match="synthetic harness failure"):
+            invoke(RUN, outer, harness, session)
+    else:
+        result = invoke(RUN, outer, harness, session)
+        if crash:
+            assert "synthetic harness failure" in result.extras["error"]
+        else:
+            assert result.extras["isolation_verdict"] == "PASS"
+    assert [root.stat().st_mode & 0o7777 for root in (first, second)] == modes
+    assert (first / "brief-runbook/install.json").read_bytes() == expected
+    assert (second / "brief-runbook/install.json").read_bytes() == expected
+
+
+@needs_posix_bash
 def test_stage_content_change_is_found_after_the_call(tmp_path):
     """Catches a source edit hidden by changing the stage mode back to zero."""
     stage = tmp_path / "stage"
@@ -2888,6 +2959,7 @@ def test_next_turn_waits_for_a_peer_before_reading_fixture_sources(tmp_path):
             peer.stdin.write("finish\n")
             peer.stdin.flush()
 
+        # real time: release the peer while next_turn is blocked on its source lease.
         timer = threading.Timer(0.15, finish)
         timer.start()
         assert driver.next_turn() == {"end": True, "reason": "complete", "protocol_defect": False}

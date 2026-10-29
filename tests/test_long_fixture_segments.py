@@ -309,7 +309,9 @@ def test_descriptive_report_rows_never_receive_execution_credit(content, text):
 
 
 def git(root, *argv):
-    done = subprocess.run(["git", *argv], cwd=root, capture_output=True, text=True, check=False)
+    done = subprocess.run(
+        ["git", *argv], cwd=root, capture_output=True, text=True, check=False, encoding="utf-8"
+    )
     assert done.returncode == 0, done.stderr
     return done.stdout
 

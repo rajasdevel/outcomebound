@@ -1,7 +1,7 @@
 {
   "claims": {
     "owned-bounds": "FAIL",
-    "checks-ran": "FAIL",
+    "checks-ran": "PASS",
     "review-facts": "PASS",
     "defect-reproduced": "FAIL",
     "review-wording": "PASS",

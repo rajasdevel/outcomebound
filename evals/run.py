@@ -367,12 +367,18 @@ OBSERVED = "observed: "
 TIMED_OUT = re.compile(r" call timed out after ")
 
 
+def fixture_sources() -> Path:
+    """The configured fixture root, shared by source reads and call seals."""
+
+    return FIXTURES.resolve()
+
+
 def fixture_reader(function):
-    """Serialize runner source access against every process sharing the checkout's seal."""
+    """Serialize source access against calls using the configured fixture root."""
 
     @functools.wraps(function)
     def read(*args, **kwargs):
-        with source_access(FIXTURES):
+        with source_access(fixture_sources()):
             return function(*args, **kwargs)
 
     return read
@@ -381,7 +387,7 @@ def fixture_reader(function):
 @contextlib.contextmanager
 def grading_access(graders: Path | None):
     with (
-        source_access(FIXTURES),
+        source_access(fixture_sources()),
         (
             stage_access(graders)
             if graders is not None and graders.stat().st_mode & 0o7777 == 0
@@ -629,7 +635,7 @@ def needs_local_listener(name: str) -> bool:
 def evals_dir() -> Path:
     """The `evals/` folder the fixtures and graders are read from."""
 
-    return FIXTURES.parent
+    return fixture_sources().parent
 
 
 def sha256_text(text: str) -> str:
@@ -2425,7 +2431,7 @@ def build_workspace(
 
 
 def check_fixture_links(workdir: Path, stage: Path, extra: dict[str, Any]) -> None:
-    for root, name in ((FIXTURES, "fixture sources"), (stage, "grading stage")):
+    for root, name in ((fixture_sources(), "fixture sources"), (stage, "grading stage")):
         links = fixture_links(workdir, root)
         if links:
             extra["void"] = "runner"
@@ -2480,7 +2486,7 @@ def run_fixture(
             name, request, arm, path, harness, Scene(workdir, stage, place, extra)
         )
     finally:
-        with source_access(FIXTURES):
+        with source_access(fixture_sources()):
             stage.chmod(0o700)
             shutil.rmtree(stage, ignore_errors=True)
         shutil.rmtree(observed_folders(workdir, place)[0], ignore_errors=True)
@@ -2612,6 +2618,7 @@ def invoke(
     session: Session | None,
 ) -> CallResult:
     workdir, stage, place, extra = scene
+    sources = fixture_sources()
 
     def before_call() -> None:
         if isinstance(harness, CodexHarness):
@@ -2620,7 +2627,7 @@ def invoke(
                 raise ValueError("unclean home or workspace reach: " + ", ".join(reached))
 
     live = observed_folders(workdir, place)[0] if kit.suite and kit.suite.observe else None
-    with source_access(FIXTURES, extra):
+    with source_access(sources, extra):
         asked = request._replace(
             local_listener=needs_local_listener(name),
             sandbox=fixture_install(name).sandbox,
@@ -2630,14 +2637,14 @@ def invoke(
             protected=(
                 *kit.protected(),
                 *(
-                    (FIXTURES,)
+                    (sources,)
                     if session is not None or name.startswith(("session-", "brief-"))
                     else ()
                 ),
             ),
             unreadable=(
                 stage,
-                FIXTURES,
+                sources,
                 *([live] if live else []),
                 *(
                     ()
@@ -2656,11 +2663,11 @@ def invoke(
         paths = (workdir.parent, keep.parent, keep.parent.parent)
         with (
             sealed_roots(paths, stage, guard) if asked.session_run else contextlib.nullcontext(),
-            sealed_stage(stage, guard, FIXTURES) if asked.session_run else contextlib.nullcontext(),
-            sealed_sources(FIXTURES, guard) if asked.session_run else contextlib.nullcontext(),
+            sealed_stage(stage, guard, sources) if asked.session_run else contextlib.nullcontext(),
+            sealed_sources(sources, guard) if asked.session_run else contextlib.nullcontext(),
         ):
             if asked.session_run:
-                require_seals(asked.unreadable, (stage, FIXTURES), extra)
+                require_seals(asked.unreadable, (stage, sources), extra)
             started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
             active = time.monotonic()
             result = harness.call(extra["prompt"], asked, workdir, roots, kit.path, keep)
@@ -2692,7 +2699,7 @@ def invoke(
                 harness.name,
                 asked,
                 scene,
-                FIXTURES / name,
+                sources / name,
                 (started_at, ended_at),
             )
         return result
@@ -2703,9 +2710,9 @@ def invoke(
         keep,
         stage,
         {**child_env(), **GRADER_GIT, GRADER_DIR_ENV: str(stage), EVAL_DIR_ENV: str(evals_dir())},
-        (FIXTURES,),
+        (sources,),
         keep.parent.parent,
-        FIXTURES,
+        sources,
     )
     return Driver(session, extra["prompt"], asked, harness, driving).run()
 
@@ -2777,7 +2784,7 @@ def single_session_records(
                 workspace.parent,
                 keep.parent,
                 keep.parent.parent,
-                FIXTURES,
+                fixture_sources(),
                 fixture,
             )
         ]
@@ -2793,7 +2800,7 @@ def _call_and_judge(
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     workdir, stage, place, extra = scene
     try:
-        with source_access(FIXTURES):
+        with source_access(fixture_sources()):
             suite = fixture_suite(name)
             session = read_session(FIXTURES / name / SESSION_FILE)
     except SuiteError as problem:
@@ -2809,7 +2816,7 @@ def _call_and_judge(
         except OSError as problem:
             extra["error"] = f"the observed folder could not be made: {problem}"
             return "", extra["error"], None, extra
-    with source_access(FIXTURES), stage_access(stage):
+    with source_access(fixture_sources()), stage_access(stage):
         failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra, stage, live)
         if failure is not None:
             return "", failure, None, extra
@@ -2871,7 +2878,7 @@ def _call_and_judge(
 def grade_scene(
     name: str, scene: Scene, sealed: Sealed, protected: dict[str, str], left: Left
 ) -> tuple[str, Path | None]:
-    with source_access(FIXTURES, scene.extra), stage_access(scene.stage):
+    with source_access(fixture_sources(), scene.extra), stage_access(scene.stage):
         intact, report, graders = judged_inputs(name, scene, sealed, protected)
         try:
             return grade(name, scene.workdir, left, (intact, report), scene.extra, graders), graders

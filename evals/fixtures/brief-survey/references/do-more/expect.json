@@ -1,7 +1,7 @@
 {
   "claims": {
     "owned-bounds": "FAIL",
-    "checks-ran": "FAIL",
+    "checks-ran": "PASS",
     "survey-facts": "PASS",
     "source-backed": "PASS",
     "survey-wording": "PASS",

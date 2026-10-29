@@ -199,7 +199,7 @@ def test_push_process_credit_requires_the_named_revision_inputs(project):
     assert RECEIPTS["checked_before"](rows, project, first)
     assert RECEIPTS["checked_before"](rows, project, "HEAD")
     path = project / "tests/test_changed.py"
-    path.write_text(path.read_text() + "\n# Delivered change\n", encoding="utf-8")
+    path.write_text(path.read_text(encoding="utf-8") + "\n# Delivered change\n", encoding="utf-8")
     commit(project, "Change tested inputs")
     second = run(project, "git", "rev-parse", "HEAD").stdout.strip()
     assert not RECEIPTS["checked_before"](rows, project, second)
@@ -311,7 +311,7 @@ def test_read_only_git_checks_keep_the_described_index(project):
     )
     assert DELIVERED["report"]("git diff --check", root=project)
     path = project / "tests/test_other.py"
-    path.write_text(path.read_text() + "bad whitespace  \n", encoding="utf-8")
+    path.write_text(path.read_text(encoding="utf-8") + "bad whitespace  \n", encoding="utf-8")
     assert DELIVERED["report"]("git diff --check", root=project) is False
     assert DELIVERED["report"]("git diff --check", root=project, revision="HEAD")
 

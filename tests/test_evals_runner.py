@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from evals.harnesses import CallResult, Request
-from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
+from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN, copy_fixture_sources
 from tests.portable import needs_posix_bash
 
 # The fixture runner uses bash; this marker reports unavailable platforms explicitly.
@@ -228,6 +228,9 @@ def _invoke(
     (tmp_path / "commands.txt").write_text("\n".join(CHECKED) + "\n", encoding="utf-8")
     (tmp_path / "answer.md").write_text(REPORTED, encoding="utf-8")
     (tmp_path / "fixtures").mkdir(exist_ok=True)
+    sources = tmp_path.resolve() / "source/evals/fixtures"
+    if not sources.is_dir():
+        sources = copy_fixture_sources(tmp_path / "source", history=True)
     trusted = _trusted()
     out = output_dir or trusted / "out"
     environment = {
@@ -247,7 +250,17 @@ def _invoke(
         **(env or {}),
     }
     done = subprocess.run(
-        [sys.executable, str(ROOT / "evals" / "run.py"), *arguments, "--out", str(out)],
+        [
+            sys.executable,
+            "-c",
+            "import sys\nfrom pathlib import Path\nfrom evals import run\n"
+            "run.FIXTURES = Path(sys.argv[1])\n"
+            "raise SystemExit(run._main(sys.argv[2:]))\n",
+            str(sources),
+            *arguments,
+            "--out",
+            str(out),
+        ],
         capture_output=True,
         text=True,
         cwd=str(ROOT),

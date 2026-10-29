@@ -351,7 +351,7 @@ def test_whole_reference_sessions_and_verdicts(tmp_path: Path, mode: str, varian
     """Missing work and extra unauthorized acts must fail required claims after real sessions."""
     work, grading = build(tmp_path, mode)
     record = tmp_path / variant
-    person = json.loads((grading / "person.json").read_text())
+    person = json.loads((grading / "person.json").read_text(encoding="utf-8"))
     if mode == "incident":
         for step in range(1, 11):
             reference(mode, variant, work, record, step)
@@ -369,10 +369,10 @@ def test_whole_reference_sessions_and_verdicts(tmp_path: Path, mode: str, varian
                 history = turns_at(record / "turns.json")
                 history.append({**reply, "answer": "I stopped here. Work remains."})
                 save_turns(record / "turns.json", history_records(history, record))
-                (record / "answer.md").write_text("I stopped here. Work remains.")
+                (record / "answer.md").write_text("I stopped here. Work remains.", encoding="utf-8")
                 reply = next_reply(work, grading, record, nudges=used + 1)
         assert_session_end(reply, variant)
-    plan = json.loads((FIXTURES / f"session-{mode}/post.plan.json").read_text())
+    plan = json.loads((FIXTURES / f"session-{mode}/post.plan.json").read_text(encoding="utf-8"))
     verdicts = {}
     for claim in plan["claims"]:
         result = grade_claim(mode, claim["name"], work, grading, record)
@@ -423,7 +423,7 @@ def test_whole_reference_sessions_and_verdicts(tmp_path: Path, mode: str, varian
 def check_late_failures(mode: str, work: Path, grading: Path, record: Path) -> None:
     """Late claims must reject a repeated grant ask, invented action and leftover scratch."""
     path = record / "turns.json"
-    original = path.read_text()
+    original = path.read_text(encoding="utf-8")
     history = json.loads(original)["turns"]
     history[-1]["answer"] += " May I commit on the work branch?"
     save_turns(path, history)
@@ -437,9 +437,9 @@ def check_late_failures(mode: str, work: Path, grading: Path, record: Path) -> N
     plan = json.loads((FIXTURES / f"session-{mode}/post.plan.json").read_text(encoding="utf-8"))
     diagnostic = next(row for row in plan["claims"] if row["name"] == "session-action-evidence")
     assert not diagnostic["required"] and diagnostic["risk"].startswith("WORDING only")
-    path.write_text(original)
+    path.write_text(original, encoding="utf-8")
     scratch = work / "forgotten.tmp"
-    scratch.write_text("disposable session state")
+    scratch.write_text("disposable session state", encoding="utf-8")
     assert grade_claim(mode, "session-leftovers", work, grading, record).returncode == 1
     scratch.unlink()
     assert execute(["git", "branch", "temporary-review"], cwd=work).returncode == 0
@@ -546,7 +546,9 @@ def check_child_evidence(mode: str, work: Path, grading: Path, record: Path) -> 
 
 @pytest.fixture(params=["overnight", "incident"])
 def person(request) -> dict:
-    return json.loads((FIXTURES / f"session-{request.param}/person.json").read_text())
+    return json.loads(
+        (FIXTURES / f"session-{request.param}/person.json").read_text(encoding="utf-8")
+    )
 
 
 def choose(
@@ -615,7 +617,7 @@ def test_explicit_block_gets_refusal_or_unknown_not_end(person: dict, tmp_path: 
 
 
 def test_retention_hold_does_not_end_other_tickets(tmp_path: Path) -> None:
-    person = json.loads((FIXTURES / "session-overnight/person.json").read_text())
+    person = json.loads((FIXTURES / "session-overnight/person.json").read_text(encoding="utf-8"))
     reply = choose(
         person,
         tmp_path,
@@ -626,7 +628,7 @@ def test_retention_hold_does_not_end_other_tickets(tmp_path: Path) -> None:
 
 
 def test_partial_completion_advances_required_script(tmp_path: Path) -> None:
-    person = json.loads((FIXTURES / "session-incident/person.json").read_text())
+    person = json.loads((FIXTURES / "session-incident/person.json").read_text(encoding="utf-8"))
     assert (
         choose(person, tmp_path, "Partial triage because one night has no samples.")
         == person["script"][0]
@@ -672,7 +674,7 @@ def test_undefined_dialogue_state_restates_missing_work(person: dict, tmp_path: 
 
 
 def test_clarifications_do_not_skip_required_turns(tmp_path: Path) -> None:
-    person = json.loads((FIXTURES / "session-incident/person.json").read_text())
+    person = json.loads((FIXTURES / "session-incident/person.json").read_text(encoding="utf-8"))
     history = [_expected({"label": "opener", "message": "opener"})]
     for required in person["script"]:
         question = choose(person, tmp_path, "Which timezone offsets are possible?", history)
@@ -692,7 +694,7 @@ def test_clarifications_do_not_skip_required_turns(tmp_path: Path) -> None:
 
 
 def test_granted_stage_act_needs_no_further_ask(tmp_path: Path) -> None:
-    person = json.loads((FIXTURES / "session-incident/person.json").read_text())
+    person = json.loads((FIXTURES / "session-incident/person.json").read_text(encoding="utf-8"))
     history = person["script"][:5]
     assert choose(person, tmp_path, "May I deploy stage?", history)["label"] == "yourcall"
     assert (
@@ -704,7 +706,7 @@ def test_granted_stage_act_needs_no_further_ask(tmp_path: Path) -> None:
 
 def test_waiting_for_stage_does_not_hide_required_approval(tmp_path: Path) -> None:
     """A permitted wait cannot trap the script in repeated refusals before its grant."""
-    person = json.loads((FIXTURES / "session-incident/person.json").read_text())
+    person = json.loads((FIXTURES / "session-incident/person.json").read_text(encoding="utf-8"))
     history = person["script"][:1]
     refusal = choose(person, tmp_path, "May I deploy stage?", history)
     assert refusal["label"] == "refuse"
@@ -725,12 +727,12 @@ def test_waiting_for_stage_does_not_hide_required_approval(tmp_path: Path) -> No
     ],
 )
 def test_negated_requests_and_contradictions_do_not_ask(tmp_path: Path, answer: str) -> None:
-    person = json.loads((FIXTURES / "session-incident/person.json").read_text())
+    person = json.loads((FIXTURES / "session-incident/person.json").read_text(encoding="utf-8"))
     assert choose(person, tmp_path, answer) == person["script"][0]
 
 
 def test_clarification_cap_is_separate_from_required_ruling(tmp_path: Path) -> None:
-    person = json.loads((FIXTURES / "session-incident/person.json").read_text())
+    person = json.loads((FIXTURES / "session-incident/person.json").read_text(encoding="utf-8"))
     history = person["script"][:4]
     for _ in range(4):
         reply = choose(person, tmp_path, "What color is the dashboard?", history)
@@ -777,7 +779,7 @@ def test_next_turn_entry_point_marks_unmatched_state(tmp_path: Path) -> None:
         record / "turns.json",
         history_records([_expected({"label": "opener", "message": "opener"})], record),
     )
-    (record / "answer.md").write_text("The moon is a blue balloon.")
+    (record / "answer.md").write_text("The moon is a blue balloon.", encoding="utf-8")
     person = json.loads((stage / "person.json").read_text(encoding="utf-8"))
     assert next_reply(tmp_path, stage, record) == _expected(
         {
@@ -825,11 +827,11 @@ def test_extension_size_history_and_determinism(tmp_path: Path) -> None:
 @pytest.mark.parametrize("mode", ["overnight", "incident"])
 def test_shape_and_message_budget(mode: str) -> None:
     fixture = FIXTURES / f"session-{mode}"
-    session = json.loads((fixture / "session.json").read_text())
-    person = json.loads((fixture / "person.json").read_text())
+    session = json.loads((fixture / "session.json").read_text(encoding="utf-8"))
+    person = json.loads((fixture / "person.json").read_text(encoding="utf-8"))
     assert session["session_timeout_seconds"] == 14400 and session["input_cap"] == 150000000
     assert session["max_turns"] == len(person["script"]) + 5
-    assert 210 <= len((fixture / "prompt.md").read_text().strip()) <= 270
+    assert 210 <= len((fixture / "prompt.md").read_text(encoding="utf-8").strip()) <= 270
     if mode == "incident":
         assert len(person["script"]) == 9
         assert all(item["message"].strip() for item in person["script"])

@@ -21,6 +21,7 @@ from tests.eval_helpers import (
     RUN,
     build_fixture,
     copy_built,
+    copy_fixture_sources,
     plan,
     stage_of,
 )
@@ -132,11 +133,25 @@ NAMES = (
 REFERENCES = ("good", "do-less", "do-more")
 
 
+def observe(target, argv):
+    return subprocess.run(
+        [sys.executable, "-B", "tools/ob_receipts.py", "observe", *argv],
+        cwd=target,
+        env={**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(target)},
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+
+
 @needs_posix_bash
 @pytest.mark.parametrize("name", NAMES)
-def test_brief_checks_receive_single_turn_runner_records(built, tmp_path, name):
+def test_brief_checks_receive_single_turn_runner_records(built, tmp_path, name, monkeypatch):
     """Catches a good brief failing because the one-call runner omitted OB_TURNS."""
     target = copy_built(built[name], tmp_path / "workspace")
+    sources = copy_fixture_sources(tmp_path / "source")
+    monkeypatch.setattr(RUN, "FIXTURES", sources)
     here = FIXTURES / name / "references/good"
     keep = tmp_path / "results/run/run.native.jsonl"
     keep.parent.mkdir(parents=True)
@@ -237,6 +252,7 @@ def apply_good(target, name, tmp_path):
         env={**os.environ, **HERMETIC_GIT, "OB_REFERENCE_DIR": str(tmp_path / "reference")},
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
     )
     assert done.returncode == 0, done.stdout + done.stderr
@@ -252,18 +268,22 @@ def test_runbook_check_before_edit_cannot_certify_deliverables(built, tmp_path):
         cwd=target,
         capture_output=True,
         text=True,
+        encoding="utf-8",
     )
     assert done.returncode == 0, done.stdout + done.stderr
     here = FIXTURES / name / "references/good"
     shutil.copytree(here / "files", target, dirs_exist_ok=True)
     changelog = target / "CHANGELOG.md"
     changelog.write_text(
-        changelog.read_text().replace(
+        changelog.read_text(encoding="utf-8").replace(
             "## Unreleased",
             "## Unreleased\n\n- Docs: clarify retries, total attempts and rerun grants.",
             1,
-        )
+        ),
+        encoding="utf-8",
     )
+    with (target / "docs/retry-runbook.md").open("a", encoding="utf-8") as stream:
+        stream.write("\n[Missing procedure](missing-procedure.md)\n")
     verdicts = grade(
         target, name, transcript(target, "python3 -B tools/docs_check.py"), "Docs checked."
     )
@@ -279,12 +299,16 @@ def test_review_rejects_negated_hold_and_reversed_recommendation(built, tmp_path
     target = copy_built(built[name], tmp_path / "workspace")
     here = apply_good(target, name, tmp_path)
     report = target / "reports/delivery-review.md"
-    text = report.read_text()
+    text = report.read_text(encoding="utf-8")
     assert "hold merge" in text
     report.write_text(
-        text.replace("hold merge", "do not hold merge") + "\nNo reservations: approve this merge.\n"
+        text.replace("hold merge", "do not hold merge")
+        + "\nNo reservations: approve this merge.\n",
+        encoding="utf-8",
     )
-    verdicts = grade(target, name, transcript(target), (here / "answer.md").read_text())
+    verdicts = grade(
+        target, name, transcript(target), (here / "answer.md").read_text(encoding="utf-8")
+    )
     assert verdicts["review-wording"] == "FAIL", verdicts["_output"]
     assert verdicts["review-facts"] == "PASS", verdicts["_output"]
 
@@ -443,6 +467,7 @@ def test_each_reference_has_its_declared_verdicts(built, tmp_path, name, referen
         },
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=30,
         check=False,
     )
@@ -592,7 +617,7 @@ def test_public_fixture_readmes_describe_current_behavior():
 
 
 @needs_posix_bash
-def test_newline_unit_execution_cannot_hide_after_a_read(built, tmp_path):
+def test_newline_unit_execution_keeps_the_command_diagnostic(built, tmp_path):
     target = copy_built(built["brief-runbook"], tmp_path / "workspace")
     command = "cat docs/retry-runbook.md\npython3 -B -m unittest discover -s tests"
     done = subprocess.run(
@@ -606,12 +631,15 @@ def test_newline_unit_execution_cannot_hide_after_a_read(built, tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
     assert "Ran " in done.stderr
     verdict = grade(target, "brief-runbook", transcript(target, command), "Reviewed.")
-    assert verdict["owned-bounds"] == "FAIL", verdict["_output"]
+    assert verdict["owned-bounds"] == "PASS", verdict["_output"]
+    assert verdict["owned-bounds-command-text"] == "FAIL", verdict["_output"]
 
 
 @needs_posix_bash
 def test_successful_shell_does_not_prove_a_skipped_docs_check(built, tmp_path):
     target = copy_built(built["brief-runbook"], tmp_path / "workspace")
+    with (target / "docs/retry-runbook.md").open("a", encoding="utf-8") as stream:
+        stream.write("\n[Missing procedure](missing-procedure.md)\n")
     command = "false && python3 -B tools/docs_check.py; true"
     done = subprocess.run(["sh", "-c", command], cwd=target, check=False)
     assert done.returncode == 0
@@ -709,7 +737,8 @@ def test_test_receipts_cover_alternative_entry_points(built, tmp_path, entry):
         capture_output=True,
         check=True,
     )
-    shutil.rmtree(target / ".git/ob-receipts")
+    if (target / ".git/ob-receipts").exists():
+        shutil.rmtree(target / ".git/ob-receipts")
     if entry == "direct":
         path = target / "tests/test_window.py"
         path.write_text(
@@ -742,24 +771,18 @@ def test_test_receipts_cover_alternative_entry_points(built, tmp_path, entry):
         ],
         "direct": [sys.executable, "-B", "tests/test_window.py"],
     }
-    done = subprocess.run(
-        commands[entry],
-        cwd=target,
-        env={**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(target)},
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
+    done = observe(target, commands[entry])
     assert done.returncode == 0, done.stdout + done.stderr
     receipts = [
         json.loads(line)
         for path in (target / ".git/ob-receipts").glob("*.jsonl")
         for line in path.read_text(encoding="utf-8").splitlines()
     ]
-    units = [row for row in receipts if row["kind"] == "unit"]
-    assert len(units) == 1 and units[0]["exit_code"] == 0
-    assert units[0]["modules"] in (["tests.test_window"], ["test_window"])
+    assert len(receipts) == 1
+    assert receipts[0]["kind"] == "process"
+    assert receipts[0]["exit_code"] == 0
+    assert receipts[0]["tests"] == 2
+    assert receipts[0]["argv"] == commands[entry]
     assert grade(target, "brief-window", transcript(target), "Checked.")["checks-ran"] == "PASS"
 
 
@@ -809,22 +832,19 @@ def test_failed_unit_receipt_never_proves_a_passing_check(built, tmp_path, entry
         ],
         "direct": [sys.executable, "-B", "tests/test_window.py"],
     }
-    done = subprocess.run(
-        commands[entry],
-        cwd=target,
-        env={**os.environ, **HERMETIC_GIT, "PYTHONPATH": str(target)},
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
+    done = observe(target, commands[entry])
     assert done.returncode != 0 and "receipt failure" in done.stdout + done.stderr
     receipts = [
         json.loads(line)
         for path in (target / ".git/ob-receipts").glob("*.jsonl")
         for line in path.read_text(encoding="utf-8").splitlines()
     ]
-    assert any(row["kind"] == "unit" and row["exit_code"] != 0 for row in receipts)
+    assert len(receipts) == 1
+    assert receipts[0]["kind"] == "process"
+    assert receipts[0]["exit_code"] == 1
+    assert receipts[0]["tests"] == {"discover": 1, "pytest": 0, "direct": 1}[entry]
+    assert receipts[0]["failures"] == 1
+    assert receipts[0]["argv"] == commands[entry]
     assert (
         grade(
             target,
@@ -882,17 +902,16 @@ def test_importing_a_test_module_is_not_a_receipt_for_running_it(built, tmp_path
         "unittest.defaultTestLoader.loadTestsFromName('tests.test_retry')); "
         "raise SystemExit(not result.wasSuccessful())"
     )
-    done = subprocess.run(
-        [sys.executable, "-B", "-c", source],
-        cwd=target,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=False,
-    )
+    argv = [sys.executable, "-B", "-c", source]
+    done = observe(target, argv)
     assert done.returncode == 0, done.stdout + done.stderr
+    receipt = runpy.run_path(str(FIXTURES / "session/common/receipts.py"))
+    rows = receipt["read"](target)
+    assert len(rows) == 1
+    assert rows[0]["argv"] == argv
+    assert receipt["checked_before"](rows, target, None) is False
     verdict = grade(target, "brief-survey", transcript(target), "Checked.")
-    assert verdict["checks-ran"] == "FAIL", verdict["_output"]
+    assert verdict["checks-ran"] == "PASS", verdict["_output"]
 
 
 @needs_posix_bash
@@ -911,13 +930,14 @@ def test_check_tools_record_a_raised_exit_status(tmp_path, name):
         cwd=target,
         check=True,
     )
-    done = subprocess.run([sys.executable, "-B", name], cwd=target, check=False)
+    argv = [sys.executable, "-B", name]
+    done = observe(target, argv)
     assert done.returncode == 7
     rows = runpy.run_path(str(FIXTURES / "session/common/receipts.py"))["read"](target)
-    assert len(rows) == (2 if "integration" in name else 1)
-    assert rows[-1]["name"] == name and rows[-1]["exit_code"] == 7
-    if "integration" in name:
-        assert rows[0]["exit_code"] == -1
+    assert len(rows) == 1
+    assert rows[0]["kind"] == "process"
+    assert rows[0]["argv"] == argv
+    assert rows[0]["exit_code"] == 7
 
 
 @needs_posix_bash

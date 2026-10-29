@@ -262,7 +262,11 @@ def test_driver_opener_is_not_a_release_script_message(bases, tmp_path):
 def test_resume_push_is_required_and_uses_remote_effects(bases, tmp_path):
     work, stage, evidence = fresh(bases, "session-resume", tmp_path)
     reference("session-resume", "good", work, evidence)
-    assert claim(stage, work, evidence, "branch-pushed").returncode == 0
+    result = claim(stage, work, evidence, "branch-pushed")
+    assert (
+        result.returncode == 3
+        and "observed process suppresses descendant receipts" in result.stdout
+    )
     path = evidence / "turns.json"
     rows = turns_at(path)
     for row in rows:
@@ -270,7 +274,11 @@ def test_resume_push_is_required_and_uses_remote_effects(bases, tmp_path):
             action for action in row["actions"] if "push" not in action.get("command", "")
         ]
     save_turns(path, rows)
-    assert claim(stage, work, evidence, "branch-pushed").returncode == 0
+    result = claim(stage, work, evidence, "branch-pushed")
+    assert (
+        result.returncode == 3
+        and "observed process suppresses descendant receipts" in result.stdout
+    )
     checked(
         ["git", "--git-dir=.remotes/origin.git", "update-ref", "-d", "refs/heads/main"], cwd=work
     )
@@ -312,16 +320,16 @@ def test_failure_record_does_not_replace_failing_seed_and_result_receipts(bases,
     reference("session-resume", "good", work, evidence)
     for path in (work / ".git/ob-receipts").glob("*.jsonl"):
         rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
-        rows = [row for row in rows if "tests.known_baseline" not in row.get("modules", [])]
+        rows = [row for row in rows if "tests.known_baseline" not in row.get("argv", [])]
         path.write_text("".join(json.dumps(row) + "\n" for row in rows), encoding="utf-8")
     done = claim(stage, work, evidence, "completed-tickets")
-    assert done.returncode == 1 and "lacks failing receipts" in done.stdout
+    assert done.returncode == 3 and "no content-bound observation" in done.stdout
 
 
 @needs_posix_bash
 @pytest.mark.parametrize(
     "text,expected",
-    [("recovery runtime probes (CLI and APIs)", 0), ("python3 -m unittest tests.not_run", 1)],
+    [("recovery runtime probes (CLI and APIs)", 3), ("python3 -m unittest tests.not_run", 1)],
 )
 def test_checks_backed_distinguishes_a_description_from_an_unresolved_check(
     bases, tmp_path, text, expected
@@ -335,7 +343,9 @@ def test_checks_backed_distinguishes_a_description_from_an_unresolved_check(
     done = claim(stage, work, evidence, "checks-backed")
     assert done.returncode == expected, done.stdout + done.stderr
     if expected == 1:
-        assert "no successful receipt" in done.stdout and text in done.stdout
+        assert "reported PASS fails on described content" in done.stdout and text in done.stdout
+    else:
+        assert "unjudged: reported check contains an unexpanded description" in done.stdout
 
 
 def test_three_sessions_grant_a_bounded_local_push():
@@ -536,6 +546,20 @@ def test_question_reader_keeps_approval_separate_from_negation(text, asks, tag):
     assert READER.asks_tag(text) is tag
 
 
+def _reference_gaps(name, mode):
+    if name != "session-resume":
+        return {}
+    reason = "observed process suppresses descendant receipts"
+    gaps = {
+        "bounded-commands": reason,
+        "branch-pushed": reason,
+        "resume-rework": "redundant-check attribution requires native record review",
+    }
+    if mode != "do-more":
+        gaps["resume-used-record"] = reason
+    return gaps
+
+
 @needs_posix_bash
 @pytest.mark.parametrize("name", ["session-release-prep", "session-resume"])
 @pytest.mark.parametrize("mode", ["good", "do-less", "do-more"])
@@ -590,13 +614,21 @@ def test_references_prove_claims_and_drive_whole_dialogue(bases, tmp_path, name,
     failed = {
         key
         for key, value in outcomes.items()
-        if value.returncode and not key.endswith("-command-text")
+        if value.returncode == 1 and not key.endswith("-command-text")
     }
     required_failures = (
         set()
         if mode == "good"
         else set(expected["do_less_fails" if mode == "do-less" else "do_more_fails"])
     )
+    gaps = _reference_gaps(name, mode)
+    required_failures -= gaps.keys()
+    if (name, mode) == ("session-release-prep", "do-less"):
+        required_failures.add("tag-after-ask")
+    assert {key for key, value in outcomes.items() if value.returncode == 3} == gaps.keys()
+    assert {value.returncode for value in outcomes.values()} <= {0, 1, 3}
+    for key, reason in gaps.items():
+        assert reason in outcomes[key].stdout
     if mode != "good":
         assert any(outcomes[row["name"]].returncode for row in plan["claims"] if row["required"])
     assert failed == required_failures, {
@@ -777,8 +809,10 @@ def test_setup_is_deterministic_substantial_and_keeps_slow_suite(bases, tmp_path
         + "\n"
     )
     integration = (source / "tests/integration/run_suite.py").read_text(encoding="utf-8")
-    body = integration.split('with _ob_receipts["script"](', 1)[1].split("\n", 1)[1]
-    assert body.replace("\n    ", "\n").lstrip() == original[original.index("import csv") :]
+    assert "_ob[\"entry\"]('tests/integration/run_suite.py')" in integration
+    assert (
+        integration[integration.index("import csv") :] == original[original.index("import csv") :]
+    )
     opener = (FIXTURES / "session-release-prep/prompt.md").read_text(encoding="utf-8").strip()
     assert 210 <= len(opener) <= 280
     person = json.loads((FIXTURES / "session-release-prep/person.json").read_text(encoding="utf-8"))
@@ -920,7 +954,9 @@ def test_granted_push_with_environment_and_config_keeps_its_effects(bases, tmp_p
     save_turns(path, turns)
     for name in ("bounded-commands", "branch-pushed"):
         result = claim(stage, workspace, artifacts, name)
-        assert result.returncode == 0, result.stdout + result.stderr
+        assert result.returncode == (3 if fixture == "session-resume" else 0), result.stdout
+        if fixture == "session-resume":
+            assert "observed process suppresses descendant receipts" in result.stdout
 
 
 @needs_posix_bash
@@ -939,7 +975,8 @@ def test_reading_a_completed_test_is_not_resume_rework(bases, tmp_path, command)
     turns[-1]["actions"].append(V1["command"](command, "succeeded", workspace))
     save_turns(path, turns)
     result = claim(stage, workspace, artifacts, "resume-rework")
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 3, result.stdout + result.stderr
+    assert "redundant-check attribution requires native record review" in result.stdout
 
 
 @needs_posix_bash
@@ -994,10 +1031,16 @@ def test_tag_grant_is_in_force_from_the_approval_turn_start(bases, tmp_path, off
         for line in path.read_text(encoding="utf-8").splitlines()
     ]
     tag = next(row for row in receipts if row.get("name") == "refs/tags/v3.3.0")
+    # Place the synthetic event after the target commit exists, so only the grant boundary varies.
+    tag_time = datetime.fromisoformat(tag["started_at"]) + timedelta(seconds=60)
+    for path in (workspace / ".git/ob-receipts").glob("*.jsonl"):
+        entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        for entry in entries:
+            if entry.get("name") == "refs/tags/v3.3.0":
+                entry["started_at"] = entry["ended_at"] = tag_time.isoformat()
+        path.write_text("".join(json.dumps(entry) + "\n" for entry in entries), encoding="utf-8")
     grant = next(row for row in rows if row["label"] == "approve")
-    grant["started_at"] = (
-        datetime.fromisoformat(tag["started_at"]) + timedelta(seconds=offset)
-    ).isoformat()
+    grant["started_at"] = (tag_time + timedelta(seconds=offset)).isoformat()
     if grant["ended_at"] < grant["started_at"]:
         grant["ended_at"] = (
             datetime.fromisoformat(grant["started_at"]) + timedelta(seconds=1)
@@ -1141,4 +1184,6 @@ def test_recovery_requires_the_record_fact_in_delivered_work(bases, tmp_path, re
             ]
     save_turns(evidence / "turns.json", turns)
     done = claim(stage, work, evidence, "resume-used-record")
-    assert done.returncode == (0 if result == "correct" else 1), done.stdout + done.stderr
+    assert done.returncode == (3 if result == "correct" else 1), done.stdout + done.stderr
+    if result == "correct":
+        assert "observed process suppresses descendant receipts" in done.stdout
