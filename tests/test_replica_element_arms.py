@@ -22,7 +22,7 @@ import pytest
 
 from evals.harnesses import CallResult
 from evals.harnesses import codex as codex_harness
-from tests.adopt_helpers import READ_GUIDANCE
+from tests.adopt_helpers import INSTALLED_RULES, READ_GUIDANCE
 from tests.eval_helpers import RUN
 from tests.portable import needs_posix_bash
 
@@ -547,8 +547,8 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
     [
         (
             "fragment:workspace",
-            "- before creating or removing a worktree, or removing a container, volume or data "
-            "another run may need: read .outcomebound/fragments/workspace.md",
+            "- before creating or removing a worktree, or removing a container, volume or named "
+            "data: read .outcomebound/fragments/workspace.md",
             "Read only when the person names it or a file you are reading directs you to it: "
             "`.outcomebound/fragments/workspace.md`.",
         ),
@@ -560,6 +560,26 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
             "`.outcomebound/fragments/multi-agent.md`.",
         ),
         (
+            "fragment:research",
+            "- before running `outcomebound research`: read .outcomebound/fragments/research.md",
+            "Read only when the person names it or a file you are reading directs you to it: "
+            "`.outcomebound/fragments/research.md`.",
+        ),
+        (
+            "fragment:explore",
+            "- before starting exploration work, and when its appetite ends or its sought signal "
+            "appears: read .outcomebound/fragments/explore.md",
+            "Read only when the person names it or a file you are reading directs you to it: "
+            "`.outcomebound/fragments/explore.md`.",
+        ),
+        (
+            "skill:using-outcomebound",
+            "- before retiring a component, or changing the route by which a change reaches "
+            "its users: read .agents/skills/using-outcomebound/SKILL.md",
+            "Read only when the person names it or a file you are reading directs you to it "
+            "(skills under `.agents/skills/<name>/SKILL.md`): `using-outcomebound`.",
+        ),
+        (
             "skill:run-acceptance",
             "- before preparing or recording a person's acceptance of a delivered change: "
             "read .agents/skills/run-acceptance/SKILL.md",
@@ -567,7 +587,7 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
             "(skills under `.agents/skills/<name>/SKILL.md`): `run-acceptance`.",
         ),
     ],
-    ids=["workspace", "multi-agent", "run-acceptance"],
+    ids=["workspace", "multi-agent", "research", "explore", "using-outcomebound", "run-acceptance"],
 )
 def test_an_act_based_element_keeps_its_read_and_refuses_missing_or_extra_guidance(
     tmp_path: Path, fake: dict[str, Path], element: str, pointer: str, manual: str
@@ -575,7 +595,12 @@ def test_an_act_based_element_keeps_its_read_and_refuses_missing_or_extra_guidan
     """Catches absent act reads, extra manual names or an isolation check accepting either."""
 
     (RUN.FIXTURES / "replica-fake" / "install.json").write_text(
-        json.dumps({**INSTALL, "fragments": ["commands", "workspace", "multi-agent"]}),
+        json.dumps(
+            {
+                **INSTALL,
+                "fragments": ["commands", "workspace", "multi-agent", "research", "explore"],
+            }
+        ),
         encoding="utf-8",
     )
     arm = _arm("replica-fake", "none", RUN.Elements(added=(element,)))
@@ -583,7 +608,16 @@ def test_an_act_based_element_keeps_its_read_and_refuses_missing_or_extra_guidan
     note = workdir / "AGENTS.md"
     text = note.read_text("utf-8")
     block = text.split("\n\n", 1)[0].splitlines()
+    rules = (
+        [
+            "These hold without a read:",
+            *("- " + line for line in INSTALLED_RULES["using-outcomebound"]),
+        ]
+        if element == "skill:using-outcomebound"
+        else []
+    )
     assert block[1:] == [
+        *rules,
         *READ_GUIDANCE,
         pointer,
         "<!-- outcomebound:end id=guidance-pointers -->",

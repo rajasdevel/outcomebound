@@ -71,25 +71,26 @@ it, so a record set that is not the recorded mode's never reads `current`.
 
 ### Skill descriptions
 
-A full install writes inline rules, two conditional skill reads, seven reads before named acts
+A full install writes inline rules, two conditional skill reads, eight reads before named acts
 and a manual line in its guidance-pointers block. `decision-brief` is read when a decision
 compares several options, the person asks for a brief or a page, or a harness refuses an act the
 person granted. `diagnose` is read when a fix did not hold. The other twelve skills remain
-manual for native invocation. Seven of them get the act-based read lines below, in skill order,
-and do not appear on the manual line. The other five are `using-outcomebound`,
-`gather-requirements`, `tests-worth-keeping`, `review-findings` and `explain-spec`: read one when
+manual for native invocation. Eight of them get the act-based read lines below, in skill order,
+and do not appear on the manual line. The other four are `gather-requirements`,
+`tests-worth-keeping`, `review-findings` and `explain-spec`: read one when
 the person names it or a file being read directs the agent to it. The manual line gives the
 installed root as `<root>/<name>/SKILL.md`.
 
 | Skill | Read condition |
 | --- | --- |
+| `using-outcomebound` | before retiring a component, or changing the route by which a change reaches its users |
 | `review-council` | before asking another model or harness for a review |
-| `slice-tickets` | before publishing tickets to the ticket store |
+| `slice-tickets` | before drafting tickets, or publishing them to the ticket store |
 | `hand-off-tickets` | before handing a ticket to the agent or model that will build it |
 | `explorable` | before building an interactive page for the person |
-| `land-change` | before merging a pull or merge request, or changing its auto-merge or review state |
+| `land-change` | before pushing to a pull or merge request, merging it, or changing its auto-merge or review state |
 | `run-acceptance` | before preparing or recording a person's acceptance of a delivered change |
-| `sync-tracker` | before writing to a card in a tracker outside the project's ticket store |
+| `sync-tracker` | before reading or writing a card in a tracker outside the project's ticket store |
 
 These lines require the read just before the act. They do not require a read on a task that
 does not reach the act. The native manual flags remain set for all twelve manual skills.
@@ -173,9 +174,10 @@ engine, a facts-only install or not.
 skills, it shows the inline rules under `These hold without a read:` in `RULES` insertion order.
 Each explicit newline starts a rule line; a sentence boundary does not. The rules cover sizing
 and reuse; data that grants no authority; grants for shared-system acts and jobs that outlive the
-task; cleanup and resume boundaries; mechanism meanings; diagnosis without writes and repair
-reproduction; red baselines, deciding logic and test proof; requirements and assumptions; prior
-rulings and routine decisions; review dispositions and counterexamples; and ownership of request
+task; cleanup, stopped-command, handoff-owner and resume boundaries; mechanism meanings;
+diagnosis without writes and repair reproduction; red baselines, deciding logic in product code
+and test proof; requirements and assumptions; prior rulings and routine decisions; review
+dispositions and counterexamples; and ownership of request
 checks, approvals and review state.
 
 The shared-system rule requires the person's grant for the named act, a read first where a read
@@ -184,16 +186,22 @@ an act. Acceptance is the person's own verdict on the build they used; an agent 
 record it, but cannot give it. Undo compares the file at the start and others' later changes
 before a restore, checkout or reverse patch. Removal is limited to what the task made and no
 longer needs, with an exception when the task lacks disk for a tool's rebuildable cache or this
-project's dangling images; the report names each removal. Resume checks apply to another
-session's or person's work, include open handoff items, and ask about a pause where a worktree
-has uncommitted work and nothing landed since the last handoff. A role in a plan is not the
-person's acceptance. The mechanism meanings include `goal-envelope`. An unreadable source is
+project's dangling images; the report names each removal. Stop a check only when it cannot
+answer the question, endangers the machine or the person says so. Report it unfinished, and
+look for a lock or half-done change before the next run. A handoff names who takes the next
+action. Where no one is established, report the gap and do not call the handover done.
+Resume checks apply to another session's or person's work, include open handoff items, and ask
+about a pause where the checkout or a worktree has uncommitted work and nothing landed since
+the last handoff. Continue what the grant covers, and end the report with each choice still
+the person's, asked as a question. A role in a plan is not the person's acceptance. New deciding
+logic in product code needs one small test unless an existing test catches its break.
+The mechanism meanings include `goal-envelope`. An unreadable source is
 reported and nothing is reconstructed. A routine decision states whether it can be undone.
 An agent never resolves another person's thread, dismisses their review or counts its own review
 as theirs.
 
 Next come the selected fragments read on a condition, the two conditional skill reads and the
-seven act-based skill reads, each as `- <condition>: read <path>`. Fragment reads use selection
+eight act-based skill reads, each as `- <condition>: read <path>`. Fragment reads use selection
 order; each skill group uses skill order. Where any such line exists, the list starts with these
 two lines:
 
@@ -206,16 +214,18 @@ There is no separate reference pointer, including for the continuity reference.
 The references are still copied.
 
 The final line starts `Read only when the person names it or a file you are reading directs you to it`,
-gives the skill root where manual-only skills are present, and names the five manual-only
+gives the skill root where manual-only skills are present, and names the four manual-only
 skills in skill order, then selected manual-only fragments in selection order. The manual-only
-fragments are `commands`, `python`, `node-typescript`, `research` and `explore`. They get a verbatim
-copy at `.outcomebound/fragments/<id>.md` but no conditional read line. Two other manual fragments
+fragments are `commands`, `python` and `node-typescript`. They get a verbatim
+copy at `.outcomebound/fragments/<id>.md` but no conditional read line. Four other manual fragments
 get act-based read lines instead of names on the manual line:
 
 | Fragment | Read condition |
 | --- | --- |
-| `workspace` | before creating or removing a worktree, or removing a container, volume or data another run may need |
+| `workspace` | before creating or removing a worktree, or removing a container, volume or named data |
 | `multi-agent` | before writing a delegate's brief or integrating a delegate's work |
+| `research` | before running `outcomebound research` |
+| `explore` | before starting exploration work, and when its appetite ends or its sought signal appears |
 
 These act conditions replace the fragments' source conditions in the pointer block. Every other
 selected fragment except `local` keeps its conditional read line. A list that has only manual

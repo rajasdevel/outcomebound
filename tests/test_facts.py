@@ -50,7 +50,7 @@ def test_rule_lines_split_only_at_explicit_newlines() -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["commands", "python", "node-typescript", "research", "explore"],
+    ["commands", "python", "node-typescript"],
 )
 def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) -> None:
     """Catches a missing person-or-file trigger, an automatic read or a lost fragment path."""
@@ -68,10 +68,15 @@ def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) ->
     [
         (
             "workspace",
-            "before creating or removing a worktree, or removing a container, volume or data "
-            "another run may need",
+            "before creating or removing a worktree, or removing a container, volume or named data",
         ),
         ("multi-agent", "before writing a delegate's brief or integrating a delegate's work"),
+        ("research", "before running `outcomebound research`"),
+        (
+            "explore",
+            "before starting exploration work, and when its appetite ends or its sought "
+            "signal appears",
+        ),
     ],
 )
 def test_guarded_fragment_renders_its_act_read_instead_of_a_manual_name(

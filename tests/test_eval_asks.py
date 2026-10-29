@@ -244,14 +244,16 @@ QUESTION_CASES = [
         "a-negated-hold-is-no-verdict",
         "",
         ("make test",),
-        "I do not recommend holding the rollout until POST retries are changed; tests miss it. Ship it.\n",
+        "I do not recommend holding the rollout until POST retries are changed; tests miss it. "
+        "Ship it.\n",
         {"verdict-on-asked": "FAIL"},
     ),
     (
         "a-release-blocker-is-a-verdict",
         "",
         ("make test",),
-        "The unbounded retry is a release blocker: it retries a POST, and the tests do not cover it.\n",
+        "The unbounded retry is a release blocker: it retries a POST, and the tests do not "
+        "cover it.\n",
         {},
     ),
     (

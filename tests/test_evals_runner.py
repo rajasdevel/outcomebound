@@ -540,12 +540,15 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     pointer = "before planning work here"
     if arm in RUN.INSTALLED:
         assert pointer not in note and "id=project-facts" in note, note
-        assert ": read .agents/skills/using-outcomebound/SKILL.md" not in note
+        assert (
+            "- before retiring a component, or changing the route by which a change reaches "
+            "its users: read .agents/skills/using-outcomebound/SKILL.md"
+        ) in note.splitlines()
         manual = note.split("Read only when the person names it", 1)[1]
-        assert "`using-outcomebound`" in manual
+        assert "`using-outcomebound`" not in manual
         assert "`slice-tickets`" not in manual
         assert (
-            "- before publishing tickets to the ticket store: "
+            "- before drafting tickets, or publishing them to the ticket store: "
             "read .agents/skills/slice-tickets/SKILL.md"
         ) in note.splitlines()
         assert "- when a fix did not hold: read .agents/skills/diagnose/SKILL.md" in note

@@ -129,7 +129,8 @@ def test_full_native_install_has_short_catalog_conditional_reads_and_manual_name
     assert (
         "Read only when the person names it or a file you are reading directs you to it "
         f"(skills under `{root}/<name>/SKILL.md`): "
-    ) in agents
+        "`gather-requirements`, `tests-worth-keeping`, `review-findings`, `explain-spec`."
+    ) in agents.splitlines()
     for name in adopt.SKILLS:
         if name in ACT_READS:
             assert f"- {ACT_READS[name]}: read {root}/{name}/SKILL.md" in agents.splitlines()

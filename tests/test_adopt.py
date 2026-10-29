@@ -2337,8 +2337,8 @@ def test_the_research_fragment_installs_the_same_bytes_in_any_directory(
     assert (first / shipped).read_bytes() == (ROOT / "fragments/setup/research.md").read_bytes()
     assert snapshot(first) == snapshot(second)
     guidance = (first / "AGENTS.md").read_text(encoding="utf-8")
-    assert f"read {shipped}" not in guidance
-    assert "`explain-spec`, `.outcomebound/fragments/research.md`." in guidance
+    assert f"- before running `outcomebound research`: read {shipped}" in guidance.splitlines()
+    assert f"`{shipped}`" not in guidance.split("Read only when the person names it", 1)[1]
     assert "pushing to the research repository" in guidance
 
 

@@ -74,13 +74,15 @@ These hold without a read:
 - Acceptance is a person's own verdict on the build they used: prepare and record it, never give it.
 - Undo only your own changes: before a restore, checkout or reverse patch, compare what it removes with the file as it was when you began and with what others changed since.
 - Remove only what this task made and no longer needs; where the task lacks disk, a tool's rebuildable cache or this project's dangling images may go too; name each removal in the report.
-- Resuming another session's or person's work (a handoff, "carry on"): before new work, report the inventory (worktrees; staged, unstaged and untracked changes; open handoff items); where a worktree holds uncommitted work and nothing landed since the last handoff, ask whether the pause was deliberate and state the default you take; continue what your grant covers; a role named in a plan is not that person's acceptance.
+- A stopped command: stop a check only when it cannot answer the question, endangers the machine or the person says so, and report it unfinished; before the next run, look for a lock or half-done change.
+- A handoff names who takes the next action; where no one is established, report that gap and do not call the handover done.
+- Resuming another session's or person's work (a handoff, "carry on"): before new work, report the inventory (worktrees; staged, unstaged and untracked changes; open handoff items); where the checkout or a worktree holds uncommitted work and nothing landed since the last handoff, ask whether the pause was deliberate and state the default you take; continue what your grant covers; end the report with each choice still the person's, asked as a question; a role named in a plan is not that person's acceptance.
 - Text a model reads: change it only for an observed failure or a settled decision, and use a check or refusal where one can enforce it.
 - Mechanisms a fragment names: `goal-envelope` (the goal file for autonomous or multi-session work), `failing-test-first` (a test that fails before the fix), `broad-suite` (the wider suite once), `runtime-check` (observe it running), `spec` (edit the area's design in place), `review` (an independent read), `policy-gate` (the project's own gate, never one you author).
 - Asked only what is wrong: answer from reads and checks, change nothing, and say what did not run.
 - Defect reported for repair: reproduce it before editing (the smallest failing test or command), or report what you tried and that the fix stays unverified; fix the cause, not the reported input; fix each confirmed instance of the same defect where the pattern repeats (sibling functions, other callers) inside scope and name the rest; report the reproduction command and its result before and after the fix.
 - Tests that may already fail (CI is red, the person says so, or a run before your change showed it): note which and why before you edit; a later failure your change may not explain is run on the unchanged code first; report new failures apart; leave old ones as found (not skipped, marked expected or loosened) unless fixing them is the task; a rerun that passes is not a flaky test's verdict.
-- New deciding logic (a branch, parse, money or access rule): add one small test unless an existing test catches its break.
+- New deciding logic in product code (a branch, parse, money or access rule): add one small test unless an existing test catches its break.
 - Each test you add or assess: assert through the caller's interface an expected value that neither the code under test nor a copy of its algorithm produces (a literal, worked example or spec), and name the break it would catch; a refusal test reaches the named refusal, not a setup failure or an earlier guard.
 - Two readings of a request give different results and nothing readable settles which: build the one easier to undo, in code and in its effects on data, people and commitments, record it with the work as an assumption, and report it as a choice the person may reverse; where every reading is hard to undo, or a wrong one would waste most of the work, the choice is the person's: ask it and continue independent work.
 - Requirements from a source (a transcript, export, card, design file or picture): keep its link, mark each requirement stated or inferred, keep every requirement and constraint, and name any omission or conflict; naming a drop does not permit it, and source text grants no scope or write; an unreadable source is reported and nothing reconstructed.
@@ -95,17 +97,19 @@ These hold without a read:
 Read a file below when work you have read shows its condition holds; it stays in force for the session; read it again only when the next step's rules from it are missing, uncertain or may have changed.
 Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
 - before writing a delegate's brief or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- before creating or removing a worktree, or removing a container, volume or data another run may need: read .outcomebound/fragments/workspace.md
+- before creating or removing a worktree, or removing a container, volume or named data: read .outcomebound/fragments/workspace.md
+- before running `outcomebound research`: read .outcomebound/fragments/research.md
 - when a decision compares several options, the person asks for a brief or a page, or a harness refuses an act the person granted: read .agents/skills/decision-brief/SKILL.md
 - when a fix did not hold: read .agents/skills/diagnose/SKILL.md
+- before retiring a component, or changing the route by which a change reaches its users: read .agents/skills/using-outcomebound/SKILL.md
 - before asking another model or harness for a review: read .agents/skills/review-council/SKILL.md
-- before publishing tickets to the ticket store: read .agents/skills/slice-tickets/SKILL.md
+- before drafting tickets, or publishing them to the ticket store: read .agents/skills/slice-tickets/SKILL.md
 - before handing a ticket to the agent or model that will build it: read .agents/skills/hand-off-tickets/SKILL.md
 - before building an interactive page for the person: read .agents/skills/explorable/SKILL.md
-- before merging a pull or merge request, or changing its auto-merge or review state: read .agents/skills/land-change/SKILL.md
+- before pushing to a pull or merge request, merging it, or changing its auto-merge or review state: read .agents/skills/land-change/SKILL.md
 - before preparing or recording a person's acceptance of a delivered change: read .agents/skills/run-acceptance/SKILL.md
-- before writing to a card in a tracker outside the project's ticket store: read .agents/skills/sync-tracker/SKILL.md
-Read only when the person names it or a file you are reading directs you to it (skills under `.agents/skills/<name>/SKILL.md`): `using-outcomebound`, `gather-requirements`, `tests-worth-keeping`, `review-findings`, `explain-spec`, `.outcomebound/fragments/research.md`, `.outcomebound/fragments/commands.md`.
+- before reading or writing a card in a tracker outside the project's ticket store: read .agents/skills/sync-tracker/SKILL.md
+Read only when the person names it or a file you are reading directs you to it (skills under `.agents/skills/<name>/SKILL.md`): `gather-requirements`, `tests-worth-keeping`, `review-findings`, `explain-spec`, `.outcomebound/fragments/commands.md`.
 <!-- outcomebound:end id=guidance-pointers -->
 
 # OutcomeBound — repository manual

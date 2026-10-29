@@ -567,7 +567,7 @@ def test_compose_cli_renders_the_facts_and_pointers_blocks_adopt_writes(source, 
     assert lines[-1] == (
         "Read only when the person names it or a file you are reading directs you to it "
         "(skills under `.outcomebound/skills/<name>/SKILL.md`): "
-        "`using-outcomebound`, `gather-requirements`, `tests-worth-keeping`, `review-findings`, "
+        "`gather-requirements`, `tests-worth-keeping`, `review-findings`, "
         "`explain-spec`, `.outcomebound/fragments/python.md`."
     )
     assert "\n".join(READ_GUIDANCE) in blocks["guidance-pointers"].body
