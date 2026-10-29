@@ -62,10 +62,10 @@ A report that shows one of these promises broken is a vulnerability.
 
 **The network**
 
-- The engine opens no network connection itself. Four commands run a tool that can:
-  `floor provision --accept` runs pip, `research clone --accept` and `research pull --accept`
-  run Git, and `explorable check --browser` starts a headless browser, which loads the page's
-  pinned libraries from their CDN.
+- The engine opens no network connection itself. Three commands run a tool that can:
+  `floor provision --accept` runs pip, and `research clone --accept` and `research pull --accept`
+  run Git. The engine starts no browser; an explorable page that a person or an agent opens loads
+  its pinned libraries from their CDN.
 
 ## Limits and behavior by design
 

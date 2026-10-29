@@ -11,8 +11,8 @@ imports and build backend use only the standard library. The project's Done comm
 project's own check tools. The installed command uses Python; the checkout launcher uses `sh`,
 which Git for Windows supplies on Windows.
 
-Charts and diagrams on an explorable page load pinned libraries from a CDN. Automatic browser
-checks need a Chromium-family browser. These are feature requirements. They are not required
+Charts and diagrams on an explorable page load pinned libraries from a CDN. The run of a page's
+own check needs a browser tool in the agent's harness. These are feature requirements. They are not required
 to adopt the contract. The [dependency inventory](../docs/dependencies.md)
 lists installation, feature, development, evaluation and CI requirements, including the current
 limits of the Git and offline-browser evidence.

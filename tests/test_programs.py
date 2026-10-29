@@ -24,7 +24,7 @@ from typing import Any
 
 import pytest
 
-from outcomebound_tools import explorable_browser, programs, validation
+from outcomebound_tools import programs, validation
 from tests.portable import WINDOWS
 from tests.processes import running
 
@@ -788,12 +788,6 @@ def run_one_claim(tmp_path: Path) -> None:
     validation._execute([sys.executable, "-c", "pass"], tmp_path, 30)
 
 
-def run_one_page(tmp_path: Path) -> None:
-    page = tmp_path / "page.html"
-    page.write_text("x", encoding="utf-8")
-    explorable_browser.run_page(sys.executable, page, 30)
-
-
 def run_one_eval_command(tmp_path: Path) -> None:
     from evals.processes import bounded_command
 
@@ -802,8 +796,8 @@ def run_one_eval_command(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "start",
-    [run_one_claim, run_one_page, run_one_eval_command],
-    ids=["validation", "explorable-browser", "eval-command"],
+    [run_one_claim, run_one_eval_command],
+    ids=["validation", "eval-command"],
 )
 def test_every_caller_that_starts_a_command_puts_it_in_a_job(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, start: Callable[[Path], None]

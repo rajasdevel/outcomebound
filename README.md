@@ -93,7 +93,8 @@ so every brief has the same shape. The marks are emoji where your terminal can s
 plain text where it cannot.
 
 You want to try the numbers first, so you reply `explore D1`. The agent builds a page with
-`outcomebound explorable`, checks it in a browser, and gives you one HTML file to open from disk.
+`outcomebound explorable`, runs its checks in a browser it drives where it has one, and gives you
+one HTML file to open from disk.
 The page draws the same brief, then lets you change the values:
 
 ![The decision page for D1: the question, the line that says what waits on it, the context, a picture of one exported row, an offer to explore, and three options. Option A, leave notes out, carries the Recommended mark, a "Choose if" line and a Downside line. The evidence and undo lines close the brief.](docs/assets/decision-brief-page.png)
