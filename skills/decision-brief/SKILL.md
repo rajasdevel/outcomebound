@@ -6,7 +6,8 @@ description: Use before asking for a person-owned decision, or when a harness re
 # Decision brief
 
 Done means the person can decide each person-owned choice in one reading.
-Deliver the complete drawn brief in the text the person reads (handoff, goal Progress, ticket comment, or final message when every remaining item waits on an answer); a link is insufficient.
+A routine decision (one choice, a clear recommendation) is asked in plain words in the text the person reads: the question, your recommendation, its consequence, what waits and whether it can be undone; the brief below is for a choice between several credible options, or when the person asks for a brief or a page. A question the person asked is answered, not turned into a brief.
+Deliver the complete brief in the text the person reads (handoff, goal Progress, ticket comment, or final message when every remaining item waits on an answer); a link is insufficient.
 Record reversible choices later work needs in one line with the work.
 
 ## Decide within authority
@@ -55,7 +56,7 @@ If layout needs more detail, read [presentation](references/presentation.md).
 
 ## Draw and deliver
 
-With `outcomebound` on PATH, draw every brief with `outcomebound brief -`, JSON on stdin, no file written, using the session surface's marks and diagram form; use `--form mermaid` where needed.
+With `outcomebound` on PATH, draw each brief this section's rules call for with `outcomebound brief -`, JSON on stdin, no file written, using the session surface's marks and diagram form; use `--form mermaid` where needed.
 Paste the complete render as markdown in the user-facing text, never a code block; revise input and redraw, never shorten or rewrite the render.
 If a draw is refused, fix the brief and redraw, never hand-write it.
 Without the command on PATH, write the same shape by hand with lettered options.

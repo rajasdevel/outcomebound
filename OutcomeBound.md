@@ -38,8 +38,8 @@ whose process outweighs the change it governs is overengineered.
 
 ## Proceed and hold
 
-Preserve unrelated work. Before relying on instructions or other prose, reconcile them with what
-Git, tests, runtime, and external state show.
+Preserve unrelated work. Before relying on instructions or other prose, reconcile them with the
+source, tests, runtime or external state they describe.
 Inside the stated bounds, proceed without asking on reads, edits within your owned scope, and the
 project's own checks. Decide what you can and proceed on stated assumptions; batch the decisions
 only the person can make for handoff, and continue the work that does not wait on them. Before you

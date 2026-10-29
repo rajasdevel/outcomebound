@@ -624,7 +624,13 @@ def inline(fragment: Fragment) -> str:
     return f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
 
 
-ONCE = "Read a file below once, when work you have read shows its condition holds."
+ONCE = (
+    "Read a file below when work you have read shows its condition holds; it stays in force for "
+    "the session; read it again only when the next step's rules from it are missing, uncertain "
+    "or may have changed.\n"
+    "Use the listed project path even if the skill catalog omits it or a personal skill has "
+    "the same name."
+)
 
 # Shown above the read list: rules that hold on every task without a read.
 RULES_LEAD = "These hold without a read:"
@@ -653,7 +659,13 @@ def manual_line(root: str, skills: Sequence[str], fragments: Sequence[str]) -> s
     named = [f"`{name}`" for name in skills]
     named += [f"`{FRAGMENT_DIR}/{name}.md`" for name in fragments]
     where = f" (skills under `{root}/<name>/SKILL.md`)" if skills and root else ""
-    return "Read only when the person names it" + where + ": " + ", ".join(named) + "."
+    return (
+        "Read only when the person names it or a file you are reading directs you to it"
+        + where
+        + ": "
+        + ", ".join(named)
+        + "."
+    )
 
 
 def pointers(

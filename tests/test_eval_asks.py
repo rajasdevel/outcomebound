@@ -141,6 +141,21 @@ QUESTION_CASES = [
         {"no-long-build": "FAIL"},
     ),
     (
+        "build-words-only-inside-a-here-document",
+        "",
+        ("make test", "outcomebound brief - <<'JSON'\n{\"not_checked\": \"make build\"}\nJSON"),
+        "Not yet. I recommend holding rollout until both blockers are fixed: `relaykit/retry.py`\n"
+        "retries with no limit, and a POST without a key is retried. The tests do not cover it.\n",
+        {},
+    ),
+    (
+        "long-build-after-a-here-document",
+        "",
+        ("cat <<'EOF'\nnote\nEOF\nmake build",),
+        RETRY_ANSWER,
+        {"no-long-build": "FAIL"},
+    ),
+    (
         "fixed-the-code-unasked",
         RETRY_FIX,
         ("make test",),

@@ -160,7 +160,9 @@ NOT_SAFE = "|".join(
         r"\bshould(?:n't| not) (?:be )?(?:ship|releas|roll)",
         r"\bnot (?:safe )?to (?:ship|release)\b",
         r"\bhold (?:off|back)\b",
-        r"\bblock(?:er|ing|s|ed)?\b",
+        r"\bblock(?:ers?|ing|s|ed)?\b",
+        r"^\W*not yet\b",
+        r"\bhold(?:ing)? (?:the )?(?:rollout|release|launch)\b",
         r"\bwould not (?:ship|release)",
         r"\bisn't safe\b",
         r"\bnot ok(?:ay)?\b",
@@ -236,7 +238,25 @@ def no_long_build() -> list[str]:
     found = _commands()
     if found is None:
         return [transcript_commands.UNKNOWN]
-    return [f"the long build was started: {c[:80]}" for c in found if BUILD.search(c)]
+    return [f"the long build was started: {c[:80]}" for c in found if BUILD.search(_unheredoc(c))]
+
+
+HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1")
+
+
+def _unheredoc(command: str) -> str:
+    """The command with each here-document's body left out: text passed as input runs nothing."""
+
+    lines, out, end = command.split("\n"), [], None
+    for line in lines:
+        if end is not None:
+            if line.strip() == end:
+                end = None
+            continue
+        out.append(line)
+        found = HEREDOC.search(line)
+        end = found.group(2) if found else None
+    return "\n".join(out)
 
 
 # --- gs-asks-fewer-decisions --------------------------------------------------------------------
