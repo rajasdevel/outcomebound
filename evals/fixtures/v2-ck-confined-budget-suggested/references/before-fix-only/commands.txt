@@ -1,0 +1,6 @@
+cat AGENTS.md CONTRIBUTING.md
+python3 -m ledger balance acc-003
+cat ledger/display.py
+python3 -B -m unittest discover -s tests/unit -t .
+python3 -m ledger balance acc-003
+git diff

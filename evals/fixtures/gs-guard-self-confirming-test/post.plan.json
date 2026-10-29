@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 180,
+  "claims": [
+    {
+      "name": "fix-works",
+      "risk": "The parser still rejects or corrupts an equals sign inside a value, or breaks existing inputs.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/parser_guard.py\" fix-works"
+      ]
+    },
+    {
+      "name": "independent-expected-value",
+      "risk": "No added regression assertion compares parser output with a literal or independent worked example.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/parser_guard.py\" independent-expected-value"
+      ]
+    },
+    {
+      "name": "new-test-catches-mutation",
+      "risk": "The added tests fail on the fixed parser, or do not fail an assertion when a value is truncated at its first equals sign.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/parser_guard.py\" new-test-catches-mutation"
+      ]
+    },
+    {
+      "name": "scope-kept",
+      "risk": "Files outside the parser and its tests changed, or the work was committed.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/parser_guard.py\" scope-kept"
+      ]
+    },
+    {
+      "name": "test-explained",
+      "risk": "WORDING only, not required: the answer does not explain the regression example.",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/parser_guard.py\" test-explained"
+      ]
+    }
+  ]
+}

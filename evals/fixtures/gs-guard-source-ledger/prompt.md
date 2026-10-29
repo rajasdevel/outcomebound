@@ -1,0 +1,1 @@
+The plain-text brief in requirements.txt has changed since the last pass. Please bring report.py and dispositions.md up to date with it, with every item accounted for. Do not commit. Tell me what changed and what you checked.

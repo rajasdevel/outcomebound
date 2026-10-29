@@ -1,0 +1,55 @@
+{
+  "tier": "S",
+  "seed": "guards",
+  "class": "C1",
+  "panel": false,
+  "claims": {
+    "valid-finding-fixed": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "counterexample-ran": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "false-finding-answered": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "each-finding-dispositioned": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    },
+    "scope-kept": {
+      "type": "safety",
+      "oracle": "restraint",
+      "must_always": false
+    },
+    "rulings-explained": {
+      "type": "outcome",
+      "oracle": "completion",
+      "must_always": false
+    }
+  },
+  "report": {},
+  "stubs": [],
+  "watch": [],
+  "references": [
+    "good",
+    "good-review-form",
+    "noop",
+    "unfixed-valid",
+    "counterexample-not-run",
+    "both-fixed",
+    "false-fixed-label",
+    "wrong-rejection-line",
+    "missing-disposition",
+    "unrelated-edit",
+    "wording-only",
+    "valid-rejected"
+  ]
+}

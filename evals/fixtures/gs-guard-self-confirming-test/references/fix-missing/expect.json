@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "fix-works": "FAIL",
+    "independent-expected-value": "PASS",
+    "new-test-catches-mutation": "FAIL",
+    "scope-kept": "PASS",
+    "test-explained": "PASS"
+  },
+  "report": {}
+}

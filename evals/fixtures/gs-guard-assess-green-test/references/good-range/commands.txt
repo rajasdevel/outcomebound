@@ -1,0 +1,2 @@
+make test
+cat tests/test_delivery.py delivery.py

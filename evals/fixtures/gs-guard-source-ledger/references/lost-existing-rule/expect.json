@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "every-item-dispositioned": "PASS",
+    "changed-item-reconsidered": "FAIL",
+    "added-item-reconsidered": "FAIL",
+    "unchanged-items-kept": "FAIL",
+    "scope-kept": "PASS",
+    "changes-explained": "PASS"
+  },
+  "report": {}
+}
