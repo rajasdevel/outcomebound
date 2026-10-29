@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+target="${1:?usage: setup.sh <dir> <grading-stage>}"
+stage="${2:?usage: setup.sh <dir> <grading-stage>}"
+mode=overnight
+# shellcheck source=../session/datapipe/setup.sh
+. "$here/../session/datapipe/setup.sh"
+cp "$here/checks/overnight.py" "$here/checks/probe_overnight.py" "$stage/checks/"

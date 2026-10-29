@@ -1,0 +1,33 @@
+"""Traffic records for offline diagnosis. Loading a file never sends a request."""
+
+import json
+from collections import Counter
+
+
+class TrafficError(ValueError):
+    pass
+
+
+def load(lines):
+    records = []
+    for number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            record = json.loads(line)
+        except ValueError:
+            raise TrafficError(f"line {number}: invalid JSON") from None
+        if not isinstance(record, dict):
+            raise TrafficError(f"line {number}: expected an object")
+        if not isinstance(record.get("path"), str) or not record["path"].startswith("/"):
+            raise TrafficError(f"line {number}: expected an absolute path")
+        payload = record.get("body")
+        if not isinstance(payload, dict):
+            raise TrafficError(f"line {number}: expected an object body")
+        records.append(record)
+    return records
+
+
+def inventory(records):
+    """A compact inventory that can be shared without bodies or caller keys."""
+    return dict(sorted(Counter(record["path"] for record in records).items()))

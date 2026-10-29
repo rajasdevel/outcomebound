@@ -1,0 +1,5 @@
+"""Select entries for an inclusive calendar window."""
+
+
+def select(entries, since=None, until=None):
+    return list(entries)

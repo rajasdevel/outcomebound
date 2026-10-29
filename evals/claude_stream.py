@@ -180,6 +180,54 @@ def _refused(result: dict[str, Any]) -> bool:
     return result.get("is_error") is True and text is not None and bool(NO_SUCH_TOOL.search(text))
 
 
+def bash_outcome(
+    result: dict[str, Any], *, denied: bool = False, background: bool = False
+) -> tuple[int | None, str]:
+    """A matched Bash result's exit code and protocol status; absent evidence stays unknown."""
+    text = _text(result.get("content"))
+    failed = result.get("is_error") is True or result.get("status") == "failed"
+    refusal = re.search(
+        r"(?i)(?:permission to use [^\n]*(?:denied|refused)|"
+        r"<tool_use_error>[^<]*(?:denied|refused))",
+        text or "",
+    )
+    if (
+        denied
+        or result.get("status") in ("refused", "declined")
+        or _refused(result)
+        or (failed and refusal)
+    ):
+        return None, "refused"
+    native = result.get("native_result") or {}
+    code = next(
+        (
+            value[key]
+            for value in (result, native)
+            if isinstance(value, dict)
+            for key in ("exit_code", "exitCode")
+            if type(value.get(key)) is int
+        ),
+        None,
+    )
+    if code is None and failed:
+        match = re.search(
+            r"(?im)^(?:Exit code:?\s*|Process exited with code\s+)(-?\d+)\b", text or ""
+        )
+        if match:
+            code = int(match[1])
+    if failed:
+        return code if code != 0 else None, "failed"
+    if (
+        background
+        or result.get("status") == "unknown"
+        or (isinstance(native, dict) and native.get("interrupted"))
+    ):
+        return None, "unknown"
+    if code is not None:
+        return code, "ok" if code == 0 else "failed"
+    return (0, "ok") if _status(result, "", set()) == "succeeded" else (None, "unknown")
+
+
 class _Decoder:
     """The state of one pass over the stream's tool calls and results (`decode`)."""
 
@@ -248,9 +296,13 @@ class _Decoder:
         if call.kind == "file":
             self.files[call.slot][2] = _status(part, key, self.denied)
             return
-        status = _status(part, key, self.denied)
-        if call.background and status == "succeeded":
-            status = "unverified"  # started in the background, not seen to finish
+        _code, outcome = bash_outcome(part, denied=key in self.denied, background=call.background)
+        status = {
+            "ok": "succeeded",
+            "failed": "failed",
+            "refused": "declined",
+            "unknown": "unverified",
+        }[outcome]
         old = self.commands[call.slot]
         self.commands[call.slot] = Command(old.command, status, old.cwd)
         text = _text(part.get("content"))
@@ -283,7 +335,7 @@ def decode(events: list[dict[str, Any]], directories: dict[str, str] | None = No
             if kind == "assistant" and part.get("type") == "tool_use":
                 state.call(part)
             elif kind == "user" and part.get("type") == "tool_result":
-                state.result(part)
+                state.result({**part, "native_result": event.get("toolUseResult")})
     answer = result.get("result") if result else None
     answer = answer if isinstance(answer, str) else ""
     state.unknown.update(c.name for c in state.pending.values() if c.kind == "unknown")

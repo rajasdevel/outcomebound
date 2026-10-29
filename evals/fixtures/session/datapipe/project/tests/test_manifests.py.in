@@ -1,0 +1,49 @@
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from datapipe.manifests import parse, read, total_rows
+
+
+def item(table="orders", file="orders.csv", rows=12):
+    return {"table": table, "file": file, "rows": rows, "checksum": "a" * 64}
+
+
+class ManifestTests(unittest.TestCase):
+    def test_counts_per_table(self):
+        rows = parse({"version": 1, "extracts": [item(), item(file="other.csv", rows=3)]})
+        self.assertEqual(total_rows(rows), {"orders": 15})
+
+    def test_unknown_version(self):
+        with self.assertRaisesRegex(ValueError, "version"):
+            parse({"version": 2, "extracts": []})
+
+    def test_escape_refused(self):
+        for name in ("../orders.csv", "/orders.csv", "data/../../orders.csv"):
+            with self.subTest(name=name), self.assertRaisesRegex(ValueError, "directory"):
+                parse({"version": 1, "extracts": [item(file=name)]})
+
+    def test_bad_rows_refused(self):
+        for count in (-1, "12", 1.5):
+            with self.subTest(count=count), self.assertRaisesRegex(ValueError, "rows"):
+                parse({"version": 1, "extracts": [item(rows=count)]})
+
+    def test_bad_checksum_refused(self):
+        data = item()
+        data["checksum"] = "not-a-checksum"
+        with self.assertRaisesRegex(ValueError, "sha256"):
+            parse({"version": 1, "extracts": [data]})
+
+    def test_unknown_table_refused(self):
+        with self.assertRaisesRegex(ValueError, "table"):
+            parse({"version": 1, "extracts": [item(table="missing")]})
+
+    def test_file_round_trip(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "manifest.json"
+            path.write_text(json.dumps({"version": 1, "extracts": [item()]}), encoding="utf-8")
+            self.assertEqual(read(path)[0].rows, 12)
+
+    def test_empty_manifest(self):
+        self.assertEqual(parse({"version": 1, "extracts": []}), [])

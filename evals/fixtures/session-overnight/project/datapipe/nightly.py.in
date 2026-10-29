@@ -1,0 +1,9 @@
+"""Build a read-only recovery queue from the nightly evidence."""
+
+from datapipe.restore_copies import plan
+
+
+def build(database, day, root, copies, catalog, receipts):
+    """Return jobs and held feeds; never load or advance a checkpoint."""
+    result = plan(database, day, root, copies)
+    return {"jobs": result["restore"], "held": result["blocked"]}

@@ -1,0 +1,33 @@
+import unittest
+
+from datapipe.loader import load
+from datapipe.manifests import Extract
+from datapipe.reconcile import Difference, compare, render
+from datapipe.warehouse import Warehouse
+
+
+class ReconcileTests(unittest.TestCase):
+    def test_empty(self):
+        with Warehouse() as warehouse:
+            self.assertEqual(compare(warehouse, []), [])
+
+    def test_missing_table(self):
+        with Warehouse() as warehouse:
+            self.assertEqual(
+                compare(warehouse, [Extract("orders", "a.csv", 3, "a" * 64)]),
+                [Difference("orders", 3, 0)],
+            )
+
+    def test_matching_count(self):
+        with Warehouse() as warehouse:
+            load(warehouse, "orders", [(1, 2, "2026-10-01", "paid", 100)], 10)
+            self.assertEqual(compare(warehouse, [Extract("orders", "a.csv", 1, "a" * 64)]), [])
+
+    def test_extra_rows_do_not_report_negative_missing(self):
+        self.assertEqual(Difference("orders", 1, 2).missing, 0)
+
+    def test_render(self):
+        self.assertEqual(
+            render([Difference("events", 5, 2)]), "table expected actual missing\nevents 5 2 3"
+        )
+        self.assertEqual(render([]), "all extract counts match")

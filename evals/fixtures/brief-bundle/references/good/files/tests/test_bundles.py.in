@@ -1,0 +1,94 @@
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+class BundleTest(unittest.TestCase):
+    def test_build_dedupes_and_verifies(self):
+        with tempfile.TemporaryDirectory() as temp:
+            p = Path(temp)
+            source = p / "in.csv"
+            source.write_text("day,project,person,minutes,note\n2026-02-02,alpha,member,20,\n")
+            done = subprocess.run([sys.executable, "-B", "-m", "tally.bundles", "build", str(source),
+                                   str(source), "--out", str(p / "bundle")], capture_output=True, text=True)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            result = json.loads(done.stdout)
+            self.assertEqual((result["entry_count"], result["duplicate_count"], result["total_minutes"]), (1, 1, 20))
+            verified = subprocess.run([sys.executable, "-B", "-m", "tally.bundles", "verify", str(p / "bundle")], capture_output=True, text=True)
+            self.assertEqual(json.loads(verified.stdout), {"valid": True})
+
+
+class BundleContractTest(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        self.source = self.root / "a.csv"
+        self.source.write_text("day,project,person,minutes,note\n2026-02-01,alpha,member,10,\n2026-02-02,beta,member,20,\n2026-02-03,alpha,other,30,\n")
+
+    def call(self, *args):
+        return subprocess.run([sys.executable, "-B", "-m", "tally.bundles", *map(str,args)],capture_output=True,text=True)
+
+    def ok(self, *args):
+        done = self.call(*args)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return json.loads(done.stdout)
+
+    def refused(self, code, *args):
+        done = self.call(*args)
+        self.assertEqual((done.returncode,done.stdout),(2,""),done.stderr)
+        self.assertEqual(json.loads(done.stderr)["code"],code)
+
+    def test_groupings_and_empty(self):
+        for by,keys in (("person",["member","other"]),("week",["2026-W05","2026-W06"]),("day",["2026-02-01","2026-02-02","2026-02-03"])):
+            result=self.ok("build",self.source,"--out",self.root/by,"--by",by)
+            self.assertEqual([row["key"] for row in result["rows"]],keys)
+        empty=self.root/"empty.csv"; empty.write_text("day,project,person,minutes,note\n")
+        self.assertEqual(self.ok("build",empty,"--out",self.root/"empty")["entry_count"],0)
+
+    def test_inclusive_window_and_refusal_cleanup(self):
+        original=self.source.read_bytes()
+        result=self.ok("build",self.source,"--out",self.root/"one","--since","2026-02-02","--until","2026-02-02")
+        self.assertEqual((result["entry_count"],result["total_minutes"]),(1,20))
+        self.refused("E104","build",self.source,"--out",self.root/"one")
+        self.refused("E104","build",self.source,"--out",self.root/"reverse","--since","2026-02-03","--until","2026-02-01")
+        self.refused("E101","build",self.root/"missing.csv","--out",self.root/"missing")
+        bad=self.root/"bad.jsonl"; bad.write_text('{"day":"invalid"}\n')
+        self.refused("E102","build",bad,"--out",self.root/"bad")
+        missing_column=self.root/"missing-column.csv"
+        missing_column.write_text("day,project,person,note\n2026-02-01,alpha,member,\n")
+        self.refused("E102","build",missing_column,"--out",self.root/"missing-column")
+        self.assertFalse((self.root/"missing-column").exists())
+        self.assertFalse((self.root/"bad").exists())
+        self.assertFalse((self.root/"reverse").exists())
+        self.assertEqual(self.source.read_bytes(),original)
+        self.assertEqual(list(self.root.glob(".bundle-*")),[])
+
+    def test_corruption_symlink_and_forged_summary_are_refused(self):
+        import hashlib
+        self.ok("build",self.source,"--out",self.root/"forged")
+        summary=self.root/"forged"/"summary.json"
+        data=json.loads(summary.read_text());data["total_minutes"]=900;summary.write_text(json.dumps(data))
+        manifest=self.root/"forged"/"manifest.json"
+        data=json.loads(manifest.read_text());data["files"]["summary.json"]=hashlib.sha256(summary.read_bytes()).hexdigest();manifest.write_text(json.dumps(data))
+        self.refused("E102","verify",self.root/"forged")
+        self.ok("build",self.source,"--out",self.root/"corrupt")
+        (self.root/"corrupt"/"entries.csv").write_text("corrupt")
+        self.refused("E102","verify",self.root/"corrupt")
+        self.ok("build",self.source,"--out",self.root/"linked")
+        entry=self.root/"linked"/"entries.csv";entry.unlink();entry.symlink_to(self.source)
+        self.refused("E102","verify",self.root/"linked")
+
+    def test_diff_added_removed_and_mixed_groupings(self):
+        self.ok("build",self.source,"--out",self.root/"before")
+        other=self.root/"b.csv";other.write_text("day,project,person,minutes,note\n2026-02-02,gamma,member,9,\n")
+        self.ok("build",other,"--out",self.root/"after")
+        self.assertEqual(self.ok("diff",self.root/"before",self.root/"after"),{"by":"project","rows":[
+          {"key":"alpha","before_minutes":40,"after_minutes":0,"delta_minutes":-40},
+          {"key":"beta","before_minutes":20,"after_minutes":0,"delta_minutes":-20},
+          {"key":"gamma","before_minutes":0,"after_minutes":9,"delta_minutes":9}]})
+        self.ok("build",other,"--out",self.root/"person","--by","person")
+        self.refused("E104","diff",self.root/"before",self.root/"person")

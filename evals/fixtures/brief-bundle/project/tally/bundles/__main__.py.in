@@ -1,0 +1,3 @@
+import json
+
+print(json.dumps({"entry_count": 0, "duplicate_count": 0, "total_minutes": 0, "by": "project", "rows": []}))

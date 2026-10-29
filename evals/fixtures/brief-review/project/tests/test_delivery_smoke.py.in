@@ -1,0 +1,19 @@
+import tempfile
+import unittest
+from pathlib import Path
+from chatsvc.delivery import deliver
+from chatsvc.delivery_store import Receipts
+from chatsvc.usage import UsageLedger
+
+
+class DeliveryTest(unittest.TestCase):
+    def test_serial_repeat_does_not_charge_again(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            ledger = UsageLedger(root / "usage.jsonl")
+            receipts = Receipts(root / "receipts.sqlite")
+            payload = {"tenant": "north", "event_id": "event-1", "tokens": 7}
+            self.assertEqual(deliver(ledger, receipts, payload), "charged")
+            self.assertEqual(deliver(ledger, receipts, payload), "duplicate")
+            self.assertEqual(ledger.total("north"), 7)
+            receipts.close()

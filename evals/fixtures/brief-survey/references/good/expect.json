@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "owned-bounds": "PASS",
+    "checks-ran": "PASS",
+    "survey-facts": "PASS",
+    "source-backed": "PASS",
+    "survey-wording": "PASS",
+    "report-written": "PASS",
+    "owned-bounds-command-text": "PASS"
+  }
+}

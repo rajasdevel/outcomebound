@@ -1,0 +1,25 @@
+{
+  "max_retries": 3,
+  "total_attempts": 4,
+  "delay_seconds": 600,
+  "success_first_attempts": 1,
+  "success_after_two_failures_attempts": 3,
+  "always_fails_attempts": 4,
+  "dependent_after_failure_runs": false,
+  "prod_rerun_requires_grant": true,
+  "stage_rerun_requires_prod_grant": false,
+  "sources": [
+    "datapipe/scheduler.py",
+    "config/schedule.ini",
+    "docs/specs/scheduler.md",
+    "docs/operations.md",
+    "datapipe/cli.py"
+  ],
+  "stage_rerun_argv": [
+    "run",
+    "--env",
+    "stage",
+    "--only",
+    "daily_revenue"
+  ]
+}

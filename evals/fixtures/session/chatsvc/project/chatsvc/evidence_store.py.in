@@ -1,0 +1,15 @@
+"""Load operator-provided release snapshots without performing an environment action."""
+
+import json
+from pathlib import Path
+
+
+def load(path):
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("snapshot must be an object")
+    return value
+
+
+def public_checks(records):
+    return [{"name": row["name"], "revision": row["revision"], "ok": row["ok"]} for row in records]

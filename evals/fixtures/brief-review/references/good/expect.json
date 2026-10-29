@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "owned-bounds": "PASS",
+    "checks-ran": "PASS",
+    "review-facts": "PASS",
+    "defect-reproduced": "PASS",
+    "review-wording": "PASS",
+    "report-written": "PASS",
+    "owned-bounds-command-text": "PASS"
+  }
+}

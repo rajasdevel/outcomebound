@@ -1,0 +1,67 @@
+"""Run bounded batches, with explicit dependency failure and content-bound resume rows."""
+
+import json
+
+from chatsvc import diagnostics
+from chatsvc.job_manifest import fingerprint, load, ordered
+
+
+def prior_results(prior):
+    result = {}
+    for row in prior:
+        if not isinstance(row, dict) or set(row) != {"id", "fingerprint", "status", "model"}:
+            raise ValueError("invalid resume record")
+        if (
+            not isinstance(row["id"], str)
+            or not row["id"]
+            or row["id"] in result
+            or not isinstance(row["fingerprint"], str)
+            or not row["fingerprint"]
+            or type(row["status"]) is not int
+            or not 0 <= row["status"] <= 599
+            or not isinstance(row["model"], str)
+        ):
+            raise ValueError("invalid or duplicate resume record")
+        result[row["id"]] = dict(row)
+    return result
+
+
+def run_jobs(jobs, service, *, prior=(), max_jobs=None):
+    if max_jobs is not None and (type(max_jobs) is not int or max_jobs < 0):
+        raise ValueError("max_jobs must be a nonnegative integer or None")
+    jobs = list(jobs)
+    sequence = ordered(jobs)
+    cached = prior_results(prior)
+    results, logs, spent = {}, [], 0
+    previous = service.log
+    service.log = logs.append
+    try:
+        for job in sequence:
+            row = {"id": job.identity, "status": 0, "model": ""}
+            before = cached.get(job.identity)
+            if any(results[name]["status"] != 200 for name in job.depends_on):
+                row["status"] = 424
+            elif before and before["status"] == 200 and before["fingerprint"] == fingerprint(job):
+                row.update(status=200, model=before["model"])
+            elif max_jobs is None or spent < max_jobs:
+                status, _headers, raw = service.handle(
+                    "POST", job.path, {"x-api-key": job.key}, json.dumps(job.body).encode("utf-8")
+                )
+                spent += 1
+                row.update(status=status, model=json.loads(raw).get("model", ""))
+            results[job.identity] = row
+    finally:
+        service.log = previous
+    return {
+        "jobs": [results[job.identity] for job in jobs],
+        "upstream": diagnostics.summarize(logs),
+        "resume": [
+            dict(results[job.identity], fingerprint=fingerprint(job))
+            for job in jobs
+            if results[job.identity]["status"] == 200
+        ],
+    }
+
+
+def run_manifest(path, service, *, prior=(), max_jobs=None):
+    return run_jobs(load(path), service, prior=prior, max_jobs=max_jobs)

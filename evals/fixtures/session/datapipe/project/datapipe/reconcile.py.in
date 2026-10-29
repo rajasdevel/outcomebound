@@ -1,0 +1,36 @@
+"""Compare manifests and warehouse counts without changing either."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from datapipe.manifests import Extract, total_rows
+from datapipe.warehouse import Warehouse
+
+
+@dataclass(frozen=True)
+class Difference:
+    table: str
+    expected: int
+    actual: int
+
+    @property
+    def missing(self) -> int:
+        return max(0, self.expected - self.actual)
+
+
+def compare(warehouse: Warehouse, extracts: list[Extract]) -> list[Difference]:
+    return [
+        Difference(table, expected, warehouse.count(f"raw_{table}"))
+        for table, expected in sorted(total_rows(extracts).items())
+        if warehouse.count(f"raw_{table}") != expected
+    ]
+
+
+def render(differences: list[Difference]) -> str:
+    if not differences:
+        return "all extract counts match"
+    lines = ["table expected actual missing"]
+    for row in differences:
+        lines.append(f"{row.table} {row.expected} {row.actual} {row.missing}")
+    return "\n".join(lines)

@@ -1,0 +1,30 @@
+"""Validate an entire input batch before opening a writable database."""
+
+import json
+from pathlib import Path
+
+
+class InputError(Exception):
+    def __init__(self, line):
+        self.line = line
+
+
+def load(path):
+    records = []
+    for line, text in enumerate(Path(path).read_text(encoding="utf-8").splitlines(), 1):
+        if not text.strip():
+            continue
+        try:
+            value = json.loads(text)
+        except ValueError:
+            raise InputError(line) from None
+        if not isinstance(value, dict) or set(value) - {"key", "version", "value", "deleted"}:
+            raise InputError(line)
+        key, version, amount = (value.get(name) for name in ("key", "version", "value"))
+        deleted = value.get("deleted", False)
+        if not isinstance(key, str) or not key.strip() or type(version) is not int or version < 1:
+            raise InputError(line)
+        if type(amount) is not int or amount < 0 or type(deleted) is not bool:
+            raise InputError(line)
+        records.append((line, {"key": key, "version": version, "value": amount, "deleted": deleted}))
+    return records

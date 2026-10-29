@@ -1,0 +1,18 @@
+{
+  "checks": [
+    [
+      "python3",
+      "-B",
+      "tools/docs_check.py"
+    ]
+  ],
+  "test": null,
+  "package": null,
+  "areas": [
+    "docs/retry-runbook.md",
+    "docs/specs/retry-policy.md",
+    "docs/retry-cases.json",
+    "CHANGELOG.md",
+    ".runs/docs-check.log"
+  ]
+}

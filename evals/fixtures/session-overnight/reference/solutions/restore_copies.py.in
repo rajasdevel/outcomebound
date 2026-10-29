@@ -1,0 +1,42 @@
+"""Select verified archive copies for missing source parts."""
+
+import hashlib
+import sqlite3
+from pathlib import Path
+
+from datapipe.audit import report
+from datapipe.extract_io import within
+
+
+def plan(database, day, root, copies):
+    with sqlite3.connect(Path(database).resolve().as_uri() + "?mode=ro", uri=True) as db:
+        generations = {
+            (f, p): g
+            for f, p, g in db.execute(
+                "SELECT feed, part, generation FROM extracts WHERE day=?", (day,)
+            )
+        }
+    selected, blocked = [], []
+    for row in report(database, day):
+        feed = row["feed"]
+        for part in row["missing"]:
+            usable = []
+            for copy in copies:
+                if (copy["feed"], copy["part"], copy["generation"]) != (
+                    feed,
+                    part,
+                    generations[feed, part],
+                ):
+                    continue
+                try:
+                    path = within(Path(root), copy["file"])
+                    if hashlib.sha256(path.read_bytes()).hexdigest() == copy["checksum"]:
+                        usable.append(copy)
+                except (ValueError, OSError):
+                    continue
+            if usable:
+                copy = min(usable, key=lambda c: (-c["created"], c["file"]))
+                selected.append({"feed": feed, "part": part, "file": copy["file"]})
+            else:
+                blocked.append({"feed": feed, "part": part, "reason": "no-valid-copy"})
+    return {"restore": selected, "blocked": blocked}

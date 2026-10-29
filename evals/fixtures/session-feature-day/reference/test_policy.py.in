@@ -1,0 +1,29 @@
+import unittest
+
+from chatsvc.app import build_service
+from chatsvc.provider import Response
+
+
+class WaitPolicyTest(unittest.TestCase):
+    def test_malformed_ms_uses_seconds_and_dates_use_injected_now(self):
+        from chatsvc.wait_policy import BoundedPolicy
+
+        policy = BoundedPolicy(now=0)
+        self.assertEqual(policy.hint({"retry-after-ms": "bad", "retry-after": "2"}), 2.0)
+        self.assertEqual(policy.hint({"retry-after": "Thu, 01 Jan 1970 00:00:03 GMT"}), 3.0)
+        self.assertIsNone(policy.hint({"retry-after-ms": "NaN"}))
+        self.assertEqual(policy.delay(3, {}), 0.4)
+
+    def test_exhausted_fractional_hint_rounds_up(self):
+        class Fractional:
+            def send(self, *args):
+                return Response(429, {"retry-after-ms": "1500"}, b"{}")
+
+        svc = build_service("config", Fractional(), sleep=lambda _: None, log=lambda _: None)
+        status, headers, _ = svc.handle(
+            "POST",
+            "/v2/chat",
+            {"x-api-key": "unit"},
+            b'{"messages":[{"role":"user","content":"x"}]}',
+        )
+        self.assertEqual((status, headers["retry-after"]), (503, "2"))

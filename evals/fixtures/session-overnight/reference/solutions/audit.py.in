@@ -1,0 +1,57 @@
+"""Compare expected extracts with the last committed attempt for each part."""
+
+import sqlite3
+from pathlib import Path
+
+
+def report(database, day):
+    with sqlite3.connect(Path(database).resolve().as_uri() + "?mode=ro", uri=True) as db:
+        expected = {
+            (f, p): rows
+            for f, p, rows in db.execute(
+                "SELECT feed, part, rows FROM extracts WHERE day=?", (day,)
+            )
+        }
+        accepted = {}
+        for feed, part, attempt, rows in db.execute(
+            "SELECT feed, part, attempt, rows FROM receipts "
+            "WHERE day=? AND status='committed' ORDER BY attempt",
+            (day,),
+        ):
+            accepted[feed, part] = (attempt, rows)
+        rejected = {}
+        for feed, part, attempt, rows in db.execute(
+            "SELECT feed, part, attempt, SUM(rows) FROM rejections "
+            "WHERE day=? GROUP BY feed, part, attempt",
+            (day,),
+        ):
+            rejected[feed, part, attempt] = rows
+    result = []
+    for feed in sorted({key[0] for key in expected.keys() | accepted.keys()}):
+        row = {
+            "feed": feed,
+            "expected_rows": 0,
+            "loaded_rows": 0,
+            "rejected_rows": 0,
+            "missing": [],
+            "orphan": [],
+            "mismatched": [],
+        }
+        for key in sorted(expected.keys() | accepted.keys()):
+            if key[0] != feed:
+                continue
+            if key not in expected:
+                row["orphan"].append(key[1])
+                continue
+            row["expected_rows"] += expected[key]
+            if key not in accepted:
+                row["missing"].append(key[1])
+                continue
+            attempt, loaded = accepted[key]
+            rejects = rejected.get((*key, attempt), 0)
+            row["loaded_rows"] += loaded
+            row["rejected_rows"] += rejects
+            if loaded + rejects != expected[key]:
+                row["mismatched"].append(key[1])
+        result.append(row)
+    return result

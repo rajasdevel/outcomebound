@@ -24,6 +24,7 @@ runner, the fixtures or the graders names a CLI.
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -62,7 +63,12 @@ class Request(NamedTuple):
     the tier that was asked for; a harness with no such tier refuses the request. `cell` is a new
     folder, outside every path the model may write, where a harness that gives each call a home
     of its own (Claude Code) makes it; None: beside `keep`. The runner names it with the
-    workspace's opaque id, so no path the call sees names the fixture or the arm."""
+    workspace's opaque id, so no path the call sees names the fixture or the arm. `resume`
+    names a native session to continue; empty starts a new one. `reuse_cell` keeps an existing
+    Claude home for another turn of the same run, including a new session after a split.
+    `cut_after_calls` stops and voids a split run if this many native model calls arrive before
+    its checkpoint. `cut_check` polls that checkpoint. `before_call` repeats the runner's reach
+    guard on each call; `session_run` enables native per-call and child accounting."""
 
     model: str
     effort: str
@@ -73,6 +79,12 @@ class Request(NamedTuple):
     unreadable: tuple[Path, ...] = ()
     service_tier: str = ""
     cell: Path | None = None
+    resume: str = ""
+    reuse_cell: bool = False
+    cut_after_calls: int | None = None
+    cut_check: Callable[[], str | None] | None = None
+    before_call: Callable[[], None] | None = None
+    session_run: bool = False
 
 
 class CallResult(NamedTuple):

@@ -1,0 +1,79 @@
+from copy import deepcopy
+from chatsvc.stage_receipts import latest, review, snapshot
+
+
+def receipts():
+    return [
+        {"action": "check", "name": "route", "sequence": 1, "ok": True, "revision": "new"},
+        {
+            "action": "deploy",
+            "sequence": 2,
+            "ok": True,
+            "revision": "new",
+            "env": "stage",
+            "dirty": False,
+        },
+        {"action": "smoke", "sequence": 3, "ok": True, "revision": "new"},
+    ]
+
+
+CATALOG = {
+    "routes": [
+        {
+            "path": "/v2/chat",
+            "default_model": "chat-fast-2",
+            "aliases": {"fast": "chat-fast-2"},
+            "max_tokens": 4096,
+        }
+    ]
+}
+CODE = {"chatsvc/app.py": "new", "config/routes.ini": "new"}
+
+
+class StageReceiptsTest(unittest.TestCase):
+    def test_docs_revision_does_not_change_the_checked_code(self):
+        records = receipts()
+        original = deepcopy(records)
+        self.assertEqual(
+            review(iter(records), "new", CATALOG, CODE, {**CODE, "docs/status.md": "later"}),
+            {"ready": True, "reasons": [], "revision": "new"},
+        )
+        self.assertEqual(records, original)
+
+    def test_smoke_before_deploy_proves_no_release(self):
+        records = receipts()
+        records[2]["sequence"] = 0
+        self.assertEqual(
+            review(records, "new", CATALOG, CODE, CODE),
+            {"ready": False, "reasons": ["smoke"], "revision": "new"},
+        )
+
+    def test_latest_failed_check_overrides_a_prior_success(self):
+        records = [
+            *receipts(),
+            {"action": "check", "name": "route", "sequence": 4, "revision": "new", "ok": False},
+        ]
+        self.assertEqual(review(records, "new", CATALOG, CODE, CODE)["reasons"], ["checks"])
+
+    def test_old_revision_check_cannot_verify_new_code(self):
+        records = receipts()
+        records[0]["revision"] = "old"
+        self.assertEqual(review(records, "new", CATALOG, CODE, CODE)["reasons"], ["checks"])
+
+    def test_added_code_file_is_a_real_inventory_difference(self):
+        self.assertEqual(
+            review(receipts(), "new", CATALOG, CODE, {**CODE, "chatsvc/new.py": "added"})[
+                "reasons"
+            ],
+            ["code"],
+        )
+
+    def test_duplicate_sequence_has_no_invented_order(self):
+        with self.assertRaisesRegex(ValueError, "duplicate"):
+            latest([*receipts(), receipts()[1]], "deploy", "new")
+
+    def test_snapshot_is_detached_from_mutable_catalog(self):
+        catalog = deepcopy(CATALOG)
+        value = snapshot(receipts(), "new", catalog, CODE, CODE)
+        catalog["routes"].clear()
+        self.assertEqual(value["catalog"], CATALOG)

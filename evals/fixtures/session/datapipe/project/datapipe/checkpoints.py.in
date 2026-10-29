@@ -1,0 +1,52 @@
+"""Atomic checkpoint files for extract recovery, without a service dependency."""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class Checkpoint:
+    source: str
+    offset: int
+    generation: int
+
+
+class Store:
+    def __init__(self, root: Path):
+        self.root = root
+
+    def _path(self, source: str) -> Path:
+        if not source or not all(c.isalnum() or c in "_-" for c in source):
+            raise ValueError("source must be a simple name")
+        return self.root / f"{source}.json"
+
+    def read(self, source: str) -> Checkpoint:
+        path = self._path(source)
+        if not path.exists():
+            return Checkpoint(source, 0, 0)
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if data["source"] != source or data["offset"] < 0 or data["generation"] < 0:
+            raise ValueError("invalid checkpoint")
+        return Checkpoint(**data)
+
+    def advance(self, source: str, offset: int, generation: int) -> Checkpoint:
+        old = self.read(source)
+        if generation != old.generation:
+            raise ValueError("stale checkpoint generation")
+        if offset < old.offset:
+            raise ValueError("checkpoint cannot go backwards")
+        current = Checkpoint(source, offset, generation + 1)
+        self.root.mkdir(parents=True, exist_ok=True)
+        path = self._path(source)
+        temporary = path.with_suffix(".pending")
+        with temporary.open("w", encoding="utf-8") as handle:
+            json.dump(asdict(current), handle, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+        return current

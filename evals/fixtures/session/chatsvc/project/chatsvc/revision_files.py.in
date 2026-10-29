@@ -1,0 +1,14 @@
+"""Compare deployed code inventories without assuming that docs share their revision."""
+
+
+def code_files(inventory):
+    return {
+        name: value for name, value in inventory.items() if name.startswith(("chatsvc/", "config/"))
+    }
+
+
+def differences(deployed, current):
+    before, after = code_files(deployed), code_files(current)
+    return sorted(
+        name for name in before.keys() | after.keys() if before.get(name) != after.get(name)
+    )

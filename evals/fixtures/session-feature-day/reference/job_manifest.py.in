@@ -1,0 +1,109 @@
+"""Validate a batch and prepare a stable dependency order before any traffic is sent."""
+
+import hashlib
+import heapq
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+
+class ManifestError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class Job:
+    identity: str
+    path: str
+    key: str
+    body: dict
+    depends_on: tuple = ()
+
+
+def endpoint(path):
+    if path in {"chat", "/v1/chat"}:
+        return "/v1/chat"
+    if path == "/v2/chat":
+        return path
+    if path in {"embed", "/v1/embed"}:
+        return "/v1/embed"
+    raise ManifestError("unsupported job path")
+
+
+def ordered(jobs):
+    by_id = {job.identity: job for job in jobs}
+    if len(by_id) != len(jobs):
+        raise ManifestError("duplicate job id")
+    positions = {job.identity: index for index, job in enumerate(jobs)}
+    indegrees, children = {}, {job.identity: [] for job in jobs}
+    for job in jobs:
+        indegrees[job.identity] = len(job.depends_on)
+        for dependency in job.depends_on:
+            if dependency not in by_id:
+                raise ManifestError("unknown job dependency")
+            children[dependency].append(job.identity)
+    ready = [positions[name] for name, count in indegrees.items() if count == 0]
+    heapq.heapify(ready)
+    result = []
+    while ready:
+        job = jobs[heapq.heappop(ready)]
+        result.append(job)
+        for name in children[job.identity]:
+            indegrees[name] -= 1
+            if indegrees[name] == 0:
+                heapq.heappush(ready, positions[name])
+    if len(result) != len(jobs):
+        raise ManifestError("cyclic job dependency")
+    return result
+
+
+def parse(lines):
+    jobs, identities = [], set()
+    for number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            raise ManifestError(f"line {number}: invalid JSON") from None
+        if not isinstance(row, dict):
+            raise ManifestError(f"line {number}: expected an object")
+        identity, key, body = row.get("id"), row.get("key"), row.get("body")
+        if not isinstance(identity, str) or not identity.strip() or identity in identities:
+            raise ManifestError(f"line {number}: missing or duplicate job id")
+        if not isinstance(key, str) or not key.strip():
+            raise ManifestError(f"line {number}: missing caller key")
+        if not isinstance(body, dict):
+            raise ManifestError(f"line {number}: body must be an object")
+        path = row.get("path")
+        if not isinstance(path, str):
+            raise ManifestError(f"line {number}: path must be a string")
+        dependencies = row.get("depends_on", [])
+        if (
+            not isinstance(dependencies, list)
+            or not all(isinstance(name, str) and name for name in dependencies)
+            or len(set(dependencies)) != len(dependencies)
+            or identity in dependencies
+        ):
+            raise ManifestError(f"line {number}: invalid dependencies")
+        jobs.append(Job(identity, endpoint(path), key, body, tuple(dependencies)))
+        identities.add(identity)
+    ordered(jobs)
+    return jobs
+
+
+def fingerprint(job):
+    content = {
+        "id": job.identity,
+        "path": job.path,
+        "key": job.key,
+        "body": job.body,
+        "depends_on": list(job.depends_on),
+    }
+    return hashlib.sha256(
+        json.dumps(content, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def load(path):
+    return parse(Path(path).read_text(encoding="utf-8").splitlines())

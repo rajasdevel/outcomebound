@@ -1,0 +1,11 @@
+{
+  "done": [
+    "python3 -B -m unittest tests.test_window"
+  ],
+  "fragments": [
+    "commands",
+    "workspace",
+    "python"
+  ],
+  "sandbox": "eval"
+}

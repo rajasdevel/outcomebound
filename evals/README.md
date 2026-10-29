@@ -27,7 +27,11 @@ The fixtures are in two sets:
   new-project, onboarding, field, replica and skill fixtures, and the other cases that later
   sections describe. They run only when `--fixtures` names them, and their results are not part
   of the released results. A claim of theirs that reads the words of the answer is not required:
-  it is still graded and reported, apart from the verdict, and its risk starts `WORDING only`. A
+  it is still graded and reported, apart from the verdict, and its risk starts `WORDING only`.
+  Long-session and brief claims that read command text are also diagnostics. Their risk starts
+  `COMMAND TEXT only`, and `required` is false. The runner and summary keep both labels beside
+  each diagnostic result. Required claims in these fixtures judge observed effects: receipts,
+  refs and logs, file and Git state, and turn records. A
   state check that misjudges a legitimate path is not required either, and its risk starts
   `Not required`. A fixture whose required claims accept a run that does nothing, or work left
   incomplete, has a `human-read` file: a run whose required checks all pass is recorded `READ`,
@@ -154,12 +158,17 @@ done
   `UNVERIFIED`, and, with no `protected_snapshot`, `protected_check` says `UNVERIFIED` and the
   source run's own `protected_intact` is carried. `--summary` reads `NEW_DIR` as any run directory.
   With `--current-graders`, `--regrade` applies grader changes to kept runs: it judges each run
-  with this checkout's graders, built under the run's arm, in place of its sealed copy, and every
-  other check still applies. A stage file that is no copy of a file under `evals/` (data the setup
+  with this checkout's fixture graders, built without guidance, in place of its sealed copy.
+  Every arm is supported, including `--earlier-ref`, `--earlier-verbatim` and edited arms; no
+  historical guidance source is needed. The installed arm files must match their recorded
+  digests, and every other check still applies. A stage file that is no copy of a file under `evals/` (data the setup
   derived from its build) is kept from the run's copy and listed. The new meta records both grader
   digests: the new ones as `graders_sha256` and `grading_files_sha256`, and the run's own under
   `current_graders`. Its sealed copy is the new graders, so a plain `--regrade` of `NEW_DIR`
-  reproduces the grading. A run that kept no sealed copy is refused.
+  reproduces the grading. A run that kept no sealed copy is refused. Regrading uses copies of
+  the workspace and call evidence. The workspace copy is graded at the original path, with the
+  original held beside it and restored after grading, as for `--rescore`. `NEW_DIR` must be
+  outside the source record and kept workspaces.
 - `python3 evals/loop.py PLAN.json [--dry-run] [--max-runs N]` runs a plan of (repetition,
   fixture, arm) cells, one `evals/run.py` call each. The plan names the model, effort, results and
   workspace folders, repetitions, fixtures, and arms (each a label, an arm of `evals/run.py`
@@ -751,15 +760,38 @@ Where the names hold:
   in them. `run.py` started by hand shows its own options (`--fixtures`, `--arm`) in its process
   title; start it with `@FILE`, as `loop.py` does, to keep them out. An arm's own text and files
   (its kernel, skills, a `--plugin-dir` plugin) are the treatment, not a label.
-- Opaque names do not keep the model from reading files outside the workspace: the graders'
-  stage, the references, the checkout's `evals/` and other runs' results. That needs reads denied
-  on every tool surface of each harness, which is not built; until it is, every run's isolation
-  beyond these names is `UNVERIFIED`. What the real Codex and Claude Code CLIs write into their own
-  session records beyond the working directory and the Git data they read is `UNVERIFIED`
+- Opaque names alone do not keep the model from reading files outside the workspace: the graders'
+  stage, the references, the checkout's `evals/` and other runs' results. Long sessions and briefs
+  also use the seals described below. Other runs need reads denied on every tool surface of each
+  harness; without that, isolation beyond these names is `UNVERIFIED`. What the real CLIs write
+  into their own session records beyond the working directory and the Git data they read is `UNVERIFIED`
   without a model call; the test derives it from what the call was given.
 - Runs kept from before opaque names have workspaces at `<root>/<run directory name>/<fixture>-r<n>`
   and call files named after the fixture. `--summary`, `--regrade`, `--rescore`, `panel.py`,
   `reading.py` and `attribute.py` read every path from the meta, so they read both.
+
+For long sessions and delegated briefs, the isolation verdict covers accidental exposure through
+the workspace, its parents and the paths the run reveals. Fixture sources and the seal state
+file are unreadable during calls. A staged copy stays unreadable while its runner does not read
+it; runner reads wait for all active calls. Setup is refused if a workspace contains a hard or
+symbolic link to a fixture source. A root that denies listing does not seal its descendants.
+A declared protected path without a seal is a runner defect. The driver refuses the call
+before the harness starts. Command and tool references are attempt diagnostics with call ids;
+they do not decide isolation.
+
+The isolation verdict has residuals. It does not prevent a deliberate search for paths the run
+never reveals: another run's random folder, a checkout found through the process table, that
+checkout's Git objects, or a pre-existing hard link that setup did not create. Observed exposure
+through such a route invalidates the run and requires the route to be fixed. A command that
+names such a route is only a diagnostic. The seal does not
+protect the owner from changing permissions where the harness sandbox allows it; that harness
+limit remains UNVERIFIED. The verdict does not claim isolation against deliberate path discovery.
+
+`seal_wait_seconds` records time waiting for another runner's seal. This is infrastructure time;
+it is excluded from active time and the session budget. Wall time still includes it. Native call
+ids match command requests to results when available. Otherwise both command text and working
+directory must match, and ambiguous requests remain unresolved. A plan that makes a `WORDING
+only` or `COMMAND TEXT only` diagnostic required is a protocol defect, refused before grading.
 
 ## Graders stay outside the workspace
 
@@ -1309,6 +1341,253 @@ What the spec cells measure. A spec package carries the algorithm as steps, the 
 and the verbatim text, with tests that fail first. It is close to the solution. A `spec` cell
 reads whether the implementer applies a near-complete package and stays in its bounds, and rule
 3 compares `--detail full` with that.
+
+## Long sessions
+
+A fixture with `session.json` is a long session. It runs only when `--fixtures` names it.
+The `session-` and `brief-` prefixes are also named-only. A brief uses the single-turn path
+unless it has `session.json`. Both prefixes have the same clean-home guard as `replica-`.
+Setup, arm installation, protected paths and the watch log use the existing runner paths.
+
+```json
+{
+  "shape": "interactive",
+  "labels": ["opener", "info", "status", "approve", "note", "nudge"],
+  "max_turns": 14,
+  "max_nudges": 4,
+  "session_timeout_seconds": 14400,
+  "input_cap": 150000000,
+  "cut_after_calls": null,
+  "cut_check": null,
+  "resume_message": "Resume the work from where it stopped.",
+  "next_turn": ["python3", "-I", "-B", "${OUTCOMEBOUND_GRADER_DIR}/checks/next_turn.py"]
+}
+```
+
+`shape`, `labels`, `max_turns`, `max_nudges`, `session_timeout_seconds`, `input_cap` and `next_turn`
+are required. Extra fields, duplicate fields, invalid types, nonpositive budgets and empty
+commands are refused. `max_nudges` can be zero. `shape` is `interactive`, `unattended` or
+`split`. A split requires `cut_check`, a nonempty `resume_message` and at least two turns.
+Its optional `cut_after_calls` is a positive whole number. For other shapes both cut fields
+must be null or absent. Programs for `next_turn` and `cut_check` must be in the grading stage.
+
+`prompt.md` gives turn 1. After each completed turn, the driver runs `next_turn` in the
+grading stage, outside the workspace. It expands `${VARIABLE}` in arguments from the grader
+environment and adds these variables:
+
+- `OB_WORKSPACE`: the workspace path.
+- `OB_LAST_ANSWER`: the last answer's file path.
+- `OB_TURN`: the completed turn's number, starting at 1.
+- `OB_HISTORY`: a JSON file of all completed turns, including the last one.
+- `OB_NUDGES`: the number of `nudge` turns sent so far.
+
+The driver and fixtures use long-session protocol v1. `labels` is a nonempty list of distinct
+lowercase words matching `[a-z][a-z-]*`. The driver checks each reply with
+`evals/session_protocol.py` and refuses labels the fixture did not declare. For example:
+
+```json
+{"label":"info","message":"More information.","required":true,"clarification":false,"wait_seconds":0}
+```
+
+`required` marks a scripted message. `clarification` marks an answer to the agent's question.
+Both default to false. The driver keeps all reply fields in the turn record. The fixture
+controls its optional `max_clarifications` budget. It must deliver every required scripted
+message in order, even when optional dialogue is exhausted. The reserved label `nudge` counts
+against `max_nudges`.
+
+An end is `{"end":true,"reason":"complete","protocol_defect":false}`. A true
+`protocol_defect` flag voids the run as a protocol defect. Only invalid inputs, such as unreadable
+history, workspace or person knowledge, are a protocol defect. An unmatched dialogue state gets
+a person's reply and the `unmatched: true` flag for review. If visible work is missing, the reply
+restates the task; otherwise it advances the script, or ends when the work is complete. An agent
+answer is never a protocol defect. A failed or invalid turn program voids the run as a runner
+fault. Its stdout and stderr are kept. A message can
+have `wait_seconds`, a number from 0 through 7200, default 0. The wait counts toward the
+session timeout and is excluded from `active_seconds`. The runner's own tests set
+`OB_EVAL_SKIP_WAITS=1` to skip the waits; a run made so records `waits_skipped` and is no
+measurement.
+
+Each later turn resumes the same native session, with the message on stdin. Claude Code
+keeps one home, config folder and set of XDG folders. Turn 1 requires new, empty folders.
+After each turn, the harness records a manifest of all names, kinds, permissions, file digests
+and symbolic-link targets in that cell. Each later call, including a fresh split session,
+requires an exact match. The manifest stays outside the cell. Instruction reach and the
+Codex clean-home guard are checked on every call.
+
+The session budget replaces the single-call budget, including one in `suite.json`. Input
+and wall time cover every turn, resume, child session and fresh restart. Time in the turn
+program and the gap also counts. Turn 1 and the fresh split session count toward `max_turns`.
+An explicit `end` at exactly that cap is accepted. A turn, nudge, input or time limit stops
+the run, grades it once and counts as a failure. A void run is not graded as a model failure.
+
+For a split, `cut_check` is a command list such as
+`["python3", "${OUTCOMEBOUND_GRADER_DIR}/checks/cut.py"]`. The driver polls it about every
+5 seconds while the first session runs. It receives `OB_WORKSPACE`. The driver opens the
+checkpoint program before locking the stage and gives only the trusted probe its read-only
+descriptor. The probe runs from the results folder; the current checkpoint programs use only
+the standard library and workspace state. Exit 1 means the checkpoint
+is not reached; exit 0 cuts the session. Any other exit is a runner fault. On POSIX the driver
+sends SIGKILL to the process group, with descendant cleanup. It gives no graceful signal or
+handoff opportunity. It verifies that no observed descendant or group member is still running.
+An unavailable process table or incomplete cleanup refuses the restart. Split verification
+requires POSIX. After cleanup, the driver keeps a cut-state JSON file with Git log, Git status
+and a file manifest with SHA-256 digests. It then starts a fresh session with `resume_message`
+in the same workspace and Claude cell. This turn has label `resume`. The first has label
+`opener`. `cut_after_calls` counts native calls across the first session and its children.
+If this safety limit is reached before the checkpoint, the run stops there as a budget stop. A
+scripted end before the checkpoint ends the run too. Both are graded as they are: the record
+says `split_reached: false`, recovery is not measured, and the missing work fails the run.
+When the first process ends on its own, the driver checks the checkpoint once more before
+the turn program runs. This check has no polling delay. If the checkpoint is reached, the
+driver keeps the state and starts the fresh session. The meta records `split_boundary` as
+`natural` for this boundary or `cut` when the driver interrupted a running call. A natural
+boundary measures recovery from the kept state; abrupt interruption is UNVERIFIED for it.
+
+Accounting uses each native call's usage: Codex `last_token_usage`, or each Claude assistant
+message's `usage`. Repeated copies and events are charged once per session and call position.
+For Codex, the cumulative usage cursor identifies repeated notifications; its values are never
+added as spend. For Claude, message ids identify calls within a session. Cumulative totals
+serve only as a reconciliation check. Differences are kept in `usage_reconciliation`.
+Input includes cached input and Claude cache creation. Reasoning is already in output and is
+not added to it again. These counts support a fixed-rate cost proxy, not a subscription bill.
+
+Codex child discovery follows `session_meta` parent ids recursively. It accepts
+`payload.source.subagent.thread_spawn.parent_thread_id` and `payload.parent_thread_id`,
+with the child's id in `payload.id`. To check a retained native copy, read its first JSON
+record: its type must be `session_meta`, and its parent id must name a session in this run.
+Discovery uses parent ids, never a shared working directory. Claude children come from
+`subagents/` transcripts in this run's
+own config folder. Children count toward usage and the live input cap. Their native copies
+are kept. New actions belong to the turn in which they ran; a retained snapshot does not
+append them again.
+
+Final claims and the turn program receive these checked JSON documents:
+
+- `OB_TURNS` and `OB_HISTORY`: `{"version":1,"turns":[...]}`, with all completed turns.
+  Each turn has `turn`, `label`, `message`, `required`, `clarification`, `wait_seconds`, inline
+  `answer` text, `answer_path`, `started_at`, `ended_at`, `session_id`, `calls` and `actions`.
+  `answer_path` is the absolute path of the retained answer. Extra retained evidence includes
+  `transcript` and `session_tokens`.
+- `OB_ACTIONS`: `{"version":1,"actions":[...]}`, with every executed action once for the
+  whole run. Each row adds its 1-based `turn`. Actions have `kind` (`command`, `file_change`
+  or `tool`), `session_id`, `child`, `parent_session_id` and `started_at`. Commands have
+  `command`, `cwd`, `exit_code`, `status`, `argv` and `segments`; `argv` is null for compound shell commands.
+  Command `status` is `ok`, `failed`, `refused` or `unknown`. A successful command has exit code
+  0. A failure keeps the code its result gives, else null. A refused or unknown result has a
+  null code. Native Claude Bash results are matched to their calls by tool-use id. A background
+  launch does not prove completion. Older protocol v1 records can omit `status`; this gives no
+  status evidence.
+  Each `segments` entry has `argv` (or null for unresolved input), an absolute `cwd`,
+  `status` (`ok`, `failed` or `unknown`), absolute `reads` and `writes`, and `runs`.
+  `runs` lists the argv of processes an inline script starts, or is null when these starts
+  cannot be resolved. An empty list means the reader proved that the script has no process
+  starts. The driver reads stdin, heredoc and `-c` scripts with an allowlist. It resolves literal
+  Python `open` operands (positional or keyword), multipart `Path` values, text and byte file
+  reads and writes, and literal `subprocess` calls. Unknown calls, stored process callables and
+  argument-list mutations keep uncertainty. JavaScript bodies stay uncertain because the
+  standard library has no JavaScript parser. Shell bodies keep their interpreter segment;
+  its paths and `runs` hold the possible body effects. Literal file edits are recorded. Heredoc
+  data sent to `cat` stays data. The action records and isolation scan use the same shell
+  reader. Graders consume these segments and do not parse `command` again. Older records
+  without segments give no segment evidence.
+  A lone segment takes the action's status, with `refused` mapped to `failed`. A successful
+  `&&` chain gives each segment status `ok`. In a successful `;` sequence or pipe, only the
+  last segment has proven success. Earlier segments stay `unknown` unless path-prefixed
+  output proves their reads. A nonzero aggregate exit gives no status for segments the
+  record cannot place.
+  File changes have absolute `paths`; tool actions name their `tool`. File tools also keep the
+  `paths` they name, resolved against the call's working directory, and their matched result's
+  `status`. A request without a success result never has status `ok`.
+
+A single-turn brief writes the same documents: one `opener` turn, with `required: true`,
+the call's start and end times, final answer, session id and normalized actions. Its
+`OB_ACTIONS` document contains those actions with `turn: 1`.
+
+The driver checks both documents before the turn program or graders receive them. A broken
+record is a runner fault. The text transcript keeps turn and child markers for people;
+graders read `OB_ACTIONS`. Parent and child command lists in the retained transcript are
+separate, so a child command is not also a parent command. Known orchestration tools include
+`spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `sleep`, `Task` and `Agent`.
+They are tool actions and do not make claims UNVERIFIED. Unknown tools are listed in
+`unknown_tools`, with raw inputs in the native copies. They make every claim UNVERIFIED;
+the original check results stay in `checks_claims` and `checks_output`.
+
+Throughout a long session or a brief's harness call, the workspace root that holds the random
+`ws-<hex>` folders, the shared results root and the run's results folder have mode `0311`:
+write and search, without listing. Mode `0311` denies listing, but permits lookup of known
+names: ancestor `AGENTS.md`, `CLAUDE.md` and `.codex/config.toml` files can still be opened,
+and Git can find its root. Other runs have random folder names. The roots stay sealed between turns. Shared file locks
+keep them sealed until the last overlapping run ends. The driver leaves `.session-mode` and
+`.session-lease` files in each root to coordinate these locks. Use a dedicated POSIX workspace
+root and a dedicated results parent; the driver refuses the system temporary root, home and
+filesystem root. For example, `--out` names a new run folder within the dedicated results root.
+
+The grading stage, which holds person knowledge and graders, has mode `0000` throughout each
+harness call. The driver restores the stage before the turn program and grading. A separate
+cleanup process restores the original modes after normal exit, an exception or a signal,
+including SIGKILL of the runner. The roots return to their original modes when the last run
+ends. A permission change by the run is contamination.
+
+The runner also seals the checkout's whole `evals/fixtures/` tree with mode `0000` during
+long-session and brief calls. Shared file leases keep it sealed while any call uses that checkout.
+Runner source reads, including setup, metadata, turn inputs and grading, use an exclusive lease
+and wait for active calls. No source copy is needed. The last call waits for its peers, restores
+the source mode, and checks the modes and content against the snapshot taken before the seal.
+Each call records this check, the grading-stage modes and content, and the run-root mode check
+in the meta file's `isolation` list. Valid writes by peer runs can change the contents of shared
+run roots; those roots are checked for their mode, rather than for unchanged contents.
+The source lock and an atomic recovery record stay under the checkout's ignored
+`.agents/fixture-seals/`. Process death releases the locks. The next runner source read restores
+a source mode left sealed by a crash. A source seal is never opened while a peer call holds it.
+
+Codex's sandbox denies `chmod` outside its writable roots. Keep the workspace and results roots,
+and the grading stage, outside those writable roots, including temporary write roots. Directory
+modes alone do not stop an owning process from using `chmod`. Claude Code's configured Bash
+sandbox limits writes to the workspace, added roots and temporary folders, with no unsandboxed
+retry. No separate rule in this driver proves that every Claude tool is unable to change these
+root modes; roots in its temporary write area can be writable. The Claude lane therefore records
+`root-permissions: UNVERIFIED` in its isolation report until that enforcement is proved.
+
+The scan checks native commands and tool inputs from parents and children against the grading
+stage, person knowledge, scripted-message files, sibling workspaces, results and the whole
+`evals/fixtures/` source tree of the runner's checkout. This includes shared bases under
+`evals/fixtures/session/` and `evals/fixtures/brief/`, on both the session and single-turn paths.
+It applies `cd` only when the record proves that the directory change succeeded. Relative
+operands after an unproved directory change stay unresolved. It resolves symbolic links and
+expands braces and globs against the filesystem at grading time. A path that resolves inside the workspace is not a
+protected operand. An unmatched glob within the workspace does not make isolation uncertain.
+Heredoc bodies are data, not shell operands. An unquoted heredoc can still expand variables
+and command substitutions. For `python3 -`, `node -` and `bash -s`, the scan checks the paths
+named in the stdin script. Each reference to a protected path is an `attempt` diagnostic,
+with the native call id. This includes commands that return no content, commands that fail,
+commands whose status is unknown, and file tools. The program, its exit status and output
+cannot prove a protected read. A path name in text also stays a diagnostic.
+
+Isolation rests on the seals. It is PASS when every seal held, subject to the harness checks
+above. A seal whose mode or content changed gives FAIL and voids the run as `contaminated`.
+A declared protected path that no seal covers is a runner defect; the call is refused before
+the harness starts and is never graded as a model failure. Setup links to fixture sources are
+also refused.
+
+Unresolved static segments stay in `isolation_residual`, including literal external operands.
+They never void the run or change isolation. The reader does not execute scripts or interpret
+arbitrary programs or encoded path construction. It invalidates container bindings after
+mutation and reads interpreter options with that interpreter's argument rules. Earlier records
+that have no fixture-source seal cannot establish that this seal held during their original
+calls.
+
+Search tool actions keep `output_mode` when the native call supplies it: `content`,
+`files_with_matches` or `count`. This lets graders separate content reads from filename or
+count results on both harness paths.
+
+Each answer, text transcript and native copy is kept. The meta file's `session_tokens` sums
+unique native calls; `turn_tokens` gives each turn's contribution. `native_sessions` lists
+sources and their latest retained copies. `turns_file` and `actions_file` name the protocol
+documents. `cut_state` and `home_manifest` name the additional records when present.
+`split_boundary` distinguishes a natural process exit from a driver cut when a split occurs.
+`elapsed_seconds` includes the turn program and gaps; `active_seconds` sums harness-call
+durations. Post-checks run once, after the session ends, except when the run is void.
+Regrading keeps void runs ungraded.
 
 ## Suite v2
 
