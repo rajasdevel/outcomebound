@@ -776,13 +776,56 @@ def test_a_claim_that_reads_outside_the_bounds_is_a_warning(
     assert "`whole-tree`" in text and "reads ., which" in text, text
 
 
+@pytest.mark.parametrize(
+    ("bound", "inside", "outside"),
+    [
+        ("src/[!a]*", "src/b.py", "src/a.py"),
+        ("src/[^a].py", "src/^.py", "src/b.py"),
+        ("src/[ab].py", "src/a.py", "src/c.py"),
+        ("src/[a-c].py", "src/b.py", "src/d.py"),
+        ("src/[]a].py", "src/].py", "src/b.py"),
+        ("src/[!]].py", "src/b.py", "src/].py"),
+        ("src/[a!].py", "src/!.py", "src/b.py"),
+        ("src/x[!a]b.py", "src/xcb.py", "src/x/b.py"),
+        ("src/**/[!a]*.py", "src/deep/b.py", "src/deep/a.py"),
+        ("src/**/[!a]*.py", "src/b.py", "src/a.py"),
+        ("src/[!a]", "src/b/deep/file.py", "src/a/deep/file.py"),
+    ],
+)
+def test_glob_classes_report_only_claim_paths_outside_bounds(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], bound: str, inside: str, outside: str
+) -> None:
+    """Breaks if glob classes reverse a diagnostic, use regex syntax, cross a slash, or lose
+    recursive and directory grants. The included and excluded paths use the ticket CLI."""
+
+    root = checkout(
+        tmp_path,
+        document("#1", bounds=[bound], done_when=["inside"]),
+        document("#2", bounds=[bound], done_when=["outside"]),
+    )
+    plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
+    plan["claims"] += [
+        {"name": "inside", "command": ["true"], "required_paths": [inside]},
+        {"name": "outside", "command": ["true"], "required_paths": [outside]},
+    ]
+    write(root, CLAIMS_PATH, json.dumps(plan))
+
+    found = report(root, capsys=capsys, expect=0)
+
+    assert codes(found, "#1") == []
+    assert codes(found, "#2") == ["CLAIM_READS_OUTSIDE_BOUNDS"]
+    [text] = said(found, "CLAIM_READS_OUTSIDE_BOUNDS")
+    assert f"reads {outside}, which" in text
+
+
+@pytest.mark.parametrize("bound", ["src/[]", "src/[^]", "src/[!]", "src/[a", "src/[z-a]"])
 def test_a_bounds_class_no_glob_holds_is_a_finding_and_not_a_crash(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], bound: str
 ) -> None:
     """`src/[]` is `BOUNDS_INVALID`, and the pass that asks whether a claim's declared
     paths are inside the bounds still reports instead of ending the run."""
 
-    root = checkout(tmp_path, document("#1", bounds=["src/[]"], done_when=["reads"]))
+    root = checkout(tmp_path, document("#1", bounds=[bound], done_when=["reads"]))
     plan = json.loads((root / CLAIMS_PATH).read_text(encoding="utf-8"))
     plan["claims"].append(
         {"name": "reads", "command": ["true"], "required_paths": ["src/a.py", "src/./a.py"]}
