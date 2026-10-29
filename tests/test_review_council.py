@@ -333,16 +333,18 @@ def test_a_failed_a_timed_out_and_an_unreadable_reviewer_are_reported_and_the_re
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # The limit holds for both reviewers, so it is long enough for the one that finishes to start
+    # on a loaded machine; the hanging stand-in sleeps 30 s, past the 10 s limit.
     cases = {
-        "fail": ("FAILED", "exit 3: boom: not logged in"),
-        "empty": ("FAILED", "its answer file is empty"),
-        "hang": ("TIMEOUT", "killed after 1 s"),
+        "fail": ("FAILED", "exit 3: boom: not logged in", "60"),
+        "empty": ("FAILED", "its answer file is empty", "60"),
+        "hang": ("TIMEOUT", "killed after 10 s", "10"),
     }
-    for number, (mode, (status, detail)) in enumerate(cases.items()):
+    for number, (mode, (status, detail, limit)) in enumerate(cases.items()):
         monkeypatch.setenv("FAKE_CODEX", mode)
         out_dir = tools / f"run{number}"
         code, out, _ = council(
-            capsys, repo, "--accept", "--base", "HEAD~1", "--timeout", "1", "--out", str(out_dir)
+            capsys, repo, "--accept", "--base", "HEAD~1", "--timeout", limit, "--out", str(out_dir)
         )
         assert code == 1
         assert f"r1 {CODEX_REVIEWER}: {status} after" in out and detail in out
