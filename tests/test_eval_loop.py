@@ -140,6 +140,22 @@ def test_an_earlier_ref_reaches_the_cell_and_the_record_and_holds_on_resume(
             LOOP.read_plan(write_plan(tmp_path, arms=[wrong], fixtures=["alpha"]), RUNNER)
 
 
+def test_an_earlier_verbatim_folder_reaches_the_cell_and_the_record(tmp_path: Path) -> None:
+    folder = tmp_path / "third-party" / "set"
+    folder.mkdir(parents=True)
+    other = {"label": "other-set", "arm": "earlier", "earlier_verbatim": str(folder)}
+    plan = LOOP.read_plan(write_plan(tmp_path, arms=[other], fixtures=["alpha"]), RUNNER)
+    words = list(LOOP.cells(plan)[0].argv)
+    assert words[words.index("--earlier-verbatim") + 1] == str(folder)
+    assert "--earlier-ref" not in words
+    LOOP.record(plan)
+    saved = json.loads((tmp_path / "results" / "example" / "LOOP.json").read_text(encoding="utf-8"))
+    assert saved["arms"][0]["earlier_verbatim"] == str(folder)
+    for wrong in ({**other, "arm": "current"}, {**other, "earlier_ref": "v1.8.0"}):
+        with pytest.raises(LOOP.PlanError, match="earlier_verbatim"):
+            LOOP.read_plan(write_plan(tmp_path, arms=[wrong], fixtures=["alpha"]), RUNNER)
+
+
 def test_a_plan_service_tier_reaches_every_cell_and_the_record(tmp_path: Path) -> None:
     plain = LOOP.read_plan(write_plan(tmp_path, fixtures=["alpha"]), RUNNER)
     assert "--service-tier" not in [word for cell in LOOP.cells(plain) for word in cell.argv]
