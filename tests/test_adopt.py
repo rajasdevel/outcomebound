@@ -960,6 +960,44 @@ def test_an_import_block_whose_file_became_a_link_is_dropped_not_followed(
     assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
 
 
+@pytest.mark.parametrize("name", ["CLAUDE.md", ".claude/CLAUDE.md", "GEMINI.md"])
+@pytest.mark.parametrize(
+    ("text", "warns"),
+    [
+        ("\n \t\n", False),
+        (
+            "\n<!-- outcomebound:begin id=pointer-example v=1.0.0 -->\n"
+            "@AGENTS.md\n<!-- outcomebound:end id=pointer-example -->\n \t\n",
+            False,
+        ),
+        (
+            "<!-- outcomebound:begin id=pointer-example v=1.0.0 -->\n"
+            "@AGENTS.md\n<!-- outcomebound:end id=pointer-example -->\n\n"
+            "# Project notes\nUse the project's build command.\n",
+            True,
+        ),
+    ],
+    ids=["whitespace", "managed", "project-text"],
+)
+def test_guidance_file_warning_keeps_project_text_and_ignores_managed_blocks(
+    tmp_path: Path, capsys: Capture, name: str, text: str, warns: bool
+) -> None:
+    # Catch a silent second guidance file, a refusal, or an automatic move of project text.
+    target = repo(tmp_path / "t", {name: text})
+    before = (target / name).read_bytes()
+
+    code, out, err = run(capsys, str(target), "--harness", "generic")
+
+    assert code == 0, err
+    warning = (
+        f"warning  {name}: AGENTS.md should be the only guidance file; "
+        "the project's text here could move into AGENTS.md"
+    )
+    assert (warning in out.splitlines()) is warns
+    assert (target / name).read_bytes() == before
+    assert "# Project notes" not in (target / "AGENTS.md").read_text(encoding="utf-8")
+
+
 def test_a_plain_claude_md_gets_the_import_block_above_its_own_text(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -2710,7 +2748,10 @@ def test_a_linked_worktree_under_its_own_project_does_not_warn_of_the_project_fi
     foreign = repo(main / "other", {"README.md": "# O\n"})
 
     _, out, _ = run(capsys, str(linked), "--harness", "claude-code")
-    assert warnings(out) == []
+    assert warnings(out) == [
+        "warning  CLAUDE.md: AGENTS.md should be the only guidance file; "
+        "the project's text here could move into AGENTS.md"
+    ]
     _, out, _ = run(capsys, str(foreign), "--harness", "claude-code")
     assert any("also loads ../CLAUDE.md" in line for line in warnings(out))
 

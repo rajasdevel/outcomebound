@@ -2,4 +2,3 @@
 # file whole; put any other ignore in the root .gitignore.
 /research-inbox/
 .outcomebound-checks/
-/overlay.json

@@ -2683,8 +2683,8 @@ cheaper result). Cost is reported and optimised; it is no ship condition (mainta
 - `ponytail`: Ponytail's text, pinned to one commit, run as a third-party arm with its own loading
   (`evals/ponytail/README.md`); it is not edited.
 - `current`: the 1.10.0 candidate, installed by its own engine.
-- `facts-only`: the 1.10.0 candidate as a facts-only overlay, on the ticket-build tier only, so
-  that the lifecycle's default of facts-only on a settled ticket rests on a measurement.
+- `facts-only`: the 1.10.0 candidate installed with ordinary `--facts-only`, on the ticket-build
+  tier only, to measure what the full guidance adds to a settled ticket.
 
 Each arm's presence is asserted from the first turn of each transcript, and the other arms'
 absence; the cache is warmed with one throwaway call before the pool; arm order changes from

@@ -647,7 +647,9 @@ FRAGMENT_ACTS = {
     ),
     "multi-agent": "before writing a delegate's brief or integrating a delegate's work",
     "research": "before running `outcomebound research`",
-    "explore": "before starting exploration work, and when its appetite ends or its sought signal appears",
+    "explore": (
+        "before starting exploration work, and when its appetite ends or its sought signal appears"
+    ),
 }
 
 

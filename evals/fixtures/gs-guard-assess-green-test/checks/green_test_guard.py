@@ -45,7 +45,9 @@ g.main(
         "scope-kept": lambda: g.scope("tests/*"),
         "plain-explanation": lambda: (
             []
-            if re.search(r"\b(?:does not|doesn't|never) calls?\b", g.answer().lower().replace("\u2019", "'"))
+            if re.search(
+                r"\b(?:does not|doesn't|never) calls?\b", g.answer().lower().replace("\u2019", "'")
+            )
             else ["the explanation omits the absent production call"]
         ),
     }
