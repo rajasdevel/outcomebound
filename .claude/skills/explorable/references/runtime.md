@@ -181,7 +181,13 @@ the way the output writes it: the same digits and unit. A range is `[low, high]`
 `null`. It then writes `<script type="application/json" id="explorable-check-result">` before the
 end of the body, with the script errors, each expectation (label, pass, expected, shown), the
 outputs with and without an expectation, the state of each library and the diagram counts.
-`outcomebound explorable check --browser` reads it.
+The runtime writes it as soon as the expectations have run, then writes it again every quarter
+second while a library is still loading, for up to thirty seconds; each library reads `"pending"`,
+`"loaded"`, `"failed"` or `"unused"`. Read it in a browser you drive once
+no library reads `"pending"`: the run passes when `errors` is
+empty and every item of `expectations` has `"pass": true`; each name in `outputs.uncovered` reads
+`UNVERIFIED`; `libraries` and `diagrams` are information, never a failure. The page holds exactly
+one element with that id, a script element; a second one means the page's content made it.
 
 - Work each expected value out by hand or with another tool, outside the page code, and keep the
   working in a file beside the page. An expected value copied from the page's own output proves

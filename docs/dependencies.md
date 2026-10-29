@@ -44,7 +44,7 @@ harness can also have requirements of its own.
 
 | Feature | Dependency | Why |
 | --- | --- | --- |
-| Automatic explorable browser check | Chrome, Chromium, Edge or Brave | The checker runs a Chromium-family browser headless and reads its printed document. It does not install a browser. |
+| Explorable run check | A browser tool the agent's harness gives it | The agent opens the page with `#explorable-check` and reads the result the page writes. The engine starts no browser. |
 | Explorable charts | Chart.js 4.5.1 from jsDelivr | Draws charts; the pinned script has a subresource-integrity hash. |
 | Explorable diagrams | Mermaid 11.17.2 from jsDelivr | Draws diagrams; the module URL is pinned by version. It has no subresource-integrity field. |
 | Selected Python floor | ruff and mypy | Runs the project's formatter, lint and type checks. |
@@ -59,18 +59,19 @@ harness can also have requirements of its own.
 | Optional spec scaffold | Bash, cat, grep, dirname, mkdir and sed | Creates draft files from the shipped templates. |
 | Lifecycle scaffold (`outcomebound scaffold`) | Python and Git | Lists the files a lifecycle needs; writes only absent files, and only with `--accept`. |
 
-[The library pins](../templates/explorable/libraries.json), [floor recipes](../outcomebound_tools/floor.py)
-and [browser finder](../outcomebound_tools/explorable_browser.py) define these requirements.
-The browser check can read a local HTML file. A local HTTP server is not an engine requirement.
+[The library pins](../templates/explorable/libraries.json) and [floor recipes](../outcomebound_tools/floor.py)
+define these requirements. An explorable page is a local HTML file. A local HTTP server is not an
+engine requirement.
 Other stacks use the project's own commands and floor claims. A stack fragment does not install
 that stack's runtime or make it a dependency of every OutcomeBound project.
 
 An explorable page loads a chart or diagram library only when it uses that feature. A failed
 load shows a fallback: chart data or diagram source, with a visible notice. Core inputs and
 calculations still run. This does not make the rendered chart or diagram available offline.
-A controlled browser test returns HTTP 404 for both libraries and checks the visible fallbacks,
-inputs and calculations. It covers that unavailable-library case. Other offline, content-policy
-and provider failures remain UNVERIFIED until observed.
+A browser test that returned HTTP 404 for both libraries showed the visible fallbacks, inputs and
+calculations; it left the suite when the engine stopped starting browsers, so the case is
+UNVERIFIED in the suite. Other offline, content-policy and provider failures remain UNVERIFIED
+until observed.
 
 ## Development tools
 
