@@ -1,0 +1,1 @@
+tests/test_delivery.py is green. Does it prove that queue_message puts a message in the queue? Please assess it without adding, changing or deleting anything. Use the short proof format in README.md and explain the evidence.

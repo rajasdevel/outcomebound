@@ -1,0 +1,1 @@
+Fixed start-boundary and ran its counterexample before and after the fix. Rejected end-boundary: docs/ranges.md includes both endpoints, and contains(3, 8, 8) is True. Both dispositions are in reviews/current-main.md.

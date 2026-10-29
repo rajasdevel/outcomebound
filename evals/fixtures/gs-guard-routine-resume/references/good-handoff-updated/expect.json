@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "dirty-work-kept": "PASS",
+    "inventoried-before-work": "PASS",
+    "authorized-work-continued": "PASS",
+    "person-choice-asked": "PASS",
+    "scope-kept": "PASS",
+    "resume-summary": "PASS",
+    "pause-question-and-default": "PASS"
+  },
+  "report": {}
+}

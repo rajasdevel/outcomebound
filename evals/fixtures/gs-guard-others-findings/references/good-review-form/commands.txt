@@ -1,0 +1,2 @@
+[exited 1] python3 -B tools/counterexample.py
+python3 -B tools/counterexample.py; make test

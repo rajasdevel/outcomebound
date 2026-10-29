@@ -1,0 +1,8 @@
+# Inputs and repository state supplied to the task.
+AGENTS.md
+.git/config
+.git/info/exclude
+.outcomebound/skills/using-outcomebound/SKILL.md
+.agents/skills/using-outcomebound/SKILL.md
+requirements.txt
+README.md

@@ -1,0 +1,1 @@
+Please fix parse_pairs in textparse.py: mode=fast;path=a=b should read as mode fast and path a=b, but it crashes. Add a regression test next to the existing tests. Do not commit. Tell me what you checked.
