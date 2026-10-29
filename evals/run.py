@@ -86,6 +86,7 @@ from evals.claude_stream import (
 from evals.claude_stream import failed as failed_rows
 from evals.codex_events import (
     COST_KEYS,
+    cache_misses,
     command_transcript,
     observed_model,
     session_tokens,
@@ -2241,7 +2242,8 @@ def seed_commit(workdir: Path) -> str | None:
 
 class CallRecords(NamedTuple):
     """What the runner observed around a call, for its checks: the budget record (`stopped`,
-    `input`, `uncached`, `output`, `seconds`), the watch log, the stubs' folder and their
+    `input`, `uncached`, `output`, `seconds`, and `misses` where read), the watch log, the
+    stubs' folder and their
     digests before and after the call, and the observed folder as the call left it. None where
     the run did not record it."""
 
@@ -2642,7 +2644,9 @@ def instruments(suite: Suite | None, workdir: Path, place: Place, path: str) -> 
 def budget_record(extra: dict[str, Any], returncode: int | None, elapsed: float) -> dict[str, Any]:
     """The call's budget record: why it was stopped (`input_cap`, `timeout`, or None where it
     ended by itself), the input it used (the cached among it), the uncached input and the
-    output, from its session's own counts (None where none were read), and its seconds. A
+    output, from its session's own counts (None where none were read), the uncached input the
+    provider's cache missed on input already sent (`misses`, where the harness reads its calls;
+    `codex_events.cache_misses`), and its seconds. A
     harness that names no stop, and a call that did not finish without a runner fault, is a
     `timeout`."""
 
@@ -2657,6 +2661,7 @@ def budget_record(extra: dict[str, Any], returncode: int | None, elapsed: float)
         "input": used,
         "uncached": used - cached if used is not None and cached is not None else None,
         "output": tokens.get("output_tokens"),
+        **({"misses": extra["cache_misses"]} if extra.get("cache_misses") is not None else {}),
         "seconds": elapsed,
     }
 
@@ -3109,13 +3114,19 @@ def _regrade_files(path: Path, name: str, meta: dict[str, Any], plan: dict[str, 
     return ""
 
 
-def kept_records(meta: dict[str, Any]) -> CallRecords:
+def kept_records(meta: dict[str, Any], native: Path | None = None) -> CallRecords:
     """What the runner recorded around a kept run's call, as its meta keeps it, for judging it
-    again; none of it for a record from before it was kept."""
+    again; none of it for a record from before it was kept. A codex budget kept before it
+    recorded `misses` gets them from the run's verified native copy, where one is kept."""
 
     stubs = _object(meta.get("stubs"))
+    budget = _object(meta.get("budget"))
+    if budget and "misses" not in budget and native and meta.get("harness", "codex") == "codex":
+        found = cache_misses(native_records(native.read_bytes()))
+        if found is not None:
+            budget = {**budget, "misses": found}
     return CallRecords(
-        _object(meta.get("budget")) or None,
+        budget or None,
         Path(meta["watch_log"]) if meta.get("watch_log") else None,
         Path(stubs["dir"]) if stubs.get("dir") else None,
         stubs.get("digests"),
@@ -3352,7 +3363,7 @@ def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any
     transcript, answer, filled = kept_transcript(plan, meta)
     intact, protected_report, protected_check = _regrade_protected(workdir, meta)
     extra: dict[str, Any] = {}
-    left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta))
+    left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta, plan["native"]))
     report = grade(name, workdir, left, (intact, protected_report), extra, plan["graders"])
     judge_stop(extra, stop_of(meta))
     problem = extra.pop("error", "")
@@ -3532,7 +3543,7 @@ def graded_copy(plan: dict[str, Any], graders: Path) -> dict[str, Any]:
     try:
         shutil.copytree(aside, workdir, symlinks=True)
         intact, protected_report, extra["protected_check"] = _regrade_protected(workdir, meta)
-        left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta))
+        left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta, plan["native"]))
         grade(name, workdir, left, (intact, protected_report), extra, graders)
     finally:
         if workdir.exists():

@@ -137,8 +137,8 @@ def test_v2_ledger_references_expect_every_claim_and_item(name: str) -> None:
         assert set(expect["claims"]) == set(suite["claims"]), reference
         assert set(expect["report"]) == set(suite["report"]), reference
         verdicts = set(expect["claims"].values()) | set(expect["report"].values())
-        if reference == "good":
-            assert verdicts <= {"PASS", "yes"}, "the good reference passes everything"
+        if reference == "good" or reference.startswith("good-"):
+            assert verdicts <= {"PASS", "yes"}, f"the {reference} reference passes everything"
         else:
             assert verdicts & {"FAIL", "no"}, f"{reference} fails nothing"
     assert (folder / "references" / "empty" / "answer.md").read_text(encoding="utf-8") == ""

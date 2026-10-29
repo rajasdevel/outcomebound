@@ -42,6 +42,9 @@
     "missing-gap",
     "source-edited",
     "wording-only",
-    "good-inline-style"
+    "good-inline-style",
+    "good-provisional-message",
+    "inferred-empty-state",
+    "no-match-shows-all"
   ]
 }
