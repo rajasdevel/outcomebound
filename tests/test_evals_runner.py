@@ -885,8 +885,19 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
     condition = adopt.CONDITIONS["diagnose"].encode()
     adopt_text = at_head("outcomebound_tools/adopt.py")
     facts_text = at_head("outcomebound_tools/facts.py")
-    reread = b"Read a file below once, when work you have read shows its condition holds."
-    assert condition in adopt_text and facts_text.count(reread) == 1
+    read_guidance = (
+        b"ONCE = (\n"
+        b'    "Read a file below when work you have read shows its condition holds; '
+        b'it stays in force for "\n'
+        b"    \"the session; read it again only when the next step's rules from it are missing, "
+        b'uncertain "\n'
+        b'    "or may have changed.\\n"\n'
+        b'    "Use the listed project path even if the skill catalog omits it or a personal '
+        b'skill has "\n'
+        b'    "the same name."\n'
+        b")"
+    )
+    assert condition in adopt_text and facts_text.count(read_guidance) == 1
     assert adopt_text.count(b'\nif __name__ == "__main__":') == 1
     ref_rules = b'\nRULES = {name: "A ref rule for " + name + "." for name in RULES}\n'
     ref_references = (
@@ -902,7 +913,10 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
                 b'\nif __name__ == "__main__":',
                 ref_rules + ref_references + b'\nif __name__ == "__main__":',
             ),
-            "outcomebound_tools/facts.py": facts_text.replace(reread, b"a ref's own reread.")
+            "outcomebound_tools/facts.py": facts_text.replace(
+                read_guidance,
+                b"ONCE = \"a ref's own reread.\\nA ref's own listed path.\"",
+            )
             + b'\nRULES_LEAD = "A ref rules lead:"\n',
             "skills/using-outcomebound/references/ref-only.md": b"A ref reference.\n",
             "outcomebound_tools/fragments.py": at_head("outcomebound_tools/fragments.py")
@@ -919,8 +933,10 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         done, out = _invoke(tmp_path / fixture, (*arguments, "--fixtures", fixture))
         assert done.returncode == 0, done.stdout + done.stderr
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
-        assert "a ref's own condition" in notes and "a ref's own reread." in notes
-        assert adopt.CONDITIONS["diagnose"] not in notes and facts.ONCE not in notes
+        assert "a ref's own condition" in notes
+        assert "a ref's own reread.\nA ref's own listed path." in notes
+        assert adopt.CONDITIONS["diagnose"] not in notes
+        assert all(line not in notes for line in facts.once_lines())
         assert "A ref rules lead:" in notes and facts.RULES_LEAD not in notes
         for skill, rule in adopt.RULES.items():
             assert f"- A ref rule for {skill}." in notes

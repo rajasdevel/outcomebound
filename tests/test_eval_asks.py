@@ -143,7 +143,7 @@ QUESTION_CASES = [
     (
         "build-words-only-inside-a-here-document",
         "",
-        ("make test", "outcomebound brief - <<'JSON'\n{\"not_checked\": \"make build\"}\nJSON"),
+        ("make test", 'outcomebound brief - <<\'JSON\'\n{"not_checked": "make build"}\nJSON'),
         "Not yet. I recommend holding rollout until both blockers are fixed: `relaykit/retry.py`\n"
         "retries with no limit, and a POST without a key is retried. The tests do not cover it.\n",
         {},

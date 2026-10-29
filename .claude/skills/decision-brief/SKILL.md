@@ -1,12 +1,13 @@
 ---
 name: decision-brief
-description: Use when writing a decision brief for the person or after a granted act is refused. Apply the person's rulings within scope. Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work. For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified. When a held act's owner and next step are settled, report it without asking again.
+description: Use when a decision compares several options, a brief or page is asked for, or a granted act is refused. Apply the person's rulings within scope. Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work. For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified. When a held act's owner and next step are settled, report it without asking again.
 ---
 
 # Decision brief
 
 Done means the person can decide each person-owned choice in one reading.
-Deliver the complete drawn brief in the text the person reads (handoff, goal Progress, ticket comment, or final message when every remaining item waits on an answer); a link is insufficient.
+A routine decision (one choice, a clear recommendation) is asked in plain words in the text the person reads: the question, your recommendation, its consequence, what waits and whether it can be undone; the brief below is for a choice between several credible options, or when the person asks for a brief or a page. A question the person asked is answered, not turned into a brief.
+Deliver the complete brief in the text the person reads (handoff, goal Progress, ticket comment, or final message when every remaining item waits on an answer); a link is insufficient.
 Record reversible choices later work needs in one line with the work.
 
 ## Decide within authority
@@ -55,7 +56,7 @@ If layout needs more detail, read [presentation](references/presentation.md).
 
 ## Draw and deliver
 
-With `outcomebound` on PATH, draw every brief with `outcomebound brief -`, JSON on stdin, no file written, using the session surface's marks and diagram form; use `--form mermaid` where needed.
+With `outcomebound` on PATH, draw each brief this section's rules call for with `outcomebound brief -`, JSON on stdin, no file written, using the session surface's marks and diagram form; use `--form mermaid` where needed.
 Paste the complete render as markdown in the user-facing text, never a code block; revise input and redraw, never shorten or rewrite the render.
 If a draw is refused, fix the brief and redraw, never hand-write it.
 Without the command on PATH, write the same shape by hand with lettered options.

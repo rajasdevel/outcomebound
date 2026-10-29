@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "44b7fdae054a82c8cfc21aa47588131347711313a9aa602dc9d7507b391900c4"
+      "sha256": "fd2afd5291743fe3a56ecb9231b7853e5a8bfc0bf64c4f65a78fb52a7096f84e"
     },
     {
       "kind": "block",
@@ -47,8 +47,8 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "8d3424f10129cf2e6296c91b7cb2400838816f8d31f38fc59e16ed1f55585789",
-      "sha256": "fb0352ec54593a945a589b0487cbac672e0f81f15f8be394ba61e0fe58231df6"
+      "frame": "57a8f0dc61089bd4bee25931f8c63485c31a056b5aaf53a5fd87c84509d49119",
+      "sha256": "da75508421e2ee7c511152847729489f5ef16cd8dfa3e75a501fb4fd51cf364c"
     },
     {
       "kind": "fragment",
@@ -93,7 +93,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "8a65d950308d11201cd2411196876983380ddfd45ff57cc3311cbf2eac6c8c7f"
+      "sha256": "800cfc17ed94fa7668cf339e0f5509e4dfeb634c00a504171ad59bdf2986f3e6"
     },
     {
       "kind": "skill",
@@ -453,7 +453,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "8a65d950308d11201cd2411196876983380ddfd45ff57cc3311cbf2eac6c8c7f"
+      "sha256": "800cfc17ed94fa7668cf339e0f5509e4dfeb634c00a504171ad59bdf2986f3e6"
     },
     {
       "kind": "skill",

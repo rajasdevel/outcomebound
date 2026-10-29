@@ -52,12 +52,13 @@ def test_rule_lines_split_only_at_explicit_newlines() -> None:
     ["commands", "workspace", "python", "node-typescript", "research", "multi-agent", "explore"],
 )
 def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) -> None:
-    """Catches a manual fragment reverting to a conditional read or losing its manual name."""
+    """Catches a missing person-or-file trigger, an automatic read or a lost fragment path."""
 
     rendered = facts.pointers([load_all(ROOT)[name]], [])
     assert rendered is not None
     assert rendered.splitlines()[1:-1] == [
-        f"Read only when the person names it: `.outcomebound/fragments/{name}.md`."
+        "Read only when the person names it or a file you are reading directs you to it: "
+        f"`.outcomebound/fragments/{name}.md`."
     ]
 
 

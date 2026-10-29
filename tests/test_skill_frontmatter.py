@@ -9,7 +9,10 @@ import pytest
 from outcomebound_tools import adopt
 from tests.adopt_helpers import (
     BOUNDARIES,
+    CONDITIONAL_READS,
+    INSTALLED_RULES,
     MANUAL_SKILLS,
+    READ_GUIDANCE,
     ROOT,
     SHORT_DESCRIPTIONS,
     Capture,
@@ -113,23 +116,25 @@ def test_NEGATIVE_CONTROL_an_unquoted_colon_or_hash_in_a_value_is_reported():
 def test_full_native_install_has_short_catalog_conditional_reads_and_manual_names(
     tmp_path: Path, capsys: Capture, harness: str, root: str
 ) -> None:
-    """Catches missing conditional reads, manual names or the manual skill root, and changes
-    to skill bodies or references when the native catalog is shortened."""
+    """Catches lost reread/path safeguards, decision triggers, inline rules or manual names,
+    and changes to skill bodies or references when the native catalog is shortened."""
 
     target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
     code, _, err = run(capsys, str(target), "--harness", harness)
     assert code == 0, err
     agents = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert set(SHORT_DESCRIPTIONS) == set(adopt.SKILLS)
-    assert "Read a file below once, when work you have read shows its condition holds." in agents
-    assert f"Read only when the person names it (skills under `{root}/<name>/SKILL.md`): " in agents
+    assert "\n".join(READ_GUIDANCE) in agents
+    assert (
+        "Read only when the person names it or a file you are reading directs you to it "
+        f"(skills under `{root}/<name>/SKILL.md`): "
+    ) in agents
     for name in adopt.SKILLS:
-        pointer = f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md"
         if name in MANUAL_SKILLS:
-            assert pointer not in agents
+            assert f": read {root}/{name}/SKILL.md" not in agents
             assert f"`{name}`" in agents.split("Read only when the person names it", 1)[1]
         else:
-            assert pointer in agents
+            assert f"- {CONDITIONAL_READS[name]}: read {root}/{name}/SKILL.md" in agents
         for native in adopt.routes(ROOT, harness.split(",")):
             data = (target / native.skills / name / "SKILL.md").read_bytes()
             assert_native_skill(data, name)
@@ -140,8 +145,8 @@ def test_full_native_install_has_short_catalog_conditional_reads_and_manual_name
                     target / native.skills / name / "references" / note.name
                 ).read_bytes() == note.read_bytes()
     assert ": read " + root + "/using-outcomebound/references/continuity.md" not in agents
-    for rule in adopt.RULES.values():
-        for line in rule.splitlines():
+    for rule in INSTALLED_RULES.values():
+        for line in rule:
             assert "- " + line in agents.splitlines()
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
@@ -302,7 +307,7 @@ def test_manual_skills_have_both_native_flags_and_auto_skills_have_neither(
         assert not (target / root / name / "agents/openai.yaml").exists()
     assert f"- when a fix did not hold: read {root}/diagnose/SKILL.md" in agents
     assert (
-        "- when writing a decision brief for the person, or when a harness refuses an act "
-        f"the person granted: read {root}/decision-brief/SKILL.md"
+        "- when a decision compares several options, the person asks for a brief or a page, or "
+        f"a harness refuses an act the person granted: read {root}/decision-brief/SKILL.md"
     ) in agents
     assert run(capsys, str(target), "--check")[0] == 0

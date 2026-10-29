@@ -24,8 +24,11 @@ import pytest
 from outcomebound_tools import adopt, facts, fileplan, fragments, identity, paths
 from outcomebound_tools.declared_tests import PYTEST
 from tests.adopt_helpers import (
+    CONDITIONAL_READS,
     GIT,
+    INSTALLED_RULES,
     MANUAL_SKILLS,
+    READ_GUIDANCE,
     ROOT,
     Capture,
     assert_native_skill,
@@ -100,6 +103,8 @@ def sha(data: bytes) -> str:
 def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
     tmp_path: Path, capsys: Capture
 ) -> None:
+    """Catches missing install artifacts, restored kernel rules or the routine/full brief split."""
+
     files = {"README.md": "# T\n", "pyproject.toml": "[project]\n", "CLAUDE.md": "# Notes\n"}
     target = repo(tmp_path / "t", files)
 
@@ -109,6 +114,13 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
     agents = blocks(target, "AGENTS.md")
     assert list(agents) == [adopt.KERNEL, adopt.FACTS, adopt.POINTERS]
     assert agents[adopt.KERNEL].version == VERSION
+    for line in (
+        "- Satisfy all four completely for the lifespan.",
+        "- Hold only an act that expands authority or crosses an ungranted irreversible edge, "
+        "with its decision brief; continue all other work.",
+        "- Explain in plain words, or leave out, an id or label the person did not use.",
+    ):
+        assert line in agents[adopt.KERNEL].body.splitlines()
     shipped = (ROOT / "fragments/stack/python.md").read_bytes()
     assert (target / PYTHON_FRAGMENT).read_bytes() == shipped
     assert list(blocks(target, "CLAUDE.md")) == ["pointer-claude-md"]
@@ -117,6 +129,16 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
     brief = (target / CLAUDE_BRIEF).read_bytes()
     assert_native_skill(skill, "using-outcomebound")
     assert_native_skill(brief, "decision-brief")
+    assert (
+        "A routine decision (one choice, a clear recommendation) is asked in plain words in "
+        "the text the person reads: the question, your recommendation, its consequence, what "
+        "waits and whether it can be undone; the brief below is for a choice between several "
+        "credible options, or when the person asks for a brief or a page. A question the "
+        "person asked is answered, not turned into a brief."
+    ) in brief.decode("utf-8")
+    assert "draw each brief this section's rules call for with `outcomebound brief -`" in (
+        brief.decode("utf-8")
+    )
     assert (target / "README.md").read_text(encoding="utf-8") == "# T\n"
 
     document = manifest(target)
@@ -214,26 +236,18 @@ def skill_pointer_lines(root: str, names: tuple[str, ...] = adopt.SKILLS) -> lis
     """The ordered inline rules, conditional reads and manual names of a full install."""
 
     rules = [
-        "- " + line
-        for name in adopt.RULES
-        if name in names
-        for line in adopt.RULES[name].splitlines()
+        "- " + line for name in INSTALLED_RULES if name in names for line in INSTALLED_RULES[name]
     ]
     automatic = [name for name in names if name not in MANUAL_SKILLS]
     manual = [f"`{name}`" for name in names if name in MANUAL_SKILLS]
     return [
         *(["These hold without a read:", *rules, ""] if rules else []),
-        *(
-            ["Read a file below once, when work you have read shows its condition holds."]
-            if automatic
-            else []
-        ),
-        *(f"- {adopt.CONDITIONS[name]}: read {root}/{name}/SKILL.md" for name in automatic),
+        *(READ_GUIDANCE if automatic else []),
+        *(f"- {CONDITIONAL_READS[name]}: read {root}/{name}/SKILL.md" for name in automatic),
         *(
             [
-                f"Read only when the person names it (skills under `{root}/<name>/SKILL.md`): "
-                + ", ".join(manual)
-                + "."
+                "Read only when the person names it or a file you are reading directs you to it "
+                f"(skills under `{root}/<name>/SKILL.md`): " + ", ".join(manual) + "."
             ]
             if manual
             else []

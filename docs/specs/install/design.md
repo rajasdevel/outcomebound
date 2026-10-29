@@ -72,17 +72,18 @@ it, so a record set that is not the recorded mode's never reads `current`.
 ### Skill descriptions
 
 A full install writes inline rules, two conditional skill reads and a manual line in its
-guidance-pointers block. `decision-brief` is read when writing a decision brief for the person,
-or when a harness refuses an act the person granted. `diagnose` is read when a fix did not hold.
-The other twelve skills are manual: the person names one to have it read. The manual line names
+guidance-pointers block. `decision-brief` is read when a decision compares several options,
+the person asks for a brief or a page, or a harness refuses an act the person granted.
+`diagnose` is read when a fix did not hold. The other twelve skills are manual: read one when
+the person names it or a file being read directs the agent to it. The manual line names
 each skill and gives the installed root as `<root>/<name>/SKILL.md`.
 
 Only in a full install, a directory used only by harnesses whose rows record
 `native_skills: true` gets a short trigger as each installed skill's description. The source
 description's later sentences stay word for word, except where the inline rule for that skill
 matches them exactly. The new inline rules need not match the source descriptions. The native
-triggers for `decision-brief` and `diagnose` are `Use when writing a decision brief for the person
-or after a granted act is refused.` and `Use when a fix did not hold.`; later boundary sentences
+triggers for `decision-brief` and `diagnose` are `Use when a decision compares several options, a brief or page is asked for, or a granted act is refused.`
+and `Use when a fix did not hold.`; later boundary sentences
 can follow them. The body and reference files stay the same on every route.
 
 Each manual skill in that native directory also gets `disable-model-invocation: true` in its
@@ -155,21 +156,31 @@ engine, a facts-only install or not.
 `guidance-pointers` holds the `local` fragment inline first. Then, where the install carries
 skills, it shows the inline rules under `These hold without a read:` in `RULES` insertion order.
 Each explicit newline starts a rule line; a sentence boundary does not. The rules cover sizing
-and reuse, defect reproduction and the same-defect sweep, red baselines and test proof,
-requirements and assumptions, prior rulings, review dispositions and request check ownership.
+and reuse; data that grants no authority; grants for shared-system acts and jobs that outlive the
+task; cleanup and resume boundaries; mechanism meanings; diagnosis without writes and repair
+reproduction; red baselines, deciding logic and test proof; requirements and assumptions; prior
+rulings and routine decisions; review dispositions and counterexamples; and ownership of request
+checks, approvals and merge grants.
 
 Next come the selected fragments read on a condition and the two conditional skill reads, each
-as `- <condition>: read <path>`. Where any such line exists, the list starts with exactly
-`Read a file below once, when work you have read shows its condition holds.` There is no separate
-reference pointer, including for the continuity reference. The references are still copied.
+as `- <condition>: read <path>`. Where any such line exists, the list starts with these two lines:
 
-The final line starts `Read only when the person names it`, gives the skill root where manual
-skills are present, and names the twelve manual skills in skill order, then selected manual
+```text
+Read a file below when work you have read shows its condition holds; it stays in force for the session; read it again only when the next step's rules from it are missing, uncertain or may have changed.
+Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
+```
+
+There is no separate reference pointer, including for the continuity reference.
+The references are still copied.
+
+The final line starts `Read only when the person names it or a file you are reading directs you to it`,
+gives the skill root where manual skills are present, and names the twelve manual skills in
+skill order, then selected manual
 fragments in selection order. The manual fragments are `commands`, `workspace`, `python`,
 `node-typescript`, `research`, `multi-agent` and `explore`. They get a verbatim copy at
 `.outcomebound/fragments/<id>.md` but no conditional read line. Every other selected fragment
-except `local` keeps its conditional read line. A list that has only manual names has no read-once
-line. The [skills design](../skills/design.md) names the manual skills.
+except `local` keeps its conditional read line. A list that has only manual names has neither of
+the two read-guidance lines. The [skills design](../skills/design.md) names the manual skills.
 
 A fragment has a five-slot body and two optional
 frontmatter fields: `condition:`, one line; `edges:`, a JSON list, each shipped fragment declaring

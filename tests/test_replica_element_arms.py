@@ -521,13 +521,16 @@ def test_the_none_arm_plus_the_launcher_reaches_it_and_nothing_else(
 def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
     tmp_path: Path, fake: dict[str, Path]
 ) -> None:
+    """Catches loss of the person-or-file trigger or extra guidance in a fragment-only arm."""
+
     arm = _arm("replica-fake", "none", RUN.Elements(added=("fragment:commands",)))
     workdir, _protected, _prompt = _build("replica-fake", arm, tmp_path / "w")
     note = (workdir / "AGENTS.md").read_text("utf-8")
     block = note.split("\n\n", 1)[0].splitlines()
     assert block[0].startswith("<!-- outcomebound:begin id=guidance-pointers ")
     assert block[1:] == [
-        "Read only when the person names it: `.outcomebound/fragments/commands.md`.",
+        "Read only when the person names it or a file you are reading directs you to it: "
+        "`.outcomebound/fragments/commands.md`.",
         "<!-- outcomebound:end id=guidance-pointers -->",
     ]
     assert sorted(_files(workdir)) == [
@@ -549,7 +552,8 @@ def test_a_manual_skill_added_without_its_block_keeps_only_its_name_and_files(
     note = workdir / "AGENTS.md"
     block = note.read_text("utf-8").split("\n\n", 1)[0].splitlines()
     manual = (
-        "Read only when the person names it (skills under `.agents/skills/<name>/SKILL.md`): "
+        "Read only when the person names it or a file you are reading directs you to it "
+        "(skills under `.agents/skills/<name>/SKILL.md`): "
         "`explain-spec`."
     )
     assert block[1:] == [manual, "<!-- outcomebound:end id=guidance-pointers -->"]
@@ -569,6 +573,11 @@ def test_a_manual_skill_added_without_its_block_keeps_only_its_name_and_files(
     assert rules["elements"] == "PASS" and rules["no-outcomebound-text"] == "PASS"
     _clean(workdir)
     note.write_text(note.read_text("utf-8").replace(manual, ""), encoding="utf-8")
+    assert RUN.element_problems(workdir, arm) == ["skill:explain-spec's manual name missing"]
+
+    # A looser trigger is not the installed manual route, even with the correct skill name.
+    wrong = manual.replace("or a file you are reading directs you to it", "whenever useful")
+    note.write_text("\n".join([block[0], wrong, block[-1], ""]), encoding="utf-8")
     assert RUN.element_problems(workdir, arm) == ["skill:explain-spec's manual name missing"]
 
 

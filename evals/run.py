@@ -1235,7 +1235,7 @@ def _manual_parts(line: str) -> tuple[str, list[str], list[str]] | None:
     """The skill root, skill names and fragment ids of the install's manual line."""
 
     found = re.fullmatch(
-        r"Read only when the person names it"
+        r"Read only when the person names it or a file you are reading directs you to it"
         r"(?: \(skills under `([^`]+)/<name>/SKILL.md`\))?: (.+)\.",
         line,
     )

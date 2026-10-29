@@ -151,7 +151,8 @@ CONDITIONS = {
 NATIVE_DESCRIPTIONS = {
     "using-outcomebound": "Use for delivery route, stage, exposure, growth or time forecasts.",
     "decision-brief": (
-        "Use when a decision compares several options, a brief or page is asked for, or a granted act is refused."
+        "Use when a decision compares several options, a brief or page is asked for, or a "
+        "granted act is refused."
     ),
     "gather-requirements": "Use for unsettled source requirements or competing request readings.",
     "tests-worth-keeping": (
@@ -197,7 +198,7 @@ RULES = {
         "perform such an act counts.\n"
         "Undo or clean up only what this task made: before a restore, checkout or removal, "
         "compare what it would remove with what the file or folder held when you began.\n"
-        "Resuming work (a handoff, \"carry on\"): before new work, report the inventory "
+        'Resuming work (a handoff, "carry on"): before new work, report the inventory '
         "(worktrees; staged, unstaged and untracked changes; open items); where uncommitted work "
         "waits and nothing landed since, ask whether the pause was deliberate and state the "
         "default you take; continue what your grant covers.\n"
