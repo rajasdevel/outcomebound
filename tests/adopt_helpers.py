@@ -113,8 +113,9 @@ INSTALLED_RULES = {
         "A handoff names who takes the next action; where no one is established, report that "
         "gap and do not call the handover done.",
         "Keep a message between calls to a line, and give the full report once, at the end of "
-        "the turn: what changed, what ran and its result, what failed, what is held, and each "
-        "question; a report or question a rule asks for before an act still comes before it.",
+        "the turn: what changed, what ran and its result, what failed, and each choice still the "
+        "person's, asked as a question; a report or question a rule asks for before an act still "
+        "comes before it.",
         "One observation settles a state: a command's own output or one read of the remote shows "
         "a push, a commit or a deployment; check it again only when something may have changed "
         "it.",
@@ -173,9 +174,10 @@ INSTALLED_RULES = {
         "Before dependent writes or delegation: disclose in one line each assumption that sets "
         "direction, inherited ones included, unless already disclosed, and record it with the "
         "work; this asks nothing.",
-        "Before asking the person: check prior rulings and attempts (`outcomebound brief "
-        "lookup <words>`, handoffs, issues, history); ask only what remains theirs, and once a "
-        "held act's owner and next step are settled, report it without asking again.",
+        "Before asking the person: check prior rulings and attempts, with `outcomebound brief "
+        "lookup <words>` and the history of the files concerned (`git log`), handoffs and "
+        "issues; ask only what remains theirs, and once a held act's owner and next step are "
+        "settled, report it without asking again.",
         "A routine decision is asked in plain words: the question, your recommendation, its "
         "consequence, what waits and whether it can be undone; answer a question with its "
         "answer, not a brief.",
