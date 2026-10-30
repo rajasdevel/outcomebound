@@ -541,9 +541,10 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     if arm in RUN.INSTALLED:
         assert pointer not in note and "id=project-facts" in note, note
         assert (
-            "- before retiring a component that people or other systems use, or changing the "
-            "route by which a change reaches its users (a release by the route it already has is "
-            "not one): read "
+            "- before retiring what people or other systems rely on or relied on (an interface, "
+            "command, format, data or route), or changing the route by which a change reaches its "
+            "users (removing internal code, tests or tools, or a release by the route it already "
+            "has, is not one): read "
             ".agents/skills/using-outcomebound/SKILL.md"
         ) in note.splitlines()
         manual = note.split("Read only when the person names it", 1)[1]

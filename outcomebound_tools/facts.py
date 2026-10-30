@@ -643,7 +643,9 @@ MANUAL_FRAGMENTS = frozenset(
 # Manual fragments read just before the act their condition names, never on other tasks.
 FRAGMENT_ACTS = {
     "workspace": (
-        "before creating or removing a worktree, or removing a container, volume or named data"
+        "before creating, resuming or removing a worktree, writing or resuming a handoff, or "
+        "removing a container, volume or named data, and when a write under `.agents/` is "
+        "refused"
     ),
     "multi-agent": "before writing a delegate's brief or integrating a delegate's work",
     "research": "before running `outcomebound research`",

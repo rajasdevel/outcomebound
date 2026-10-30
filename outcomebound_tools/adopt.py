@@ -190,8 +190,10 @@ ACTS = {
         "before reading or writing a card in a tracker outside the project's ticket store"
     ),
     "using-outcomebound": (
-        "before retiring a component that people or other systems use, or changing the route by "
-        "which a change reaches its users (a release by the route it already has is not one)"
+        "before retiring what people or other systems rely on or relied on (an interface, "
+        "command, format, data or route), or changing the route by which a change reaches its "
+        "users (removing internal code, tests or tools, or a release by the route it already "
+        "has, is not one)"
     ),
     "run-acceptance": "before preparing or recording a person's acceptance of a delivered change",
     "review-council": "before asking another model or harness for a review",
@@ -230,11 +232,6 @@ RULES = {
         "a lock or half-done change.\n"
         "A handoff names who takes the next action; where no one is established, report that "
         "gap and do not call the handover done.\n"
-        "Writing or resuming a handoff: keep it and its evidence where another run finds it (a "
-        "file under `.agents/handoffs/`, never a temporary folder); name landed work with each "
-        "check's verdict, work in flight, blocks, the next step and the person's open decisions; "
-        "treat a note as a claim and re-check it against its source; run `outcomebound "
-        "instructions check .` and rely on no note it flags.\n"
         "Keep a message between calls to a line, and give the full report once, at the end of "
         "the turn: what changed, what ran and its result, what failed, and each choice still the "
         "person's, asked as a question; a report or question a rule asks for before an act still "
