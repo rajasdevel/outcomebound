@@ -14,6 +14,8 @@ from pathlib import Path, PurePath, PureWindowsPath
 
 import pytest
 
+from evals.session_permissions import seal_refusal
+
 ROOT = Path(__file__).resolve().parent.parent
 WINDOWS = os.name == "nt"
 
@@ -125,17 +127,10 @@ EVAL_REASON = _eval_reason()
 needs_posix_bash = pytest.mark.skipif(bool(EVAL_REASON), reason=EVAL_REASON or "-")
 posix_only = pytest.mark.skipif(WINDOWS, reason="needs a POSIX feature Windows lacks")
 not_root = pytest.mark.skipif(
-    "__import__('tests.portable', fromlist=['root_user']).root_user()",
-    reason="the user is root, and root ignores file modes and read-only folders",
+    root_user(), reason="the user is root, and root ignores file modes and read-only folders"
 )
-needs_session_seal = pytest.mark.skipif(
-    "__import__('evals.session_permissions', fromlist=['seal_refusal']).seal_refusal() != ''",
-    reason=(
-        "long sessions require POSIX permission seals; Windows cannot enforce them"
-        if WINDOWS
-        else "long sessions require permission seals; effective uid 0 bypasses them"
-    ),
-)
+SEAL_REFUSAL = seal_refusal()
+needs_session_seal = pytest.mark.skipif(bool(SEAL_REFUSAL), reason=SEAL_REFUSAL or "-")
 needs_posix_processes = pytest.mark.skipif(
     WINDOWS, reason="needs POSIX process groups and signals; Windows does not provide them"
 )

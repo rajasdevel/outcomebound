@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import runpy
 import shlex
 import shutil
@@ -297,7 +298,9 @@ def test_reported_project_script_is_run(project, passing):
         f"#!{sys.executable}\nraise SystemExit({0 if passing else 1})\n", encoding="utf-8"
     )
     script.chmod(0o755)
-    assert DELIVERED["report"]("python3 tools/check.py", root=project) is passing
+    # Windows runs no script by its first line, so there the check names its interpreter.
+    command = "python3 tools/check.py" if os.name == "nt" else "./tools/check.py"
+    assert DELIVERED["report"](command, root=project) is passing
 
 
 def test_read_only_git_checks_keep_the_described_index(project):
