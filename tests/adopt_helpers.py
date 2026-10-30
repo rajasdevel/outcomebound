@@ -66,8 +66,8 @@ CONDITIONAL_READS = {
 # Manual native skills still require these reads immediately before the named acts.
 ACT_READS = {
     "using-outcomebound": (
-        "before retiring a component, or changing the route by which a change reaches its users "
-        "(a release by the route it already has is not one)"
+        "before retiring a component that people or other systems use, or changing the route by "
+        "which a change reaches its users (a release by the route it already has is not one)"
     ),
     "review-council": "before asking another model or harness for a review",
     "slice-tickets": "before drafting tickets, or publishing them to the ticket store",
@@ -112,6 +112,11 @@ INSTALLED_RULES = {
         "a lock or half-done change.",
         "A handoff names who takes the next action; where no one is established, report that "
         "gap and do not call the handover done.",
+        "Writing or resuming a handoff: keep it and its evidence where another run finds it (a "
+        "file under `.agents/handoffs/`, never a temporary folder); name landed work with each "
+        "check's verdict, work in flight, blocks, the next step and the person's open decisions; "
+        "treat a note as a claim and re-check it against its source; run `outcomebound "
+        "instructions check .` and rely on no note it flags.",
         "Keep a message between calls to a line, and give the full report once, at the end of "
         "the turn: what changed, what ran and its result, what failed, and each choice still the "
         "person's, asked as a question; a report or question a rule asks for before an act still "

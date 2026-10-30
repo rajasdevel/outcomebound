@@ -547,8 +547,8 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
     [
         (
             "fragment:workspace",
-            "- before creating or removing a worktree, resuming another session's or person's "
-            "work, writing a handoff, or removing a container, volume or named data: read "
+            "- before creating or removing a worktree, or removing a container, volume or named "
+            "data: read "
             ".outcomebound/fragments/workspace.md",
             "Read only when the person names it or a file you are reading directs you to it: "
             "`.outcomebound/fragments/workspace.md`.",
@@ -575,8 +575,9 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
         ),
         (
             "skill:using-outcomebound",
-            "- before retiring a component, or changing the route by which a change reaches "
-            "its users (a release by the route it already has is not one): read "
+            "- before retiring a component that people or other systems use, or changing the "
+            "route by which a change reaches its users (a release by the route it already has is "
+            "not one): read "
             ".agents/skills/using-outcomebound/SKILL.md",
             "Read only when the person names it or a file you are reading directs you to it "
             "(skills under `.agents/skills/<name>/SKILL.md`): `using-outcomebound`.",

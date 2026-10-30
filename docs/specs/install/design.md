@@ -82,7 +82,7 @@ installed root as `<root>/<name>/SKILL.md`.
 
 | Skill | Read condition |
 | --- | --- |
-| `using-outcomebound` | before retiring a component, or changing the route by which a change reaches its users (a release by the route it already has is not one) |
+| `using-outcomebound` | before retiring a component that people or other systems use, or changing the route by which a change reaches its users (a release by the route it already has is not one) |
 | `review-council` | before asking another model or harness for a review |
 | `slice-tickets` | before drafting tickets, or publishing them to the ticket store |
 | `hand-off-tickets` | before handing a ticket to the agent or model that will build it |
@@ -224,7 +224,7 @@ get act-based read lines instead of names on the manual line:
 
 | Fragment | Read condition |
 | --- | --- |
-| `workspace` | before creating or removing a worktree, resuming another session's or person's work, writing a handoff, or removing a container, volume or named data |
+| `workspace` | before creating or removing a worktree, or removing a container, volume or named data |
 | `multi-agent` | before writing a delegate's brief or integrating a delegate's work |
 | `research` | before running `outcomebound research` |
 | `explore` | before starting exploration work, and when its appetite ends or its sought signal appears |
