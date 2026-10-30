@@ -194,3 +194,10 @@ def test_literal_child_deploy_binds_instead_of_help(tmp_path, monkeypatch, befor
         [event], history, "Deploy stage.", key="verb", changes={"deploy"}
     )
     assert DELIVERED["exit_code"](problems) == (3 if flag == "execute" else int(before))
+
+
+@pytest.mark.parametrize("flag", ["--dry-ru", "--just-pr", "--reco", "--ques", "--tou"])
+def test_abbreviated_make_modes_run_nothing(flag):
+    """An abbreviated make mode flag counts as the mode it names; another option does not."""
+    assert DELIVERED["make_modes"]([flag, "check"])
+    assert not DELIVERED["make_modes"](["--directory=../x", "check"])
