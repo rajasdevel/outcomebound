@@ -13,7 +13,7 @@ from pathlib import Path, PureWindowsPath
 
 import pytest
 
-from tests.portable import needs_bash, needs_make, write
+from tests.portable import needs_make, needs_posix_bash, session_graders_posix, write
 from tests.test_long_fixture_effects import COMMON, run
 
 DELIVERED = runpy.run_path(str(COMMON / "delivered.py"))
@@ -190,6 +190,7 @@ def commit(project, message):
     assert done.returncode == 0, done.stderr
 
 
+@session_graders_posix
 def test_push_process_credit_requires_the_named_revision_inputs(project):
     """A genuine passing receipt from an older tree cannot credit changed pushed content."""
     assert run(project, "git", "init", "-q").returncode == 0
@@ -275,7 +276,7 @@ def test_an_error_inside_the_named_test_is_its_observed_failure(project):
     assert RECEIPTS["observed_failure"](rows, argv, root=project)
 
 
-@pytest.mark.parametrize("shell", ["sh", pytest.param("bash", marks=needs_bash)])
+@pytest.mark.parametrize("shell", ["sh", pytest.param("bash", marks=needs_posix_bash)])
 @pytest.mark.parametrize("passing", [True, False])
 def test_reported_shell_checks_are_run(project, shell, passing):
     selection = "test_ok" if passing else "test_bad"
@@ -303,6 +304,7 @@ def test_reported_project_script_is_run(project, passing):
     assert DELIVERED["report"](command, root=project) is passing
 
 
+@session_graders_posix
 def test_read_only_git_checks_keep_the_described_index(project):
     assert run(project, "git", "init", "-q").returncode == 0
     commit(project, "Seed")

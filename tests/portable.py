@@ -131,6 +131,11 @@ not_root = pytest.mark.skipif(
 )
 SEAL_REFUSAL = seal_refusal()
 needs_session_seal = pytest.mark.skipif(bool(SEAL_REFUSAL), reason=SEAL_REFUSAL or "-")
+# The session graders rerun a session's checks only where a long session runs, and the runner
+# refuses one on Windows (`evals.session_permissions.seal_refusal`).
+session_graders_posix = pytest.mark.skipif(
+    WINDOWS, reason="the session graders run only where a long session runs; Windows refuses one"
+)
 needs_posix_processes = pytest.mark.skipif(
     WINDOWS, reason="needs POSIX process groups and signals; Windows does not provide them"
 )
