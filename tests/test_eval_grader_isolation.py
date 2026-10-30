@@ -25,7 +25,7 @@ import pytest
 
 from evals.harnesses import CallResult, Request
 from tests.eval_helpers import FIXTURES, HERMETIC_GIT, RUN, copy_fixture_sources, transcript
-from tests.portable import needs_posix_bash
+from tests.portable import needs_posix_bash, needs_session_seal
 from tests.test_long_eval_protocol import FakeHarness
 
 pytestmark = needs_posix_bash
@@ -288,7 +288,16 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Callable[..., di
 # --- no grader in the workspace or its history ---------------------------------------------
 
 
-@pytest.mark.parametrize("name", RUN.fixture_names())
+# A long session refuses to run where its seals cannot hold (as root, or on Windows).
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(name, marks=needs_session_seal)
+        if (RUN.FIXTURES / name / RUN.SESSION_FILE).is_file()
+        else name
+        for name in RUN.fixture_names()
+    ],
+)
 def test_the_sealed_copy_holds_every_file_the_checks_of_the_fixture_read(
     built: Callable[..., dict[str, Any]], name: str
 ) -> None:

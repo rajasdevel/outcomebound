@@ -16,6 +16,11 @@ from tests.test_long_fixture_sealed_failures import EFFECTS, action
 DELIVERED = reexecution.DELIVERED
 project = reexecution.project
 
+on_default_path = shell_feature("command -p -- python3 -c pass", "python3 on the default PATH")
+on_system_path = shell_feature(
+    "env -i PATH=/usr/bin:/bin python3 -c pass", "python3 in /usr/bin or /bin"
+)
+
 
 @needs_posix_bash
 @pytest.mark.parametrize("interpreter", ["python3", "python3.11"])
@@ -93,8 +98,9 @@ def test_unresolved_command_is_a_gap(project, text):
         pytest.param("time {}", marks=shell_feature("time true", "time")),
         pytest.param("time -p {}", marks=shell_feature("time -p true", "time -p")),
         "command -- {}",
-        "command -p -- {}",
-        "env -i PATH=/usr/bin:/bin {}",
+        # Both search only the system folders, where an image may not keep python3.
+        pytest.param("command -p -- {}", marks=on_default_path),
+        pytest.param("env -i PATH=/usr/bin:/bin {}", marks=on_system_path),
         "env -u UNUSED MODE=check {}",
         "nice -n 1 {}",
         "exec {}",

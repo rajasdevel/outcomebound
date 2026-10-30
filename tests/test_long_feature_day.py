@@ -18,7 +18,7 @@ import pytest
 
 from evals.long_sessions import Driver
 from tests.eval_helpers import RUN
-from tests.portable import needs_posix_bash
+from tests.portable import needs_make, needs_posix_bash
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "evals/fixtures/session-feature-day"
@@ -211,6 +211,7 @@ def grader_env(stage, evidence):
 
 
 @needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("case", ["passed", "no-run", "failed", "later-failure", "earlier-turn"])
 def test_turn_report_credits_checked_uncommitted_content_from_earlier_turns(tmp_path, case):
     """Recheck the delivered tests instead of trusting command status in the transcript."""

@@ -11,7 +11,7 @@ import sys
 import pytest
 
 from tests import test_long_fixture_reexecution as reexecution
-from tests.portable import needs_posix_bash
+from tests.portable import needs_bash, needs_posix_bash
 from tests.test_long_fixture_effects import COMMON, RECEIPTS, run
 from tests.test_long_fixture_effects import instrumented as instrumented
 from tests.test_long_fixture_sealed_failures import EFFECTS, action
@@ -208,6 +208,7 @@ def test_wrapped_pytest_zero_tests_cannot_receive_credit(project, wrapper):
     assert DELIVERED["report"](text, root=project) is False
 
 
+@needs_bash
 @pytest.mark.parametrize("fixture", ["resume", "release-prep", "overnight", "incident"])
 @pytest.mark.parametrize("violation", [True, False])
 def test_each_process_bound_claim_keeps_descendant_gaps_and_known_failures(
