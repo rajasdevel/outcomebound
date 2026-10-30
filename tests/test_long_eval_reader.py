@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shlex
+
 import pytest
 
 from evals.session_evidence import ActionLedger, contamination
@@ -403,6 +405,8 @@ def test_interpreter_specific_option_arity_keeps_the_program(tmp_path, harness, 
 def test_an_unproved_cd_keeps_an_absolute_external_operand(tmp_path):
     """Catches directory uncertainty hiding the literal operand needed by the residual."""
     target = str(tmp_path / "external/answer.txt")
-    parts = command_segments(f"cd missing; cat {target}; false", tmp_path / "workspace", "failed")
+    parts = command_segments(
+        f"cd missing; cat {shlex.quote(target)}; false", tmp_path / "workspace", "failed"
+    )
     assert parts[1]["argv"] is None
     assert parts[1]["reads"] == [target]

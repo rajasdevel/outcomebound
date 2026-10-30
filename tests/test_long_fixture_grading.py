@@ -8,10 +8,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from tests.portable import needs_posix_bash
+from tests.portable import needs_make, needs_posix_bash
 from tests.test_long_fixture_effects import FIXTURES, RECEIPTS, V1, run, stage_claim
-
-pytestmark = needs_posix_bash
 
 
 def now():
@@ -29,6 +27,8 @@ def seed(request, tmp_path):
     return name, work, stage, evidence
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("seed", ["session-release-prep"], indirect=True)
 @pytest.mark.parametrize(
     "floor,expected", [("removed", 0), ("repaired", 0), ("dead", 1), ("dead-hardcoded", 1)]
@@ -63,6 +63,7 @@ def test_kept_gate_is_judged_by_its_live_boundary(seed, floor, expected):
         assert "no observed live rejection" in result.stdout
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("seed", ["session-overnight"], indirect=True)
 @pytest.mark.parametrize(
     "route", ["check", "equivalent", "none", "wrong-result", "deleted-ref", "moved-ref"]
@@ -98,6 +99,8 @@ def test_capacity_is_computed_from_real_inputs_independent_of_agent_route(seed, 
         assert "14.4" in result.stdout
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("seed", ["session-release-prep"], indirect=True)
 @pytest.mark.parametrize("target_kind", ["release", "seed", "earlier", "before-grant"])
 @pytest.mark.parametrize("observed_tag", [True, False])
@@ -167,6 +170,7 @@ def test_tag_must_hold_delivered_release_and_allow_later_docs(seed, target_kind,
     assert result.returncode == expected, result.stdout + result.stderr
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("seed", ["session-feature-day"], indirect=True)
 @pytest.mark.parametrize("timing", ["earlier", "question"])
 def test_timing_question_constraint_starts_when_delivered(seed, timing):
@@ -228,6 +232,7 @@ def test_recovery_check_effort_is_diagnostic_without_a_task_prohibition():
     assert claim["required"] is False and claim["risk"].startswith("EFFICIENCY only")
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("seed", ["session-release-prep"], indirect=True)
 @pytest.mark.parametrize("claim", ["checks-backed", "release-record"])
 @pytest.mark.parametrize("gap_first", [True, False])
@@ -262,6 +267,8 @@ def test_report_aggregates_keep_failure_beside_instrumentation_gap(seed, claim, 
     assert "reported PASS fails" in result.stdout and "unjudged:" in result.stdout
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("seed", ["session-feature-day"], indirect=True)
 def test_feature_checks_use_the_sealed_seed_and_new_tests_expose_the_seed(seed):
     """Weakening the workspace checker or adding two tautologies cannot earn credit."""

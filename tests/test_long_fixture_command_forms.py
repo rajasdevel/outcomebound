@@ -9,15 +9,15 @@ import shutil
 import pytest
 
 from tests import test_long_fixture_reexecution as reexecution
-from tests.portable import needs_posix_bash
+from tests.portable import needs_exec_a, needs_make, needs_posix_bash, shell_feature
 from tests.test_long_fixture_effects import FIXTURES, run
 from tests.test_long_fixture_sealed_failures import EFFECTS, action
 
-pytestmark = needs_posix_bash
 DELIVERED = reexecution.DELIVERED
 project = reexecution.project
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("interpreter", ["python3", "python3.11"])
 @pytest.mark.parametrize("companion", [True, False])
 def test_real_assignment_prefixed_baseline_cannot_be_dropped(tmp_path, interpreter, companion):
@@ -34,6 +34,7 @@ def test_real_assignment_prefixed_baseline_cannot_be_dropped(tmp_path, interpret
     assert credit == ([False] if shutil.which(interpreter) else []) + ([True] if companion else [])
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("flag", ["--he", "--hel"])
 def test_environment_parser_accepts_abbreviated_help_without_a_deploy(tmp_path, flag):
     """Help exclusion follows the fixture's actual argparse abbreviation behavior."""
@@ -49,6 +50,7 @@ def test_environment_parser_accepts_abbreviated_help_without_a_deploy(tmp_path, 
     assert (log.read_bytes() if log.is_file() else b"") == before
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("passing", [True, False])
 @pytest.mark.parametrize("companion_first", [True, False])
 def test_assignment_prefixed_check_is_executed(project, passing, companion_first):
@@ -83,19 +85,20 @@ def test_unresolved_command_is_a_gap(project, text):
     assert all(reason.startswith("unjudged:") for reason in problems)
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("empty", [True, False])
 @pytest.mark.parametrize(
     "wrapper",
     [
-        "time {}",
-        "time -p {}",
+        pytest.param("time {}", marks=shell_feature("time true", "time")),
+        pytest.param("time -p {}", marks=shell_feature("time -p true", "time -p")),
         "command -- {}",
         "command -p -- {}",
         "env -i PATH=/usr/bin:/bin {}",
         "env -u UNUSED MODE=check {}",
         "nice -n 1 {}",
         "exec {}",
-        "exec -a check {}",
+        pytest.param("exec -a check {}", marks=needs_exec_a),
         "sh -ec {}",
         "bash -euc {}",
         "env MODE=check nice -n 1 sh -ec {}",
@@ -110,8 +113,18 @@ def test_launchers_preserve_nonempty_unit_requirement(project, empty, wrapper):
     assert DELIVERED["report"](text, root=project) is (not empty)
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("mode", ["", "-n", "-q", "-t", "--dry-run"])
-@pytest.mark.parametrize("wrapper", ["{}", "time {}", "command -- {}", "sh -ec {}"])
+@pytest.mark.parametrize(
+    "wrapper",
+    [
+        "{}",
+        pytest.param("time {}", marks=shell_feature("time true", "time")),
+        "command -- {}",
+        "sh -ec {}",
+    ],
+)
 @pytest.mark.parametrize(
     "operand", ["-Itools", "-ItoolsI", "-Ctools", "-fMakefile", "--jobs", "--load-average"]
 )

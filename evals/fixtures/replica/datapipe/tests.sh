@@ -728,7 +728,7 @@ class PipelineTest(unittest.TestCase):
         for _id, user, when, kind, _page in self.events:
             if kind == "bot":
                 continue
-            moment = datetime.fromisoformat(when)
+            moment = datetime.fromisoformat(when.replace("Z", "+00:00"))
             if user not in last or (moment - last[user]).total_seconds() > 30 * 60:
                 sessions += 1
             last[user] = moment

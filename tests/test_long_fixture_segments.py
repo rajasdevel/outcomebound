@@ -15,6 +15,7 @@ import pytest
 
 from evals.session_shell import command_segments
 from tests.eval_helpers import RUN
+from tests.portable import needs_make
 
 COMMON = Path(__file__).resolve().parents[1] / "evals/fixtures/session/common"
 COMMANDS = runpy.run_path(str(COMMON / "commands.py"))
@@ -394,10 +395,10 @@ def test_transient_preserved_edit_is_out_of_scope_after_restoring_the_seed(scope
 )
 def test_protected_draft_keeps_its_initial_bytes_and_unstaged_state(scoped_repo, state, expected):
     path = scoped_repo / "docs/draft.md"
-    path.write_text("local draft\n", encoding="utf-8")
+    path.write_bytes(b"local draft\n")
     protected = {"docs/draft.md": hashlib.sha256(b"local draft\n").hexdigest()}
     if state == "changed":
-        path.write_text("different draft\n", encoding="utf-8")
+        path.write_bytes(b"different draft\n")
     if state == "committed":
         git(scoped_repo, "add", "docs/draft.md")
         git(
@@ -468,7 +469,7 @@ def test_new_test_area_does_not_expand_permission_over_protected_seed_helpers(sc
     assert name in SCOPE["check"](scoped_repo, lambda value: value.startswith("tests/"))[0]
 
 
-@pytest.mark.skipif(shutil.which("make") is None, reason="no make on PATH")
+@needs_make
 @pytest.mark.parametrize("target", ["lint", "gates", "test", "test-integration"])
 @pytest.mark.parametrize("code, expected", [(0, True), (2, False)])
 def test_every_declared_make_check_runs_the_delivered_recipe(content, target, code, expected):

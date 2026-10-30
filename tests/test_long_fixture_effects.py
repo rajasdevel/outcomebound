@@ -13,10 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.portable import needs_posix_bash
-
-pytestmark = needs_posix_bash
-needs_make = pytest.mark.skipif(shutil.which("make") is None, reason="make is not installed")
+from tests.portable import needs_make, needs_posix_bash
 
 COMMON = Path(__file__).resolve().parents[1] / "evals/fixtures/session/common"
 RECEIPTS = runpy.run_path(str(COMMON / "receipts.py"))
@@ -82,6 +79,7 @@ def instrumented(tmp_path):
 DELIVERED = runpy.run_path(str(COMMON / "delivered.py"))
 
 
+@needs_posix_bash
 @needs_make
 def test_failed_make_target_cannot_borrow_successful_prerequisites(instrumented):
     """The grader runs the false parent recipe even without receipts."""
@@ -89,6 +87,7 @@ def test_failed_make_target_cannot_borrow_successful_prerequisites(instrumented)
     assert DELIVERED["report"]("make docs-check", root=instrumented) is True
 
 
+@needs_posix_bash
 @needs_make
 def test_make_dry_run_does_not_hide_a_failure(instrumented, monkeypatch):
     """A previous dry run and inherited MAKEFLAGS cannot satisfy a report."""
@@ -97,6 +96,7 @@ def test_make_dry_run_does_not_hide_a_failure(instrumented, monkeypatch):
     assert DELIVERED["report"]("make check", root=instrumented) is False
 
 
+@needs_posix_bash
 @pytest.mark.parametrize(
     "text",
     ["git diff -- tools/docs_check.py", "ls tools/docs_check.py", "cat tests/test_example.py"],
@@ -229,6 +229,7 @@ def fixture_seed(request, tmp_path_factory):
     return request.param, work, stage, evidence
 
 
+@needs_posix_bash
 def test_skipped_and_lazy_commands_never_fail_required_effect_bounds(fixture_seed):
     """Catches the review's false && commands across all five sessions and six briefs."""
     name, work, stage, evidence = fixture_seed
@@ -246,6 +247,7 @@ def test_skipped_and_lazy_commands_never_fail_required_effect_bounds(fixture_see
         assert result.returncode == 0, (name, claim, result.stdout, result.stderr)
 
 
+@needs_posix_bash
 def test_new_test_assets_are_in_scope_and_protected_seed_is_not(fixture_seed):
     """An arbitrary test-data filename is owned; an unrelated seed file stays protected."""
     name, work, stage, evidence = fixture_seed
@@ -290,6 +292,7 @@ def test_new_test_assets_are_in_scope_and_protected_seed_is_not(fixture_seed):
     assert result.returncode == 1 and "out-of-scope" in result.stdout, result.stdout + result.stderr
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("remote_name", [".remotes/origin.git", ".remote.git"])
 def test_real_ungranted_push_and_transient_tag_keep_ref_evidence(instrumented, remote_name):
     """The same dictionary-mutation push the reader missed must leave ref receipts."""
@@ -317,6 +320,7 @@ def test_real_ungranted_push_and_transient_tag_keep_ref_evidence(instrumented, r
     assert len(effects["tags"](instrumented)) == 2
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("fixture_seed", ["session-release-prep", "session-resume"], indirect=True)
 def test_real_deploy_fails_the_effect_bound_without_a_command_record(fixture_seed):
     name, work, stage, evidence = fixture_seed
@@ -327,6 +331,7 @@ def test_real_deploy_fails_the_effect_bound_without_a_command_record(fixture_see
     (work / "env/actions.jsonl").unlink()
 
 
+@needs_posix_bash
 def test_setup_ref_changes_are_not_charged_to_the_agent(instrumented, monkeypatch):
     """Arm installation can move the seed before the first person turn starts."""
     assert (
@@ -348,6 +353,7 @@ def test_setup_ref_changes_are_not_charged_to_the_agent(instrumented, monkeypatc
     assert [row["name"] for row in effects["tags"](instrumented)] == ["refs/tags/ungranted"]
 
 
+@needs_posix_bash
 def test_local_worktree_commits_are_never_remote_pushes(instrumented):
     """A child worktree uses the common ref hook but still changes a local branch."""
     assert (

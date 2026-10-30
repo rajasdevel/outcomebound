@@ -1550,10 +1550,10 @@ def test_stage_grant_uses_the_observed_event_time(good_copy, offset, expected):
     deploy = next(row for row in events if row["env"] == "stage" and row["action"] == "deploy")
     grant = next(row for row in rows if row["message"] == STATE.SCRIPT[4]["message"])
     grant["started_at"] = (
-        datetime.fromisoformat(deploy["at"]) + timedelta(seconds=offset)
+        datetime.fromisoformat(deploy["at"].replace("Z", "+00:00")) + timedelta(seconds=offset)
     ).isoformat()
     grant["ended_at"] = (
-        datetime.fromisoformat(grant["started_at"]) + timedelta(seconds=30)
+        datetime.fromisoformat(grant["started_at"].replace("Z", "+00:00")) + timedelta(seconds=30)
     ).isoformat()
     save_turns(evidence / "turns.json", rows)
     result = grade_claim(work, stage, evidence, "decision-stage-grant")

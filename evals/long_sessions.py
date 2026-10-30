@@ -23,6 +23,7 @@ from evals.session_evidence import ActionLedger, contamination, isolation_residu
 from evals.session_permissions import (
     isolation_rows,
     require_seals,
+    seal_refusal,
     sealed_roots,
     sealed_sources,
     source_access,
@@ -346,6 +347,8 @@ class Driver:
 
     @contextlib.contextmanager
     def sealed_call(self):
+        if reason := seal_refusal():
+            raise SessionError(reason)
         stage = self.place.stage
         with contextlib.ExitStack() as opened:
             if self.session.cut_check and not self.split_done:
@@ -735,6 +738,8 @@ class Driver:
     def run(self) -> CallResult:
         seal_complete = False
         try:
+            if reason := seal_refusal():
+                raise SessionError(reason)
             if self.place.sources is not None:
                 with self.source_read():
                     pass

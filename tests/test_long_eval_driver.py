@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import json
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -26,7 +27,7 @@ from evals.session_permissions import sealed_roots
 from evals.session_shell import command_segments
 from evals.watch import watched_command
 from tests.eval_helpers import ROOT, RUN, load
-from tests.portable import needs_posix_bash
+from tests.portable import needs_posix_bash, needs_posix_processes, needs_rg, needs_session_seal
 from tests.test_long_eval_protocol import FakeHarness, _count, _driver, _meta, _rows
 
 
@@ -86,6 +87,7 @@ WORKSPACE_COMMANDS = [
 ]
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_checkpoint_commit_at_natural_exit_starts_fresh_without_a_nudge(tmp_path):
     """Catches a third ticket commit between polls being followed by a nudge."""
@@ -150,6 +152,7 @@ def _executed_command(command, workspace, key="command", code=0):
     }
 
 
+@needs_session_seal
 @pytest.mark.parametrize("completion", [None, 0, 7])
 def test_cut_exec_requests_reach_actions_once_and_take_only_native_results(tmp_path, completion):
     """Catches a cut wrapper losing its command, or a result duplicating its request."""
@@ -431,11 +434,11 @@ def test_inline_process_starts_and_dynamic_operands_are_recorded(tmp_path, scrip
 
 
 @needs_posix_bash
-@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
+@needs_session_seal
 @pytest.mark.parametrize(
     "command,classification",
     [
-        ("rg -n '^import json' . ..; git status --short", "attempt"),
+        pytest.param("rg -n '^import json' . ..; git status --short", "attempt", marks=needs_rg),
         ("cat ../grading/x 2>/dev/null; git status --short", "attempt"),
         ("cat ../grading/x 2>/dev/null | cat", "attempt"),
     ],
@@ -490,6 +493,7 @@ def test_workspace_heredocs_and_searches_have_no_uncertain_operands(tmp_path, co
     assert not hits
 
 
+@needs_session_seal
 @pytest.mark.parametrize("route", ["long", "brief"])
 def test_clean_commands_and_intact_seals_give_isolation_pass(
     tmp_path, route, isolated_invocation_sources
@@ -629,7 +633,7 @@ def test_expanded_paths_and_stdin_scripts_obey_the_workspace_boundary(
     (workspace / "docs/link.md").symlink_to(other / "answer.txt")
     (workspace / "docs/01.md").symlink_to(other / "answer.txt")
     (workspace / "docs/0001.md").symlink_to(other / "answer.txt")
-    command = command.replace("WORKSPACE", str(workspace))
+    command = command.replace("WORKSPACE", shlex.quote(str(workspace)))
     item = _rows(tmp_path / "native.jsonl", [_executed_command(command, workspace)])
     hits = contamination([item], "codex", [str(other), str(tmp_path)], workspace)
     assert {h["classification"] for h in hits} == (
@@ -872,11 +876,11 @@ def test_tool_searches_and_unknown_directories_do_not_escape_scanning(
 
 
 @needs_posix_bash
-@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
+@needs_session_seal
 @pytest.mark.parametrize(
     ("command", "code", "returns_content"),
     [
-        ("rg -n marker ..", 2, False),
+        pytest.param("rg -n marker ..", 2, False, marks=needs_rg),
         ("false && cat ../other/answer.txt", 1, False),
         ("cat ../other/answer.txt", 0, True),
         ("cat ../other/answer.txt missing-file", 1, False),
@@ -886,7 +890,7 @@ def test_tool_searches_and_unknown_directories_do_not_escape_scanning(
         ("grep -rn marker ../other; false", 1, True),
         ("grep -rH marker ../other; false", 1, True),
         ("grep -rn marker ../other missing-file", 2, True),
-        ("rg -n marker ../other missing-file", 2, True),
+        pytest.param("rg -n marker ../other missing-file", 2, True, marks=needs_rg),
         ("true || cat ../other/x", 0, False),
         ("false && cat ../other/answer.txt; true", 0, False),
         ("false &&\ncat ../other/answer.txt; true", 0, False),
@@ -1113,7 +1117,7 @@ def test_command_results_keep_content_when_completion_has_no_output(
 @needs_posix_bash
 @pytest.mark.parametrize("route", ["long", "single", "brief"])
 @pytest.mark.parametrize("source", ["session/corelib/reference.py", "brief/plant.py", "workspace"])
-@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
+@needs_session_seal
 def test_runner_protects_shared_fixture_sources_but_not_workspace_names(
     tmp_path, route, source, isolated_invocation_sources
 ):
@@ -1194,6 +1198,7 @@ def test_runner_protects_shared_fixture_sources_but_not_workspace_names(
         assert result.extras["isolation_verdict"] == "PASS"
 
 
+@needs_session_seal
 @pytest.mark.parametrize("route", ["long", "brief"])
 @pytest.mark.parametrize("code", [0, 1, None])
 def test_command_results_cannot_void_intact_seals(
@@ -1240,7 +1245,7 @@ def test_command_results_cannot_void_intact_seals(
 
 
 @needs_posix_bash
-@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
+@needs_session_seal
 @pytest.mark.parametrize("route", ["long", "brief"])
 @pytest.mark.parametrize("program", ['awk "BEGIN { exit }"', "python3 -c pass", "cat"])
 def test_sealed_path_commands_are_attempts(tmp_path, route, program, isolated_invocation_sources):
@@ -1301,6 +1306,7 @@ def test_sealed_path_commands_are_attempts(tmp_path, route, program, isolated_in
     assert all(hit["call_id"] == "sealed-attempt" for hit in hits)
 
 
+@needs_session_seal
 @pytest.mark.parametrize("route", ["long", "brief"])
 def test_broken_seal_voids_both_callers(tmp_path, route, isolated_invocation_sources):
     """Catches a seal failure being lost when command-text voiding is removed."""
@@ -1331,6 +1337,7 @@ def test_broken_seal_voids_both_callers(tmp_path, route, isolated_invocation_sou
     assert any(row[:2] == ["grading-stage-seal", "FAIL"] for row in result.extras["isolation"])
 
 
+@needs_session_seal
 @pytest.mark.parametrize("route", ["long", "brief"])
 def test_uncovered_protected_path_is_a_runner_defect(
     tmp_path, monkeypatch, route, isolated_invocation_sources
@@ -1372,8 +1379,9 @@ def test_uncovered_protected_path_is_a_runner_defect(
     assert extra["verdict"] == "UNVERIFIED"
 
 
+@needs_rg
 @needs_posix_bash
-@pytest.mark.skipif(os.geteuid() == 0, reason="root bypasses directory read permissions")
+@needs_session_seal
 @pytest.mark.parametrize("route", ["long", "brief"])
 @pytest.mark.parametrize("generated", [False, True], ids=["temporary", "feature-day"])
 def test_workspace_search_output_does_not_void_a_denied_parent_read(
@@ -1492,6 +1500,7 @@ def test_single_turn_records_include_the_real_call_interval_and_answer(tmp_path)
     assert RUN.records_env(records, tmp_path)["OB_TURNS"] == result.extras["turns_file"]
 
 
+@needs_session_seal
 @pytest.mark.parametrize("label", ["ruling", "directive", "answer"])
 def test_fixture_labels_and_metadata_survive_the_driver(tmp_path, label):
     """Catches fixed label lists and loss of required/clarification metadata."""
@@ -1510,6 +1519,7 @@ def test_fixture_labels_and_metadata_survive_the_driver(tmp_path, label):
     assert all(turns[1][key] == value for key, value in message.items())
 
 
+@needs_session_seal
 def test_explicit_protocol_defect_is_void_even_with_a_descriptive_reason(tmp_path):
     driver, harness = _driver(
         tmp_path,
@@ -1520,6 +1530,7 @@ def test_explicit_protocol_defect_is_void_even_with_a_descriptive_reason(tmp_pat
     assert result.extras.get("void") == "protocol_defect", result.extras
 
 
+@needs_session_seal
 def test_answer_text_and_actions_documents_validate(tmp_path):
     """Catches answer paths passed as answers, bare history arrays and missing OB_ACTIONS."""
     driver, _ = _driver(tmp_path, [])
@@ -1814,6 +1825,7 @@ def test_next_message_checks_the_declared_labels():
     assert next_message('{"label":"ruling","message":"Use B."}', ("ruling",))["label"] == "ruling"
 
 
+@needs_session_seal
 @pytest.mark.parametrize("crash", [None, OSError, RuntimeError, KeyboardInterrupt])
 def test_grading_stage_is_locked_for_each_call_and_restored_on_exit(tmp_path, crash):
     """Catches exposing person knowledge on resume or leaving a crashed stage locked."""
@@ -1839,6 +1851,7 @@ def test_grading_stage_is_locked_for_each_call_and_restored_on_exit(tmp_path, cr
     assert driver.place.stage.stat().st_mode & 0o7777 == mode
 
 
+@needs_session_seal
 def test_a_permission_change_by_the_run_voids_it(tmp_path):
     driver, harness = _driver(tmp_path, [])
     original = harness.call
@@ -1856,6 +1869,7 @@ def test_a_permission_change_by_the_run_voids_it(tmp_path):
     assert driver.place.stage.stat().st_mode & 0o7777 == mode
 
 
+@needs_session_seal
 @pytest.mark.parametrize("command", ["printf 'person.json'", 'cat "$INPUT"'])
 def test_mentions_and_dynamic_commands_keep_residual_without_overriding_seals(tmp_path, command):
     driver, harness = _driver(tmp_path, [{"label": "info", "message": "Continue."}])
@@ -1890,6 +1904,7 @@ def test_mentions_and_dynamic_commands_keep_residual_without_overriding_seals(tm
         assert {hit["classification"] for hit in hits} == {"attempt"}
 
 
+@needs_session_seal
 def test_broken_records_are_runner_faults_before_the_program_or_grader_sees_them(
     tmp_path, monkeypatch
 ):
@@ -1907,6 +1922,7 @@ def test_broken_records_are_runner_faults_before_the_program_or_grader_sees_them
     assert extra["void"] == "runner" and extra["verdict"] == "UNVERIFIED"
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_one_granted_child_act_belongs_to_its_turn_once(tmp_path):
     driver, harness = _driver(
@@ -2007,6 +2023,7 @@ def test_one_granted_child_act_belongs_to_its_turn_once(tmp_path):
     )
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_sealed_checkpoint_probe_reads_its_whole_script_on_every_poll(tmp_path):
     """Catches a later poll reading the sealed script from its end: an empty script exits 0,
@@ -2031,6 +2048,7 @@ def test_sealed_checkpoint_probe_reads_its_whole_script_on_every_poll(tmp_path):
     assert polls == [None, None, None]
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_checkpoint_probe_does_not_unlock_the_stage(tmp_path):
     driver, harness = _driver(tmp_path, [])
@@ -2058,6 +2076,7 @@ def test_checkpoint_probe_does_not_unlock_the_stage(tmp_path):
     assert driver.place.stage.stat().st_mode & 0o777 != 0
 
 
+@needs_session_seal
 @pytest.mark.parametrize(
     "fixture",
     [path.name for path in sorted((ROOT / "evals/fixtures").glob("session-*")) if path.is_dir()],
@@ -2266,6 +2285,7 @@ def test_recursive_reads_and_unresolved_expansions_cannot_get_a_clean_scan(
     )
 
 
+@needs_session_seal
 @pytest.mark.parametrize("crash", [None, OSError, RuntimeError, KeyboardInterrupt])
 def test_roots_are_search_only_until_the_run_exits(tmp_path, crash):
     """Catches listing between resumed calls and a crash leaving roots locked."""
@@ -2298,6 +2318,7 @@ def test_roots_are_search_only_until_the_run_exits(tmp_path, crash):
     assert [path.stat().st_mode & 0o7777 for path in roots] == modes
 
 
+@needs_session_seal
 def test_overlapping_runs_restore_only_after_the_last_lease(tmp_path):
     """Catches one finished run making another run's sibling names listable."""
     roots = tuple(tmp_path / name for name in ("workspaces", "results"))
@@ -2316,6 +2337,7 @@ def test_overlapping_runs_restore_only_after_the_last_lease(tmp_path):
     assert first == second == {}
 
 
+@needs_session_seal
 def test_changing_a_root_mode_stops_the_run_and_restores_it(tmp_path):
     driver, harness = _driver(tmp_path, [{"label": "info", "message": "Continue."}])
     root = driver.place.workspace.parent
@@ -2334,6 +2356,7 @@ def test_changing_a_root_mode_stops_the_run_and_restores_it(tmp_path):
     assert root.stat().st_mode & 0o7777 == mode
 
 
+@needs_session_seal
 def test_claude_run_reports_root_isolation_as_unverified(tmp_path):
     """Catches a clean command scan being reported as proof that chmod cannot escape."""
     driver, harness = _driver(tmp_path, [])
@@ -2371,7 +2394,9 @@ def test_claude_run_reports_root_isolation_as_unverified(tmp_path):
     assert "root-permissions" in result.extras["isolation_unverified"]
 
 
-@pytest.mark.parametrize("signum", [signal.SIGTERM, signal.SIGKILL])
+@needs_session_seal
+@needs_posix_processes
+@pytest.mark.parametrize("signum", ["SIGTERM", "SIGKILL"])
 @needs_posix_bash
 def test_runner_death_restores_roots_and_the_inflight_stage(tmp_path, signum):
     """Catches exits that cannot unwind the driver's Python finally blocks."""
@@ -2406,7 +2431,7 @@ driver.run()
         assert child.stdout is not None
         assert select.select([child.stdout], [], [], 15)[0], "runner did not reach its call"
         assert child.stdout.readline().strip() == "inflight"
-        child.send_signal(signum)
+        child.send_signal(getattr(signal, signum))
         child.wait(timeout=15)
         expected = {folder: 0o750, folder / "results": 0o700, folder / "stage": 0o710}
         deadline = time.monotonic() + 10
@@ -2511,6 +2536,7 @@ def test_claude_bash_outcomes_reach_the_decoder_and_action_writer(
     assert decoded["commands"][1][1] == statuses[expected_status]
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_feature_day_person_wait_reaches_sleep_and_is_not_active_time(tmp_path, monkeypatch):
     """Catches metadata loss in the real selector before the driver's sleep sees it."""
@@ -2580,6 +2606,7 @@ def test_feature_day_person_wait_reaches_sleep_and_is_not_active_time(tmp_path, 
     assert clock[0] - driver.started == 64
 
 
+@needs_session_seal
 @needs_posix_bash
 @pytest.mark.parametrize("mutation", ["content", "mode", "entry", "bytecode", "seal"])
 def test_fixture_seal_checks_modes_and_content_after_each_call(tmp_path, mutation):
@@ -2611,6 +2638,7 @@ def test_fixture_seal_checks_modes_and_content_after_each_call(tmp_path, mutatio
     assert root.stat().st_mode & 0o7777 == 0o750
 
 
+@needs_session_seal
 @needs_posix_bash
 @pytest.mark.parametrize("route", ["long", "brief"])
 @pytest.mark.parametrize("crash", [False, True])
@@ -2681,6 +2709,7 @@ def test_calls_with_distinct_fixture_roots_can_overlap(
     assert (second / "brief-runbook/install.json").read_bytes() == expected
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_stage_content_change_is_found_after_the_call(tmp_path):
     """Catches a source edit hidden by changing the stage mode back to zero."""
@@ -2722,6 +2751,7 @@ print(json.dumps(extra), flush=True)
     )
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_shared_fixture_seal_waits_for_calls_and_runner_reads_wait_for_the_seal(tmp_path):
     """Catches one process opening sources while a peer still has an active harness call."""
@@ -2776,6 +2806,7 @@ with source_access(root):
                 child.communicate(timeout=15)
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_next_runner_restores_a_fixture_seal_after_sigkill(tmp_path):
     """Catches persistent chmod 000 after a runner dies without unwinding Python contexts."""
@@ -2805,6 +2836,7 @@ def test_next_runner_restores_a_fixture_seal_after_sigkill(tmp_path):
             pass
 
 
+@needs_session_seal
 @pytest.mark.parametrize(
     "operand, expected",
     [
@@ -2889,6 +2921,7 @@ def test_command_text_diagnostics_are_reported_beside_the_effect_verdict(
     assert "  command-hint [COMMAND TEXT only]: PASS 0/1" in RUN._claim_lines([extra])
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_driver_seals_sources_and_records_all_three_seals_on_every_turn(tmp_path):
     """Catches a resume omitting source protection or a per-call integrity row."""
@@ -2930,6 +2963,7 @@ def test_failing_diagnostics_do_not_change_the_summary_verdict_denominator(label
     )
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_next_turn_waits_for_a_peer_before_reading_fixture_sources(tmp_path):
     """Catches the turn program reading original sources without an exclusive runner lease."""
@@ -2974,6 +3008,7 @@ def test_next_turn_waits_for_a_peer_before_reading_fixture_sources(tmp_path):
         peer.communicate(timeout=15)
 
 
+@needs_session_seal
 @pytest.mark.parametrize("harness_name", ["codex", "claude-code"])
 @pytest.mark.parametrize(
     "command",
@@ -3191,6 +3226,7 @@ def test_required_diagnostic_is_a_protocol_defect_before_any_grade(
     assert extra["claims"] == {} and "claims are not required" in report
 
 
+@needs_posix_processes
 @needs_posix_bash
 def test_a_call_group_whose_members_all_exited_is_stopped_where_the_host_refuses_its_probe(
     monkeypatch,
@@ -3208,6 +3244,7 @@ def test_a_call_group_whose_members_all_exited_is_stopped_where_the_host_refuses
     processes.stop_call_group(4242)
 
 
+@needs_session_seal
 def test_dead_runner_keeps_sources_sealed_until_its_live_call_has_ended(tmp_path):
     """Catches SIGKILL releasing a runner's lock while its call can still read sources."""
     from evals.session_permissions import source_access
@@ -3291,6 +3328,7 @@ def test_dead_runner_keeps_sources_sealed_until_its_live_call_has_ended(tmp_path
             pass
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_two_driver_processes_exclude_peer_seal_wait_from_active_time_and_budget(tmp_path):
     """Catches a peer's 0.7-second call timing out a fast call with a 0.35-second budget."""
@@ -3368,6 +3406,7 @@ print(json.dumps({**driver.extras, 'active_seconds': driver.active}), flush=True
                 child.communicate(timeout=15)
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_idle_peer_stage_and_source_state_are_unreadable_to_another_call(tmp_path):
     """Catches a known sibling stage or the seal state exposing grading inputs."""
@@ -3406,6 +3445,7 @@ def test_idle_peer_stage_and_source_state_are_unreadable_to_another_call(tmp_pat
     assert state.stat().st_mode & 0o7777 == 0o600
 
 
+@needs_session_seal
 @needs_posix_bash
 @pytest.mark.parametrize("signal_exit", [False, True])
 def test_sealed_call_gate_preserves_stdout_and_actual_exit_status(tmp_path, signal_exit):
@@ -3426,6 +3466,7 @@ def test_sealed_call_gate_preserves_stdout_and_actual_exit_status(tmp_path, sign
     assert not extra.get("void")
 
 
+@needs_session_seal
 @needs_posix_bash
 def test_recovery_has_the_original_mode_if_sealing_is_interrupted(tmp_path, monkeypatch):
     """Catches losing the restoration mode when a runner dies between sealing writes."""

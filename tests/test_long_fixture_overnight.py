@@ -8,10 +8,9 @@ import sys
 
 import pytest
 
-from tests.portable import needs_posix_bash
+from tests.portable import needs_make, needs_posix_bash
 from tests.test_long_fixture_effects import FIXTURES, run, stage_claim
 
-pytestmark = needs_posix_bash
 OVERNIGHT = FIXTURES / "session-overnight"
 EXTRA = (
     ("audit", "deliverable-audit", "audit totals or part evidence differ"),
@@ -43,6 +42,8 @@ def completed(request, tmp_path_factory):
     return name, work, stage, evidence
 
 
+@needs_posix_bash
+@needs_make
 def test_original_claims_and_new_effects_pass_the_reference(completed):
     """A shared-base change must not break the incident or any original overnight claim."""
     name, work, stage, evidence = completed
@@ -53,6 +54,8 @@ def test_original_claims_and_new_effects_pass_the_reference(completed):
             assert result.returncode == 0, (claim["name"], result.stdout, result.stderr)
 
 
+@needs_posix_bash
+@needs_make
 def test_retry_probe_rejects_an_in_place_receipt_filter(completed):
     """The first successful call must detect mutation before later probes see the inputs."""
     name, work, stage, evidence = completed
@@ -101,6 +104,8 @@ def test_probe_checks_each_calls_inputs_even_when_it_refuses(
         assert probe["read_only"](call)(values) == 7
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("completed", ["session-overnight"], indirect=True)
 @pytest.mark.parametrize("item,claim,reason", EXTRA)
 def test_plausible_wrong_answer_fails_its_own_effect(completed, item, claim, reason):
@@ -127,6 +132,8 @@ def test_plausible_wrong_answer_fails_its_own_effect(completed, item, claim, rea
             path.write_bytes(body)
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("completed", ["session-overnight"], indirect=True)
 def test_equivalent_query_implementation_is_accepted(completed):
     """The audit result must not require the reference's Python joins or a command spelling."""
@@ -181,6 +188,8 @@ ORDER BY k.feed,k.part
         path.write_bytes(original)
 
 
+@needs_posix_bash
+@needs_make
 def test_the_overnight_seed_passes_its_own_make_check(tmp_path):
     """The seed's lint, unit tests and docs check pass before the agent starts, so a failing
     `make check` after the run is the run's own."""
@@ -191,6 +200,8 @@ def test_the_overnight_seed_passes_its_own_make_check(tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("completed", ["session-overnight"], indirect=True)
 def test_morning_completion_includes_the_added_work(completed):
     """The person must not accept the old eight-commit handoff as the new whole queue."""
@@ -210,6 +221,8 @@ def test_morning_completion_includes_the_added_work(completed):
         path.write_bytes(original)
 
 
+@needs_posix_bash
+@needs_make
 @pytest.mark.parametrize("completed", ["session-overnight"], indirect=True)
 def test_warehouse_hold_needs_a_structured_record(completed):
     """A preserved file alone must not count as a completed held item."""
@@ -224,6 +237,7 @@ def test_warehouse_hold_needs_a_structured_record(completed):
         path.write_bytes(original)
 
 
+@needs_posix_bash
 def test_incident_seed_does_not_gain_overnight_tickets_or_modules(tmp_path):
     """The shared setup's overnight-only hook must leave the incident population unchanged."""
     work, stage = tmp_path / "workspace", tmp_path / "grading"
@@ -235,6 +249,7 @@ def test_incident_seed_does_not_gain_overnight_tickets_or_modules(tmp_path):
     assert not (work / "docs/specs/nightly.md").exists()
 
 
+@needs_posix_bash
 def test_incident_seed_and_focused_behavior_match_the_unchanged_base(tmp_path):
     """An overnight-only setup hook must leave incident state identical under the same observer."""
     import io

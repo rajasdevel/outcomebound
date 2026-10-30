@@ -8,10 +8,11 @@ import runpy
 import shlex
 import shutil
 import sys
+from pathlib import Path, PureWindowsPath
 
 import pytest
 
-from tests.portable import needs_bash
+from tests.portable import needs_bash, needs_make, write
 from tests.test_long_fixture_effects import COMMON, run
 
 DELIVERED = runpy.run_path(str(COMMON / "delivered.py"))
@@ -22,16 +23,16 @@ RECEIPTS = runpy.run_path(str(COMMON / "receipts.py"))
 def project(tmp_path):
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests/__init__.py").touch()
-    (tmp_path / "tests/test_changed.py").write_text(
+    write(
+        tmp_path / "tests/test_changed.py",
         "import unittest\nclass Example(unittest.TestCase):\n"
         "    def test_ok(self): self.assertEqual(5, 5)\n"
         "    def test_bad(self): self.assertEqual(4, 5)\n",
-        encoding="utf-8",
     )
-    (tmp_path / "tests/test_other.py").write_text(
+    write(
+        tmp_path / "tests/test_other.py",
         "import unittest\nclass Other(unittest.TestCase):\n"
         "    def test_ok(self): self.assertEqual(6, 6)\n",
-        encoding="utf-8",
     )
     return tmp_path
 
@@ -200,7 +201,7 @@ def test_push_process_credit_requires_the_named_revision_inputs(project):
     assert RECEIPTS["checked_before"](rows, project, first)
     assert RECEIPTS["checked_before"](rows, project, "HEAD")
     path = project / "tests/test_changed.py"
-    path.write_text(path.read_text(encoding="utf-8") + "\n# Delivered change\n", encoding="utf-8")
+    write(path, path.read_text(encoding="utf-8") + "\n# Delivered change\n")
     commit(project, "Change tested inputs")
     second = run(project, "git", "rev-parse", "HEAD").stdout.strip()
     assert not RECEIPTS["checked_before"](rows, project, second)
@@ -281,7 +282,8 @@ def test_reported_shell_checks_are_run(project, shell, passing):
         [
             shell,
             "-c",
-            f"{shlex.quote(sys.executable)} -B -m unittest tests.test_changed.Example.{selection}",
+            f"{shlex.quote(Path(sys.executable).as_posix())} "
+            f"-B -m unittest tests.test_changed.Example.{selection}",
         ]
     )
     assert DELIVERED["report"](command, root=project) is passing
@@ -295,7 +297,7 @@ def test_reported_project_script_is_run(project, passing):
         f"#!{sys.executable}\nraise SystemExit({0 if passing else 1})\n", encoding="utf-8"
     )
     script.chmod(0o755)
-    assert DELIVERED["report"]("./tools/check.py", root=project) is passing
+    assert DELIVERED["report"]("python3 tools/check.py", root=project) is passing
 
 
 def test_read_only_git_checks_keep_the_described_index(project):
@@ -315,6 +317,20 @@ def test_read_only_git_checks_keep_the_described_index(project):
     path.write_text(path.read_text(encoding="utf-8") + "bad whitespace  \n", encoding="utf-8")
     assert DELIVERED["report"]("git diff --check", root=project) is False
     assert DELIVERED["report"]("git diff --check", root=project, revision="HEAD")
+
+
+@pytest.mark.parametrize("spelling", ["native", "escaped", "forward"])
+def test_windows_path_rewrite_preserves_the_literal_encoding(spelling):
+    root = PureWindowsPath(r"C:\source\project")
+    target = PureWindowsPath(r"D:\scratch\project")
+    if spelling == "native":
+        before, after = str(root), str(target)
+    elif spelling == "escaped":
+        before, after = str(root).replace("\\", "\\\\"), str(target).replace("\\", "\\\\")
+    else:
+        before, after = root.as_posix(), target.as_posix()
+    text = before + "/file.py"
+    assert DELIVERED["rewrite_path"](text, root, target) == after + "/file.py"
 
 
 @pytest.mark.parametrize("gap_first", [True, False])
@@ -347,7 +363,7 @@ def test_parenthetical_report_description_is_a_gap_but_shell_groups_are_executed
     assert DELIVERED["report"]("true; (exit 1)", root=project) is False
 
 
-@pytest.mark.skipif(shutil.which("make") is None, reason="no make on PATH")
+@needs_make
 def test_seed_machinery_runs_on_delivered_content_despite_workspace_edits(project, tmp_path):
     stage = tmp_path / "sealed"
     stage.mkdir()

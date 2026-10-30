@@ -118,7 +118,8 @@ def copy_repository(root, target, revision):
         )
         config = target / ".git/config"
         config.write_text(
-            config.read_text(encoding="utf-8").replace(str(root), str(target)), encoding="utf-8"
+            rewrite_path(config.read_text(encoding="utf-8"), root, target),
+            encoding="utf-8",
         )
         for key in ("core.worktree", "core.bare"):
             subprocess.run(["git", "config", "--unset", key], cwd=target, capture_output=True)
@@ -133,6 +134,7 @@ def copy_repository(root, target, revision):
 
 
 def run(root, argv, revision=None, *, input=None, machinery=True):
+    root = Path(root).resolve()
     with snapshot(root, revision, machinery=machinery and Path(argv[0]).name != "git") as target:
         env = {
             key: value
@@ -148,7 +150,7 @@ def run(root, argv, revision=None, *, input=None, machinery=True):
         )
         try:
             return subprocess.run(
-                [arg.replace(str(Path(root).resolve()), str(target)) for arg in argv],
+                [rewrite_path(arg, root, target) for arg in argv],
                 cwd=target,
                 env=env,
                 capture_output=True,
@@ -156,12 +158,19 @@ def run(root, argv, revision=None, *, input=None, machinery=True):
                 encoding="utf-8",
                 timeout=120,
                 check=False,
-                input=input.replace(str(Path(root).resolve()), str(target))
-                if input is not None
-                else None,
+                input=rewrite_path(input, root, target) if input is not None else None,
             )
         except (OSError, subprocess.TimeoutExpired) as error:
             raise ValueError("unjudged: check could not finish: " + str(error)) from error
+
+
+def rewrite_path(text, root, target):
+    """Redirect native paths, including Python/JSON escaped Windows literals."""
+    source = str(root)
+    destination = str(target)
+    text = text.replace(source.replace("\\", "\\\\"), destination.replace("\\", "\\\\"))
+    text = text.replace(source, destination)
+    return text.replace(root.as_posix(), target.as_posix())
 
 
 def unit(root=Path("."), revision=None):

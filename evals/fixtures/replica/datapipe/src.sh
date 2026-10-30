@@ -803,7 +803,7 @@ def read_csv(
         if tuple(reader.fieldnames or ()) != CSV_COLUMNS:
             raise ValueError(f"{path}: columns are not {', '.join(CSV_COLUMNS)}")
         for row in reader:
-            started = datetime.fromisoformat(row["started_at"])
+            started = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))
             if since is not None and started < since:
                 continue
             if until is not None and started >= until:

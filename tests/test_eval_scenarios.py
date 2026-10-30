@@ -50,7 +50,7 @@ from tests.eval_helpers import (
 from tests.eval_helpers import (
     seed as _seed,
 )
-from tests.portable import ROOT_USER, needs_posix_bash
+from tests.portable import needs_posix_bash, root_user
 
 # Maintainer tooling: each fixture is built by `bash setup.sh`. Skipped with the reason, shown by
 # -rs, where there is no bash (Alpine) or the fixtures cannot run (Windows).
@@ -2400,7 +2400,7 @@ HIDE_CASES = [(name, hide) for name in WIRINGS for hide in sorted(HIDES)] + [
 def test_no_name_mode_link_ignore_or_index_bit_hides_a_write_from_the_scope_check(
     workspace: Callable[..., Path], name: str, hide: str
 ) -> None:
-    if hide == "unreadable-mode" and ROOT_USER:
+    if hide == "unreadable-mode" and root_user():
         pytest.skip("the user is root, and root reads a file with no mode bits")
     _claim, tracked, allowed = SCOPED[name]
     target = workspace(name)

@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
 import shutil
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -16,10 +18,63 @@ from evals.harnesses.claude_code import ClaudeCodeHarness
 from evals.harnesses.codex import CodexHarness
 from evals.long_sessions import SessionError, next_message, read_session
 from tests.eval_helpers import ROOT, RUN
-from tests.portable import needs_posix_bash
+from tests.portable import needs_posix_bash, needs_session_seal, posix_only
 
-pytestmark = needs_posix_bash
 NAME = "session-synthetic"
+
+
+@pytest.mark.parametrize(
+    "platform,uid,why", [("nt", None, "Windows"), ("posix", 0, "effective uid 0")]
+)
+def test_unenforceable_seal_refuses_before_setup_or_harness(
+    tmp_path, monkeypatch, capsys, platform, uid, why
+):
+    from evals import session_permissions
+
+    fixtures = _fixture(tmp_path, SESSION, {"messages": []})
+    monkeypatch.setattr(RUN, "FIXTURES", fixtures)
+    host = dict(vars(os), name=platform)
+    if uid is None:
+        host.pop("geteuid", None)
+    else:
+        host["geteuid"] = lambda: uid
+    monkeypatch.setattr(session_permissions, "os", SimpleNamespace(**host))
+    # Source locking is separate from the host-capability refusal under test.
+    monkeypatch.setattr(RUN, "source_access", lambda *args: contextlib.nullcontext())
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("an unsupported host reached setup or a harness call")
+
+    monkeypatch.setattr(RUN, "build_workspace", forbidden)
+    parser = RUN._parser()
+    args = parser.parse_args(["--arm", "none", "--model", "synthetic", "--fixtures", NAME])
+    with pytest.raises(SystemExit) as refused:
+        RUN.checked_fixtures(parser, args)
+    assert refused.value.code == 2
+    assert why in capsys.readouterr().err
+    _answer, report, code, extra = RUN.run_fixture(
+        NAME,
+        RUN.Request("synthetic", "medium"),
+        RUN.load_arm("none"),
+        os.environ["PATH"],
+        SimpleNamespace(name="codex", call=forbidden),
+        RUN.Place(workspace=tmp_path / "workspace"),
+    )
+    assert code is None and extra["void"] == "runner"
+    assert why in report and why in extra["error"]
+    assert not (tmp_path / "workspace/locked").exists()
+
+    from tests.test_long_eval_protocol import _driver
+
+    direct = tmp_path / "direct"
+    direct.mkdir()
+    driver, harness = _driver(direct, [])
+    result = driver.run()
+    assert result.extras["void"] == "runner" and why in result.extras["error"]
+    assert harness.requests == []
+    with pytest.raises(SessionError, match=why):
+        driver.call(driver.base)
+    assert harness.requests == []
 
 
 def _kept_for_regrade(tmp_path, monkeypatch):
@@ -97,6 +152,7 @@ def _kept_for_regrade(tmp_path, monkeypatch):
     return fixtures.parent, meta, source
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("kind", ["hard", "symbolic"])
 @pytest.mark.parametrize("target", ["source", "stage"])
 def test_setup_cannot_link_workspace_files_to_protected_inputs(tmp_path, monkeypatch, kind, target):
@@ -125,6 +181,7 @@ def test_setup_cannot_link_workspace_files_to_protected_inputs(tmp_path, monkeyp
     )
 
 
+@needs_posix_bash
 def test_rescore_keeps_its_staged_grading_copy_unreadable(tmp_path, monkeypatch):
     """Catches rescore leaving a retained staged copy readable to a later call."""
     _evals, _meta, source = _kept_for_regrade(tmp_path, monkeypatch)
@@ -135,6 +192,7 @@ def test_rescore_keeps_its_staged_grading_copy_unreadable(tmp_path, monkeypatch)
     assert graders.stat().st_mode & 0o7777 == 0
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("sealed_copy", [False, True])
 @pytest.mark.parametrize("origin", ["earlier_ref", "earlier_verbatim", "edits"])
 def test_current_grader_regrade_keeps_historical_installs_and_grades_copies(
@@ -197,6 +255,7 @@ def test_current_grader_regrade_keeps_historical_installs_and_grades_copies(
     assert not workspace.with_name(workspace.name + RUN.ASIDE).exists()
 
 
+@needs_posix_bash
 def test_current_grader_regrade_refuses_an_arm_file_that_differs_from_its_record(
     tmp_path, monkeypatch, capsys
 ):
@@ -220,6 +279,7 @@ def test_current_grader_regrade_refuses_an_arm_file_that_differs_from_its_record
     assert not target.exists()
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("destination", ["record", "workspace"])
 def test_regrade_refuses_to_write_output_inside_source_evidence(
     tmp_path, monkeypatch, capsys, destination
@@ -586,7 +646,7 @@ def _run(
     env: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], list[dict[str, Any]], Path]:
     fixtures = _fixture(
-        tmp_path,
+        trusted / "source",
         {**SESSION, **(session or {})},
         {
             "messages": messages
@@ -633,6 +693,8 @@ def _run(
     return meta, calls, out
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_three_turns_resume_and_keep_answers_native_copies_and_one_final_grade(
     tmp_path, trusted, monkeypatch, harness
@@ -677,6 +739,8 @@ def test_three_turns_resume_and_keep_answers_native_copies_and_one_final_grade(
     assert json.loads(kept)["turns"] == transcript["turns"]
 
 
+@needs_session_seal
+@needs_posix_bash
 def test_resume_counts_two_native_files_once(tmp_path, trusted, monkeypatch):
     """Catches adding cumulative snapshots or refusing a second rollout for the same thread."""
     meta, _calls, _out = _run(tmp_path, trusted, monkeypatch, env={"FAKE_TWO_FILES": "1"})
@@ -686,6 +750,8 @@ def test_resume_counts_two_native_files_once(tmp_path, trusted, monkeypatch):
     assert [t["input_tokens"] for t in meta["turn_tokens"]] == [1000, 1000, 1000]
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_nudge_is_resumed_and_the_cap_is_enforced(tmp_path, trusted, monkeypatch, harness):
     """Catches nudges lost from history or sent after max_nudges."""
@@ -703,6 +769,8 @@ def test_nudge_is_resumed_and_the_cap_is_enforced(tmp_path, trusted, monkeypatch
     assert meta["verdict"] == "FAIL" and meta["checks_verdict"] == "PASS"
 
 
+@needs_session_seal
+@needs_posix_bash
 def test_max_turns_is_graded_as_failure_without_another_call(tmp_path, trusted, monkeypatch):
     meta, calls, _out = _run(tmp_path, trusted, monkeypatch, session={"max_turns": 2})
     assert meta["error"] == "", meta
@@ -710,6 +778,8 @@ def test_max_turns_is_graded_as_failure_without_another_call(tmp_path, trusted, 
     assert meta["verdict"] == "FAIL" and meta["checks_verdict"] == "PASS"
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("fault", ["crash", "invalid"])
 def test_next_turn_fault_voids_the_run_and_keeps_its_stderr(tmp_path, trusted, monkeypatch, fault):
     meta, calls, out = _run(tmp_path, trusted, monkeypatch, scenario={"fault": fault})
@@ -725,6 +795,8 @@ def test_next_turn_fault_voids_the_run_and_keeps_its_stderr(tmp_path, trusted, m
         assert "invented" in (out / f"{NAME}.next-1.stdout.txt").read_text(encoding="utf-8")
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_split_interrupts_the_first_call_and_starts_a_new_session(
     tmp_path, trusted, monkeypatch, harness
@@ -763,6 +835,8 @@ def test_split_interrupts_the_first_call_and_starts_a_new_session(
     assert meta["session_tokens"]["input_tokens"] == 2000
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_cumulative_input_cap_is_not_reset_on_resume(tmp_path, trusted, monkeypatch, harness):
     meta, calls, _out = _run(tmp_path, trusted, monkeypatch, harness, session={"input_cap": 2000})
@@ -771,6 +845,8 @@ def test_cumulative_input_cap_is_not_reset_on_resume(tmp_path, trusted, monkeypa
     assert meta["verdict"] == "FAIL" and meta["session_tokens"]["input_tokens"] == 2000
 
 
+@needs_session_seal
+@needs_posix_bash
 def test_session_timeout_includes_next_turn_time(tmp_path, trusted, monkeypatch):
     meta, calls, _out = _run(
         tmp_path,
@@ -864,6 +940,8 @@ def test_next_turn_output_is_strict(raw):
         next_message(raw, ("info", "nudge"))
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_running_call_stops_at_the_input_cap(tmp_path, trusted, monkeypatch, harness):
     """Catches checking a cap only after an unbounded harness returns."""
@@ -875,6 +953,8 @@ def test_running_call_stops_at_the_input_cap(tmp_path, trusted, monkeypatch, har
     assert meta["verdict"] == "FAIL" and meta["session_tokens"]["input_tokens"] == 1000
 
 
+@needs_session_seal
+@needs_posix_bash
 def test_split_safety_stop_is_a_graded_budget_stop_without_restart(tmp_path, trusted, monkeypatch):
     """Catches voiding a first session that never reaches its checkpoint, which would drop the
     runs that fail to deliver from the comparison."""
@@ -895,6 +975,8 @@ def test_split_safety_stop_is_a_graded_budget_stop_without_restart(tmp_path, tru
     assert meta["verdict"] == "FAIL"
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_resumed_identity_is_checked_before_sending_more_turns(
     tmp_path, trusted, monkeypatch, harness
@@ -907,6 +989,8 @@ def test_resumed_identity_is_checked_before_sending_more_turns(
     assert any(row[0] == "native-model" and row[1] == "FAIL" for row in meta["identity_checks"])
 
 
+@needs_session_seal
+@needs_posix_bash
 @pytest.mark.parametrize("harness", ["codex", "claude-code"])
 def test_split_counts_the_first_session_across_an_early_stop_and_nudge(
     tmp_path, trusted, monkeypatch, harness
@@ -933,7 +1017,7 @@ def test_split_counts_the_first_session_across_an_early_stop_and_nudge(
     assert meta["session_tokens"]["input_tokens"] == 3000
 
 
-@pytest.mark.skipif(os.name == "nt", reason="POSIX folder modes")
+@posix_only
 def test_a_graded_copy_with_an_unreadable_folder_is_removed_whole(tmp_path):
     copy = tmp_path / "out" / "session-synthetic.graders"
     locked = copy / "checks"

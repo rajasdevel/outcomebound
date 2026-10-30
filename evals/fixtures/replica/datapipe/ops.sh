@@ -128,7 +128,7 @@ def cmd_logs(args: argparse.Namespace) -> int:
 def _window(args: argparse.Namespace) -> tuple[datetime | None, datetime | None]:
     if args.day is None:
         return None, None
-    day = datetime.fromisoformat(args.day)
+    day = datetime.fromisoformat(args.day.replace("Z", "+00:00"))
     start = day + _offset(args.start) if args.start else day
     end = day + _offset(args.end) if args.end else day + timedelta(days=1)
     return start, end
@@ -153,8 +153,8 @@ def cmd_stats(args: argparse.Namespace) -> int:
 
 def cmd_health(args: argparse.Namespace) -> int:
     state = load_state(args.env)
-    now = datetime.fromisoformat(state["clock"])
-    last = datetime.fromisoformat(state["last_load_at"])
+    now = datetime.fromisoformat(state["clock"].replace("Z", "+00:00"))
+    last = datetime.fromisoformat(state["last_load_at"].replace("Z", "+00:00"))
     hours = (now - last).total_seconds() / 3600
     fresh = hours <= 26
     verdict = "ok" if fresh else "STALE"

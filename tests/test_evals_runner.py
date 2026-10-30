@@ -22,7 +22,7 @@ import pytest
 
 from evals.harnesses import CallResult, Request
 from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN, copy_fixture_sources
-from tests.portable import needs_posix_bash
+from tests.portable import needs_posix_bash, needs_session_seal
 
 # The fixture runner uses bash; this marker reports unavailable platforms explicitly.
 pytestmark = needs_posix_bash
@@ -228,10 +228,8 @@ def _invoke(
     (tmp_path / "commands.txt").write_text("\n".join(CHECKED) + "\n", encoding="utf-8")
     (tmp_path / "answer.md").write_text(REPORTED, encoding="utf-8")
     (tmp_path / "fixtures").mkdir(exist_ok=True)
-    sources = tmp_path.resolve() / "source/evals/fixtures"
-    if not sources.is_dir():
-        sources = copy_fixture_sources(tmp_path / "source", history=True)
     trusted = _trusted()
+    sources = copy_fixture_sources(trusted / "source", history=True)
     out = output_dir or trusted / "out"
     environment = {
         **os.environ,
@@ -491,7 +489,12 @@ def test_the_current_arm_puts_the_launcher_and_its_skills_in_reach_and_no_check_
 # and under the kernel-off arm, and the other two arms on a few fixtures that cover each shape.
 _ARM_SAMPLE = ("small-fix", "slice-a-spec", "decision")
 _ARM_CASES = [
-    pytest.param(fixture, arm, id=f"{arm}-{fixture}")
+    pytest.param(
+        fixture,
+        arm,
+        id=f"{arm}-{fixture}",
+        marks=needs_session_seal if fixture.startswith(("session-", "brief-")) else (),
+    )
     for fixture in RUN.fixture_names()
     for arm in RUN.ARMS
     if arm in ("current", RUN.NONE) or fixture in _ARM_SAMPLE

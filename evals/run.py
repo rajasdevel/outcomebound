@@ -125,6 +125,7 @@ from evals.session_permissions import (
     fixture_links,
     isolation_rows,
     require_seals,
+    seal_refusal,
     sealed_roots,
     sealed_sources,
     source_access,
@@ -2809,6 +2810,9 @@ def _call_and_judge(
     except SessionError as problem:
         extra["error"] = f"{SESSION_FILE}: {problem}"
         return "", extra["error"], None, extra
+    if session is not None and (reason := seal_refusal()):
+        extra.update(error=reason, void="runner")
+        return "", reason, None, extra
     live, kept = observed_folders(workdir, place) if suite and suite.observe else (None, None)
     if live is not None:
         try:
@@ -4495,9 +4499,11 @@ def suite_refusal(name: str) -> str:
     except SuiteError as problem:
         return f"{name}/{SUITE_FILE}: {problem}"
     try:
-        read_session(FIXTURES / name / SESSION_FILE)
+        session = read_session(FIXTURES / name / SESSION_FILE)
     except SessionError as problem:
         return f"{name}/{SESSION_FILE}: {problem}"
+    if session is not None and (reason := seal_refusal()):
+        return f"{name}: {reason}"
     return ""
 
 

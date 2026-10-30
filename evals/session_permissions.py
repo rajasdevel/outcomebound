@@ -15,6 +15,15 @@ from pathlib import Path
 from typing import Any
 
 
+def seal_refusal() -> str:
+    """Why this host cannot enforce the session's POSIX permission seals."""
+    if os.name == "nt":
+        return "long sessions require POSIX permission seals; Windows cannot enforce them"
+    if os.geteuid() == 0:
+        return "long sessions require permission seals; effective uid 0 bypasses them"
+    return ""
+
+
 class RootLease:
     """Two file locks serialize mode changes and keep overlapping runs sealed."""
 

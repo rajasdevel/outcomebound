@@ -22,7 +22,7 @@ from evals.session_evidence import contamination, family_evidence
 from evals.session_usage import CallUsage, codex_children
 from evals.watch import watched_command
 from tests.eval_helpers import RUN
-from tests.portable import needs_posix_bash
+from tests.portable import needs_posix_bash, needs_posix_processes, needs_session_seal
 
 
 def _count(total, last, out=0):
@@ -227,7 +227,9 @@ def test_contamination_scans_all_tool_inputs_even_unknown_tools(tmp_path, harnes
         ]
     item = {**_rows(tmp_path / "native.jsonl", rows), "child": child}
     (hit,) = contamination([item], harness, [path])
-    assert hit["child"] is child and path in str(hit["input"])
+    assert hit["child"] is child
+    decoded = json.loads(hit["input"]) if isinstance(hit["input"], str) else hit["input"]
+    assert decoded == ({"file": path} if harness == "codex" else {"file_path": path})
     assert hit["position"] == 0
 
 
@@ -451,6 +453,7 @@ def _driver(
     ), harness
 
 
+@needs_session_seal
 def test_gap_is_excluded_from_active_time_and_timeout_is_cumulative(tmp_path):
     driver, harness = _driver(
         tmp_path, [{"label": "status", "message": "Go.", "wait_seconds": 0.1}]
@@ -462,6 +465,7 @@ def test_gap_is_excluded_from_active_time_and_timeout_is_cumulative(tmp_path):
     assert harness.requests[1].budget.seconds < harness.requests[0].budget.seconds - 0.1
 
 
+@needs_session_seal
 def test_timeout_during_gap_never_sends_the_waiting_turn(tmp_path):
     driver, harness = _driver(
         tmp_path, [{"label": "status", "message": "Go.", "wait_seconds": 2}], seconds=0.5
@@ -471,6 +475,7 @@ def test_timeout_during_gap_never_sends_the_waiting_turn(tmp_path):
     assert result.extras["stopped"] == "timeout" and not result.extras.get("error")
 
 
+@needs_session_seal
 @pytest.mark.parametrize(
     ("stdout", "stderr", "expected_stdout", "expected_stderr"),
     [
@@ -503,6 +508,7 @@ def test_next_turn_timeout_keeps_partial_output_as_text(
         assert driver.extras["void"] == "runner" and "next_turn" in driver.extras["error"]
 
 
+@needs_session_seal
 def test_split_starts_fresh_and_keeps_the_session_input_budget(tmp_path):
     driver, harness = _driver(tmp_path, [], shape="split", limit=200, stops=("split",))
     subprocess.run(["git", "init", "-q", str(driver.place.workspace)], check=True)
@@ -536,6 +542,7 @@ def test_split_starts_fresh_and_keeps_the_session_input_budget(tmp_path):
     )
 
 
+@needs_session_seal
 @pytest.mark.parametrize("stop", ["cut_after_calls", None])
 def test_safety_limit_is_a_graded_stop_even_when_the_cli_ends_before_polling(tmp_path, stop):
     """Catches a missed cut that voids the run, or restarts it, instead of grading it as is."""
@@ -546,6 +553,7 @@ def test_safety_limit_is_a_graded_stop_even_when_the_cli_ends_before_polling(tmp
     assert result.extras["stopped"] == "cut_after_calls" and result.extras["split_reached"] is False
 
 
+@needs_session_seal
 def test_protocol_defect_voids_instead_of_model_failure(tmp_path):
     driver, harness = _driver(
         tmp_path, [{"end": True, "reason": "undefined", "protocol_defect": True}]
@@ -555,6 +563,7 @@ def test_protocol_defect_voids_instead_of_model_failure(tmp_path):
     assert result.extras["stopped"] is None
 
 
+@needs_session_seal
 def test_protected_tool_reference_keeps_attempt_with_intact_seals(tmp_path):
     # The grading stage's own file: a relative `person.json` would resolve inside the workspace.
     person = str(tmp_path / "stage" / "person.json")
@@ -602,6 +611,7 @@ def test_void_never_calls_a_grader(tmp_path, monkeypatch, void):
     assert void in report
 
 
+@needs_posix_processes
 @needs_posix_bash
 def test_split_kills_without_warning_and_waits_for_detached_child(tmp_path):
     script = tmp_path / "session.py"
@@ -665,6 +675,7 @@ def test_cut_program_outside_the_stage_is_a_runner_fault(tmp_path):
         driver.cut_check()
 
 
+@needs_session_seal
 def test_budget_carries_input_across_resumed_turns(tmp_path):
     driver, harness = _driver(tmp_path, [{"label": "info", "message": "Again."}] * 3, limit=200)
     result = driver.run()
@@ -699,6 +710,7 @@ def test_session_and_brief_prefixes_have_clean_home_guards(tmp_path):
         assert RUN.unclean_reach([name], home, tmp_path)
 
 
+@needs_posix_processes
 def test_split_waits_for_the_last_observed_process_before_returning(monkeypatch):
     from evals import processes, watch
     from outcomebound_tools import programs
@@ -717,6 +729,7 @@ def test_split_waits_for_the_last_observed_process_before_returning(monkeypatch)
     assert list(tables) == []
 
 
+@needs_posix_processes
 def test_unavailable_process_table_refuses_a_split_restart(monkeypatch):
     from evals import processes, watch
     from outcomebound_tools import programs

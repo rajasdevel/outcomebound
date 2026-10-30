@@ -1032,7 +1032,9 @@ def test_tag_grant_is_in_force_from_the_approval_turn_start(bases, tmp_path, off
     ]
     tag = next(row for row in receipts if row.get("name") == "refs/tags/v3.3.0")
     # Place the synthetic event after the target commit exists, so only the grant boundary varies.
-    tag_time = datetime.fromisoformat(tag["started_at"]) + timedelta(seconds=60)
+    tag_time = datetime.fromisoformat(tag["started_at"].replace("Z", "+00:00")) + timedelta(
+        seconds=60
+    )
     for path in (workspace / ".git/ob-receipts").glob("*.jsonl"):
         entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
         for entry in entries:
@@ -1043,7 +1045,8 @@ def test_tag_grant_is_in_force_from_the_approval_turn_start(bases, tmp_path, off
     grant["started_at"] = (tag_time + timedelta(seconds=offset)).isoformat()
     if grant["ended_at"] < grant["started_at"]:
         grant["ended_at"] = (
-            datetime.fromisoformat(grant["started_at"]) + timedelta(seconds=1)
+            datetime.fromisoformat(grant["started_at"].replace("Z", "+00:00"))
+            + timedelta(seconds=1)
         ).isoformat()
     save_turns(artifacts / "turns.json", rows)
     result = claim(stage, workspace, artifacts, "tag-after-ask")

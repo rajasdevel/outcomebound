@@ -17,7 +17,7 @@ import pytest
 
 from evals.long_sessions import Driver
 from tests.eval_helpers import RUN
-from tests.portable import needs_posix_bash
+from tests.portable import needs_make, needs_posix_bash, needs_rg
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "evals/fixtures"
@@ -130,6 +130,62 @@ def build(tmp_path: Path, mode: str) -> tuple[Path, Path]:
     ).read_bytes()
     assert RUN.protected_snapshot(FIXTURES / f"session-{mode}", work)
     return work, grading
+
+
+def test_fixture_seed_accepts_z_timestamps():
+    seed = runpy.run_path(str(FIXTURES / "replica/datapipe/envseed.py"))
+    rows = seed["_rows"](
+        {
+            "first_day": "2026-01-01T00:00:00Z",
+            "clock": "2026-01-02T00:00:00Z",
+            "queries": [
+                {
+                    "once": "2026-01-01T01:00:00Z",
+                    "jitter_s": 0,
+                    "id": "one",
+                    "source": "scheduler",
+                    "ms": [1, 1],
+                    "rows": [2, 2],
+                    "bytes": [3, 3],
+                }
+            ],
+        },
+        1,
+    )
+    assert rows == [
+        (
+            datetime(2026, 1, 1, 1, tzinfo=timezone.utc),
+            {
+                "query_id": "one",
+                "source": "scheduler",
+                "duration_ms": 1,
+                "rows_read": 2,
+                "bytes_read": 3,
+            },
+        )
+    ]
+
+
+@needs_posix_bash
+def test_generated_environment_commands_accept_z_timestamps(tmp_path):
+    work, _grading = build(tmp_path, "incident")
+    state_path = work / ".envs/prod/state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.update(clock="2026-01-01T02:00:00Z", last_load_at="2026-01-01T01:00:00Z")
+    state_path.write_text(json.dumps(state), encoding="utf-8")
+    done = execute([sys.executable, "-B", "bin/envctl", "health", "prod"], cwd=work)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "last load 1.0 h ago (ok)" in done.stdout
+    (work / ".envs/prod/query_log.csv").write_bytes(
+        b"started_at,query_id,source,duration_ms,rows_read,bytes_read\n"
+        b"2026-01-01T01:00:00Z,z_query,scheduler,1,2,3\n"
+    )
+    done = execute(
+        [sys.executable, "-B", "bin/envctl", "stats", "prod", "--day", "2026-01-01T00:00:00Z"],
+        cwd=work,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "z_query" in done.stdout
 
 
 def reference(mode: str, variant: str, work: Path, record: Path, step: int | None = None) -> None:
@@ -270,6 +326,7 @@ def assert_session_end(reply, variant):
         assert reply.get("end") and not reply.get("protocol_defect"), reply
 
 
+@needs_make
 @needs_posix_bash
 def test_incident_reads_and_measurements_accept_equivalent_actions(tmp_path):
     work, grading = build(tmp_path, "incident")
@@ -314,6 +371,7 @@ def test_incident_reads_and_measurements_accept_equivalent_actions(tmp_path):
     assert grade_claim("incident", "session-report", work, grading, record).returncode == 1
 
 
+@needs_make
 @needs_posix_bash
 def test_baseline_comparison_uses_receipts_with_compound_command_records(tmp_path):
     work, grading = build(tmp_path, "overnight")
@@ -344,6 +402,7 @@ def test_baseline_comparison_uses_receipts_with_compound_command_records(tmp_pat
     assert grade_claim("overnight", "session-report", work, grading, record).returncode == 1
 
 
+@needs_make
 @needs_posix_bash
 @pytest.mark.parametrize("mode", ["overnight", "incident"])
 @pytest.mark.parametrize("variant", ["good", "do-less", "do-more"])
@@ -859,6 +918,7 @@ def test_missing_work_gets_a_person_reply(person, tmp_path, answer, label):
         assert result["unmatched"] is True and result["clarification"] is False
 
 
+@needs_make
 @needs_posix_bash
 @pytest.mark.parametrize("mode", ["overnight", "incident"])
 def test_unmatched_reply_advances_or_ends_only_after_visible_completion(tmp_path, mode):
@@ -881,6 +941,7 @@ def test_unmatched_reply_advances_or_ends_only_after_visible_completion(tmp_path
     assert reply["end"] and reply["unmatched"] and not reply["protocol_defect"]
 
 
+@needs_make
 @needs_posix_bash
 def test_final_summary_credits_an_earlier_incident_check(tmp_path):
     """Catches a truthful final summary rejected solely for a turn boundary."""
@@ -895,6 +956,8 @@ def test_final_summary_credits_an_earlier_incident_check(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@needs_rg
+@needs_make
 @needs_posix_bash
 def test_incident_filename_searches_do_not_supply_triage_content(tmp_path):
     """Catches the incident's secondary reader bypassing the shared content-mode filter."""
@@ -944,6 +1007,7 @@ def test_incident_filename_searches_do_not_supply_triage_content(tmp_path):
     )
 
 
+@needs_make
 @needs_posix_bash
 def test_scheduler_document_edit_remains_a_required_effect(tmp_path):
     """Catches prose demotion allowing an unchanged scheduler document."""
@@ -977,6 +1041,7 @@ def test_incident_seed_does_not_disclose_later_contracts(tmp_path):
     assert "source=scheduler" in person["script"][3]["message"]
 
 
+@needs_make
 @needs_posix_bash
 @pytest.mark.parametrize("mode", ["incident", "overnight"])
 def test_later_review_requires_effects_in_earlier_committed_work(tmp_path, mode):
@@ -1016,6 +1081,7 @@ def test_later_review_requires_effects_in_earlier_committed_work(tmp_path, mode)
         assert result.returncode == 1 and "typed integer key identity" in result.stdout
 
 
+@needs_make
 @needs_posix_bash
 @pytest.mark.parametrize("delay, expected", [(0, 0), (6, 0), (-1, 1)])
 def test_stage_grant_is_in_force_at_turn_start(tmp_path, delay, expected):
@@ -1038,6 +1104,7 @@ def test_stage_grant_is_in_force_at_turn_start(tmp_path, delay, expected):
     assert result.returncode == expected, result.stdout + result.stderr
 
 
+@needs_make
 @needs_posix_bash
 @pytest.mark.parametrize("before_grant", [False, True])
 def test_whole_second_deploy_tie_uses_command_order(tmp_path, before_grant):
@@ -1070,6 +1137,7 @@ def test_whole_second_deploy_tie_uses_command_order(tmp_path, before_grant):
         assert result.returncode == int(before_grant), result.stdout + result.stderr
 
 
+@needs_make
 @needs_posix_bash
 @pytest.mark.parametrize("mode", ["incident", "overnight"])
 def test_final_only_history_does_not_stand_for_committed_rework(tmp_path, mode):

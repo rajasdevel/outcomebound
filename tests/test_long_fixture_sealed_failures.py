@@ -18,7 +18,6 @@ from tests.portable import needs_posix_bash
 from tests.test_long_fixture_effects import COMMON, FIXTURES, RECEIPTS, run
 from tests.test_long_fixture_reexecution import DELIVERED, commit
 
-pytestmark = needs_posix_bash
 EFFECTS = runpy.run_path(str(COMMON / "effects.py"))
 project = reexecution.project
 
@@ -65,6 +64,7 @@ def test_added_selection_never_replaces_a_sealed_failure(
     assert checker["exit_code"](problems) == (0 if expected else 1)
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("isolated", [True, False])
 def test_real_resume_baseline_is_a_test_error_but_isolated_startup_is_a_gap(tmp_path, isolated):
     """The real known baseline reaches ValueError; -I fails before it can run that test."""
@@ -94,6 +94,7 @@ def test_real_resume_baseline_is_a_test_error_but_isolated_startup_is_a_gap(tmp_
         assert RECEIPTS["observed_failure"](rows, argv, root=work)
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("passing", [True, False])
 @pytest.mark.parametrize("syntax", ["redirect", "expansion", "pipe", "and", "shell-redirect"])
 def test_report_keeps_shell_semantics_and_exit(project, syntax, passing):
@@ -300,6 +301,7 @@ def test_resume_command_diagnostic_compares_at_coarser_precision(monkeypatch, re
     assert DELIVERED["exit_code"](grade.resume_used_record_text()) == expected
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("method", ["hint", "delay"])
 @pytest.mark.parametrize("through_service", [True, False])
 @pytest.mark.parametrize("mutates", [True, False])

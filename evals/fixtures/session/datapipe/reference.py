@@ -593,7 +593,7 @@ def incident_ruling(session: Session, _variant: str) -> None:
     )
     session.replace(
         "datapipe/querystats.py",
-        '            started = datetime.fromisoformat(row["started_at"])',
+        '            started = datetime.fromisoformat(row["started_at"].replace("Z", "+00:00"))',
         "            started = utc(datetime.fromisoformat("
         'row["started_at"].replace("Z", "+00:00")))',
     )
@@ -890,7 +890,7 @@ DIAGNOSE = """    from collections import Counter, defaultdict
     nights = []
     recurring = Counter()
     for day in sorted(set(days)):
-        since = datetime.fromisoformat(day) + timedelta(hours=3)
+        since = datetime.fromisoformat(day.replace("Z", "+00:00")) + timedelta(hours=3)
         until = since + timedelta(minutes=20)
         totals = defaultdict(int)
         for row in aggregate(read_csv(path, since, until)):

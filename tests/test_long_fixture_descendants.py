@@ -16,11 +16,11 @@ from tests.test_long_fixture_effects import COMMON, RECEIPTS, run
 from tests.test_long_fixture_effects import instrumented as instrumented
 from tests.test_long_fixture_sealed_failures import EFFECTS, action
 
-pytestmark = needs_posix_bash
 DELIVERED = reexecution.DELIVERED
 project = reexecution.project
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("passing", [True, False])
 @pytest.mark.parametrize("quoted", [True, False])
 def test_report_line_continuation_has_the_shells_value(project, passing, quoted):
@@ -35,6 +35,7 @@ def test_report_line_continuation_has_the_shells_value(project, passing, quoted)
     assert DELIVERED["report"](text, root=project) is passing
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("wrapper", ["{}", "{} 2>&1", "sh -c {}", "sh -c {} 2>&1"])
 @pytest.mark.parametrize("mode", ["-n", "--dry-run", "-q", "-t", "-Bn", "execute"])
 def test_make_modes_cannot_gain_credit_through_a_wrapper(project, wrapper, mode):
@@ -47,6 +48,7 @@ def test_make_modes_cannot_gain_credit_through_a_wrapper(project, wrapper, mode)
     assert DELIVERED["report"](text, root=project) is (mode == "execute")
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("wrapper", ["{}", "{} 2>&1", "sh -c {}"])
 @pytest.mark.parametrize("empty", [True, False])
 def test_wrapped_unittest_still_requires_a_nonempty_run(project, wrapper, empty):
@@ -56,6 +58,7 @@ def test_wrapped_unittest_still_requires_a_nonempty_run(project, wrapper, empty)
     assert DELIVERED["report"](text, root=project) is (not empty)
 
 
+@needs_posix_bash
 @pytest.mark.parametrize(
     "wrapper", ["env MAKEFLAGS=n {}", "env -u MAKEFLAGS {}", "env MAKEFLAGS=n sh -c {}"]
 )
@@ -70,6 +73,7 @@ def test_launcher_modes_apply_only_to_the_inner_make(project, wrapper, make):
     assert DELIVERED["report"](text, root=project) is (not make)
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("redirect", ["", " 2>&1", " 1>&2"])
 def test_unavailable_shell_program_is_a_gap_in_either_stream(project, redirect):
     text = "sh -c 'missing-fixture-check --verify'" + redirect
@@ -83,6 +87,7 @@ def test_nonprogram_rows_with_paths_are_diagnostics(project, first):
     assert DELIVERED["reports"]([{"command": text, "result": "PASS"}], root=project) == ([], [])
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("executable", [True, False])
 def test_delivered_script_requires_executable_permission(project, executable):
     script = project / "inspect"
@@ -95,6 +100,7 @@ def test_delivered_script_requires_executable_permission(project, executable):
     assert DELIVERED["exit_code"](problems) == (1 if executable else 3)
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("text, expected", [("test 1 = 1", True), ("test 1 = 2", False)])
 def test_shell_builtin_is_a_command(project, text, expected):
     assert DELIVERED["report"](text, root=project) is expected
@@ -174,6 +180,7 @@ def test_direct_slow_receipt_overrules_observer_gap():
     assert DELIVERED["exit_code"](RECEIPTS["slow_problems"](rows, "slow suite exceeds scope")) == 1
 
 
+@needs_posix_bash
 def test_real_frozen_observer_leaves_descendant_entry_unverified(instrumented):
     """The child reaches the installed entry hook; its receipt is suppressed at the freeze."""
     done = run(
@@ -191,6 +198,7 @@ def test_real_frozen_observer_leaves_descendant_entry_unverified(instrumented):
     assert DELIVERED["exit_code"](RECEIPTS["slow_problems"](rows, "slow suite ran")) == 3
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("wrapper", ["{}", "{} 2>&1", "sh -c {}"])
 def test_wrapped_pytest_zero_tests_cannot_receive_credit(project, wrapper):
     script = project / "pytest"
@@ -233,6 +241,7 @@ def test_each_process_bound_claim_keeps_descendant_gaps_and_known_failures(
     assert DELIVERED["exit_code"](problems) == (1 if violation else 3)
 
 
+@needs_posix_bash
 @pytest.mark.parametrize("tagged,removed", [(True, False), (True, True), (False, False)])
 def test_current_resume_tag_decides_even_when_its_child_receipt_is_missing(
     tmp_path, tagged, removed
