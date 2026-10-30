@@ -107,7 +107,7 @@ Use the listed project path even if the skill catalog omits it or a personal ski
 - before drafting tickets, or publishing them to the ticket store: read .agents/skills/slice-tickets/SKILL.md
 - before handing a ticket to the agent or model that will build it: read .agents/skills/hand-off-tickets/SKILL.md
 - before building an interactive page for the person: read .agents/skills/explorable/SKILL.md
-- before opening, updating or pushing to a pull or merge request, merging it, or changing its auto-merge or review state: read .agents/skills/land-change/SKILL.md
+- before opening, updating or merging a pull or merge request, or changing its auto-merge or review state (a push to a branch with no open request needs no read): read .agents/skills/land-change/SKILL.md
 - before preparing or recording a person's acceptance of a delivered change: read .agents/skills/run-acceptance/SKILL.md
 - before reading or writing a card in a tracker outside the project's ticket store: read .agents/skills/sync-tracker/SKILL.md
 Read only when the person names it or a file you are reading directs you to it (skills under `.agents/skills/<name>/SKILL.md`): `gather-requirements`, `tests-worth-keeping`, `review-findings`, `explain-spec`, `.outcomebound/fragments/commands.md`.

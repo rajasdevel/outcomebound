@@ -87,7 +87,7 @@ installed root as `<root>/<name>/SKILL.md`.
 | `slice-tickets` | before drafting tickets, or publishing them to the ticket store |
 | `hand-off-tickets` | before handing a ticket to the agent or model that will build it |
 | `explorable` | before building an interactive page for the person |
-| `land-change` | before opening, updating or pushing to a pull or merge request, merging it, or changing its auto-merge or review state |
+| `land-change` | before opening, updating or merging a pull or merge request, or changing its auto-merge or review state (a push to a branch with no open request needs no read) |
 | `run-acceptance` | before preparing or recording a person's acceptance of a delivered change |
 | `sync-tracker` | before reading or writing a card in a tracker outside the project's ticket store |
 

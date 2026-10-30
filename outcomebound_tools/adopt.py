@@ -183,8 +183,8 @@ MANUAL = frozenset(SKILLS) - {"decision-brief", "diagnose"}
 # before the guarded act, never on a task that does not reach it. The skill stays out of the list.
 ACTS = {
     "land-change": (
-        "before opening, updating or pushing to a pull or merge request, merging it, or changing "
-        "its auto-merge or review state"
+        "before opening, updating or merging a pull or merge request, or changing its auto-merge "
+        "or review state (a push to a branch with no open request needs no read)"
     ),
     "sync-tracker": (
         "before reading or writing a card in a tracker outside the project's ticket store"
