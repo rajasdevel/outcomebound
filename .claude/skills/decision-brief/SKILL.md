@@ -1,6 +1,6 @@
 ---
 name: decision-brief
-description: Use when a decision compares several options, a brief or page is asked for, or a granted act is refused. Apply the person's rulings within scope. Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work. For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified. When a held act's owner and next step are settled, report it without asking again.
+description: Use when a decision compares several options, a brief or page is asked for, or a granted act is refused. Apply the person's rulings within scope. Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work. For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified. When a held act's owner and next step are settled and the person has been asked, report it without asking again.
 ---
 
 # Decision brief
@@ -25,7 +25,7 @@ For recurring similar choices, propose one bounded standing rule with exclusions
 Read recorded answers with `outcomebound brief lookup <id or words>` or open briefs with `outcomebound brief open`; neither read-only command proves no answer exists elsewhere.
 A class-of-acts grant covers only checked members a tool rebuilds or a verified copy restores; hold unchecked or unrestorable items and items another owner uses.
 An unattended order answers whether to ask only for choices the kernel lets you decide; it grants no held act.
-When act and owner are settled, report what it waits for without re-asking; reporting grants nothing.
+When act and owner are settled and the person has been asked, report what it waits for without re-asking; reporting grants nothing.
 After a harness, hook or sandbox refusal, read [refusals](references/refusal.md) before proceeding.
 
 ## Due diligence

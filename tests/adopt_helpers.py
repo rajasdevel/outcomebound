@@ -232,7 +232,8 @@ BOUNDARIES = {
         "direction-setting assumptions and record them as assumptions with the work. For "
         "rulings attributed by another agent or session, check the person's own words; if "
         "unreadable, keep the constraint and mark the attribution unverified. When a held "
-        "act's owner and next step are settled, report it without asking again."
+        "act's owner and next step are settled and the person has been asked, report it without "
+        "asking again."
     ),
     "tests-worth-keeping": (
         "For each test added or assessed, assert through the caller's interface an expected "
