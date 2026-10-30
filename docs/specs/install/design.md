@@ -190,7 +190,7 @@ answer the question, endangers the machine or the person says so. Report it unfi
 look for a lock or half-done change before the next run. A handoff names who takes the next
 action. Where no one is established, report the gap and do not call the handover done.
 A message between calls is kept to a line, and the full report comes once, at the end of the
-turn. One observation settles a state: a command's own output or one read of the remote, read
+turn; a report or question that a rule asks for before an act still comes before it. One observation settles a state: a command's own output or one read of the remote, read
 again only when something may have changed it.
 Resume checks apply to another session's or person's work, include open handoff items, and ask
 about a pause where the checkout or a worktree has uncommitted work and nothing landed since

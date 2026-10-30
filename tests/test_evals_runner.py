@@ -899,7 +899,7 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         b'    "Read a file below when work you have read shows its condition holds; '
         b'it stays in force for "\n'
         b'    "the session, through its later turns and requests; read it again only when the '
-        b'next step\'s "\n'
+        b"next step's \"\n"
         b'    "rules from it are missing, uncertain or may have changed.\\n"\n'
         b'    "Use the listed project path even if the skill catalog omits it or a personal '
         b'skill has "\n'

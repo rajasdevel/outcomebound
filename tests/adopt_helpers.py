@@ -112,8 +112,9 @@ INSTALLED_RULES = {
         "a lock or half-done change.",
         "A handoff names who takes the next action; where no one is established, report that "
         "gap and do not call the handover done.",
-        "Keep a message between calls to a line; report once, at the end of the turn: what "
-        "changed, what ran and its result, what failed, what is held, and each question.",
+        "Keep a message between calls to a line, and give the full report once, at the end of "
+        "the turn: what changed, what ran and its result, what failed, what is held, and each "
+        "question; a report or question a rule asks for before an act still comes before it.",
         "One observation settles a state: a command's own output or one read of the remote shows "
         "a push, a commit or a deployment; check it again only when something may have changed "
         "it.",
