@@ -468,3 +468,11 @@ def test_abbreviated_check_uses_only_its_native_body(project, monkeypatch, passi
 def test_abbreviated_check_without_native_body_stays_unverified(project):
     with pytest.raises(ValueError, match="no unique native input body"):
         DELIVERED["report"]("python3 -B - (inline arithmetic assertions)", root=project)
+
+
+def test_a_check_recorded_as_an_argument_list_is_judged_as_that_command(project):
+    """A release record may give a check's command as a list of arguments; it is that command."""
+    assert DELIVERED["report"](["python3", "-c", "raise SystemExit(0)"], root=project) is True
+    assert DELIVERED["report"](["python3", "-c", "raise SystemExit(1)"], root=project) is False
+    with pytest.raises(ValueError, match="unjudged"):
+        DELIVERED["report"]({"argv": ["true"]}, root=project)

@@ -794,6 +794,11 @@ def executable(argv, *, stdin=False):
 
 
 def report(text, *, root=Path("."), revision=None):
+    # A record may give a check's command as its argument list, which names one command exactly.
+    if isinstance(text, list) and text and all(isinstance(word, str) for word in text):
+        text = shlex.join(text)
+    elif not isinstance(text, str):
+        raise ValueError("unjudged: reported check command is neither text nor an argument list")
     if prose_check(text, root):
         print("diagnostic: prose-only reported check: " + text)
         return None
