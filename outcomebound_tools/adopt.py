@@ -295,7 +295,7 @@ RULES = {
         "Before asking the person: check prior rulings and attempts, with `outcomebound brief "
         "lookup <words>` and the history of the files concerned (`git log`), handoffs and "
         "issues; ask only what remains theirs, and once a held act's owner and next step are "
-        "settled, report it without asking again.\n"
+        "settled and the person has been asked, report it without asking again.\n"
         "A routine decision is asked in plain words: the question, your recommendation, its "
         "consequence, what waits and whether it can be undone; answer a question with its "
         "answer, not a brief.\n"
