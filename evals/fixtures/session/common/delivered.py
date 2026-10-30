@@ -15,9 +15,66 @@ import sys
 import tarfile
 import tempfile
 from contextlib import contextmanager
+from itertools import pairwise
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+READ_ONLY_GIT = {"diff", "show", "status", "log", "rev-parse", "ls-files"}
+
+
+def excluded(path):
+    parts = path.parts
+    return bool(
+        set(parts)
+        & {
+            ".git",
+            ".remotes",
+            ".remote.git",
+            ".worktrees",
+            "__pycache__",
+            ".pytest_cache",
+            ".outcomebound-checks",
+        }
+        or any(
+            (parent == ".agents" and child in {"work", "worktrees", "handoffs", "shared-memory"})
+            or (parent == ".outcomebound" and child == "research-inbox")
+            for parent, child in pairwise(parts)
+        )
+    )
+
+
+def copy_tree(root, target, omit):
+    """Apply the same exclusions to entry names and link destinations."""
+    root = Path(root).resolve()
+
+    def ignore(folder, names):
+        skipped = []
+        for name in names:
+            path = Path(folder) / name
+            if omit(path.relative_to(root)):
+                skipped.append(name)
+            elif path.is_symlink():
+                resolved = path.resolve()
+                if not resolved.is_relative_to(root):
+                    raise ValueError("copy link escapes disposable copy")
+                if omit(resolved.relative_to(root)):
+                    skipped.append(name)
+        return skipped
+
+    shutil.copytree(root, target, dirs_exist_ok=True, symlinks=True, ignore=ignore)
+    for path in target.rglob("*"):
+        if path.is_symlink() and Path(os.readlink(path)).is_absolute():
+            destination = (root / path.relative_to(target)).resolve().relative_to(root)
+            path.unlink()
+            path.symlink_to(os.path.relpath(target / destination, path.parent))
+
+
+def overlay_machinery(target):
+    sealed = HERE / "seed-checks"
+    if sealed.is_dir():
+        shutil.copytree(sealed, target, dirs_exist_ok=True)
+    elif (HERE / "session.json").is_file():
+        raise ValueError("unjudged: sealed seed machinery is unavailable")
 
 
 def seal(root, folder, *, release=False):
@@ -51,29 +108,10 @@ def snapshot(root=Path("."), revision=None, *, machinery=True):
         if revision:
             archive_revision(root, target, revision)
         else:
-            shutil.copytree(
-                root,
-                target,
-                dirs_exist_ok=True,
-                symlinks=False,
-                ignore=shutil.ignore_patterns(
-                    ".git",
-                    ".agents",
-                    ".outcomebound",
-                    ".remotes",
-                    ".remote.git",
-                    ".worktrees",
-                    "__pycache__",
-                    ".pytest_cache",
-                ),
-            )
+            copy_tree(root, target, excluded)
         copy_repository(root, target, revision)
         if machinery:
-            sealed = HERE / "seed-checks"
-            if sealed.is_dir():
-                shutil.copytree(sealed, target, dirs_exist_ok=True)
-            elif (HERE / "session.json").is_file():
-                raise ValueError("unjudged: sealed seed machinery is unavailable")
+            overlay_machinery(target)
         yield target
 
 
@@ -82,7 +120,10 @@ def archive_revision(root, target, revision):
     if done.returncode:
         raise ValueError("unjudged: described revision is unavailable: " + revision)
     with tarfile.open(fileobj=io.BytesIO(done.stdout)) as archive:
+        links = []
         for member in archive:
+            if excluded(Path(member.name)):
+                continue
             path = target / member.name
             if not path.resolve().is_relative_to(target):
                 raise ValueError("archive path escapes disposable copy")
@@ -93,11 +134,26 @@ def archive_revision(root, target, revision):
                     path.write_bytes(source.read())
                     path.chmod(member.mode)
             elif member.issym():
-                link = path.parent / member.linkname
-                if not link.resolve().is_relative_to(target):
-                    raise ValueError("archive link escapes disposable copy")
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.symlink_to(member.linkname)
+                link = Path(member.linkname)
+                if link.is_absolute() and link.is_relative_to(root):
+                    link = Path(os.path.relpath(target / link.relative_to(root), path.parent))
+                path.symlink_to(link)
+                links.append(path)
+        prune_links(target, links)
+
+
+def prune_links(target, links):
+    # Resolve chains before removing any link, so an alias cannot restore evidence.
+    removed = []
+    for path in links:
+        resolved = path.resolve()
+        if not resolved.is_relative_to(target):
+            raise ValueError("archive link escapes disposable copy")
+        if excluded(resolved.relative_to(target)):
+            removed.append(path)
+    for path in removed:
+        path.unlink()
 
 
 def copy_repository(root, target, revision):
@@ -111,10 +167,10 @@ def copy_repository(root, target, revision):
         encoding="utf-8",
     )
     if repository.returncode == 0:
-        shutil.copytree(
+        copy_tree(
             repository.stdout.strip(),
             target / ".git",
-            ignore=shutil.ignore_patterns("hooks", "worktrees", "ob-receipts"),
+            lambda path: bool(set(path.parts) & {"hooks", "worktrees", "ob-receipts"}),
         )
         config = target / ".git/config"
         config.write_text(
@@ -133,9 +189,18 @@ def copy_repository(root, target, revision):
             (target / ".git/HEAD").write_text(head + "\n", encoding="utf-8")
 
 
-def run(root, argv, revision=None, *, input=None, machinery=True):
+def run(root, argv, revision=None, *, input=None, machinery=None):
     root = Path(root).resolve()
-    with snapshot(root, revision, machinery=machinery and Path(argv[0]).name != "git") as target:
+    with snapshot(root, revision, machinery=False) as target:
+        argv = [rewrite_path(arg, root, target) for arg in argv]
+        input = rewrite_path(input, root, target) if input is not None else None
+        if machinery is None:
+            machinery = any(
+                protected_execution(target, call, input=input)
+                for call in check_commands(shlex.join(argv))
+            )
+        if machinery:
+            overlay_machinery(target)
         env = {
             key: value
             for key, value in os.environ.items()
@@ -150,7 +215,7 @@ def run(root, argv, revision=None, *, input=None, machinery=True):
         )
         try:
             return subprocess.run(
-                [rewrite_path(arg, root, target) for arg in argv],
+                argv,
                 cwd=target,
                 env=env,
                 capture_output=True,
@@ -158,7 +223,7 @@ def run(root, argv, revision=None, *, input=None, machinery=True):
                 encoding="utf-8",
                 timeout=120,
                 check=False,
-                input=rewrite_path(input, root, target) if input is not None else None,
+                input=input,
             )
         except (OSError, subprocess.TimeoutExpired) as error:
             raise ValueError("unjudged: check could not finish: " + str(error)) from error
@@ -236,14 +301,7 @@ def command(text):
     if name in {"sh", "bash", "zsh"} and "-c" in argv:
         return argv
     if name == "git":
-        if len(argv) < 2 or argv[1] not in {
-            "diff",
-            "show",
-            "status",
-            "log",
-            "rev-parse",
-            "ls-files",
-        }:
+        if len(argv) < 2 or argv[1] not in READ_ONLY_GIT:
             raise ValueError("unjudged: reported Git operation is not a read-only check")
     elif not (
         name in {"env", "uv", "make", "gmake", "pytest"}
@@ -385,13 +443,12 @@ def shell_groups(text):
 def check_commands(text, makeflags=()):
     """Qualify drawn checks inside shell launchers and redirections, not tool actions."""
     result = []
-    launch = runpy.run_path(str(HERE / "commands.py"))["_program"]
     for argv in shell_groups(text):
         flags = list(makeflags)
         for word in argv:
             if word.startswith("MAKEFLAGS="):
                 flags = word.partition("=")[2].split()
-        argv = list(launch(argv))
+        argv = normalized(argv)
         if not argv:
             continue
         at = shell_body(argv)
@@ -399,11 +456,262 @@ def check_commands(text, makeflags=()):
             if at >= len(argv):
                 raise ValueError("unjudged: shell check has no command body")
             result.extend(check_commands(argv[at], flags))
+        elif argv[0] == "eval":
+            result.extend(check_commands(" ".join(argv[1:]), flags))
         else:
             if Path(argv[0]).name in {"make", "gmake"} and make_modes(flags, environment=True):
                 argv.insert(1, "-n")
             result.append(argv)
     return result
+
+
+def python_entry(argv):
+    """The first Python mode or script, after interpreter options."""
+    if not argv or not Path(argv[0]).name.startswith(("python", "pypy")):
+        return None
+    index = 1
+    while index < len(argv):
+        arg = argv[index]
+        if arg in {"-m", "-c", "-"} or not arg.startswith("-"):
+            return index
+        if arg == "--":
+            return index + 1 if index + 1 < len(argv) else None
+        index += 2 if arg in {"-W", "-X"} else 1
+    return None
+
+
+def normalized(argv):
+    """Unwrap the known observer before runner, make-mode or view qualification."""
+    launch = runpy.run_path(str(HERE / "commands.py"))["_program"]
+    argv = list(launch(argv))
+    while argv:
+        at = python_entry(argv)
+        if (
+            at is None
+            or Path(argv[at]).parts[-2:] != ("tools", "ob_receipts.py")
+            or argv[at + 1 : at + 2] != ["observe"]
+        ):
+            break
+        argv = list(launch(argv[at + 2 :]))
+    return argv
+
+
+def protected_path(root, path):
+    path = (root / path).resolve()
+    if not path.is_relative_to(root):
+        return False
+    path = path.relative_to(root)
+    return bool(
+        path.parts
+        and (
+            path.parts[0] == "tests"
+            or path.as_posix() == "Makefile"
+            or (HERE / "seed-checks" / path).is_file()
+        )
+    )
+
+
+def protected_execution(root, argv, *, input=None, seen=()):
+    """Choose a view before replay: protect executed machinery, not files read as data."""
+    runner = check_runner(argv)
+    if runner in {"unittest", "pytest", "make", "gmake"}:
+        return True
+    at = python_entry(argv)
+    if at is not None:
+        return python_execution(root, argv[at:], input, seen)
+    entry = argv[0]
+    shell = entry in {".", "source"} or Path(entry).name in {"sh", "bash", "zsh", "dash"}
+    if shell:
+        # Shell -c launchers are already expanded by check_commands; this is a script file.
+        entry = next((arg for arg in argv[1:] if not arg.startswith("-")), "")
+    path = root / entry
+    if protected_path(root, path):
+        return True
+    if path.is_relative_to(root) and path.is_file():
+        source = path.read_text(encoding="utf-8")
+        if source.startswith("#!") and "python" in source.splitlines()[0]:
+            return python_machinery(root, source, seen)
+        if shell or (
+            source.startswith("#!") and re.search(r"\b(?:sh|bash|zsh)\b", source.splitlines()[0])
+        ):
+            if path in seen:
+                raise ValueError("unjudged: recursive reported script")
+            return any(
+                protected_execution(root, call, seen=(*seen, path))
+                for call in check_commands(source)
+            )
+    return False
+
+
+def python_execution(root, args, input, seen):
+    entry = args[0]
+    if entry == "-c":
+        return python_machinery(root, args[1] if len(args) > 1 else "", seen)
+    if entry == "-":
+        return python_machinery(root, input or "", seen)
+    if entry == "-m":
+        module = (args[1] if len(args) > 1 else "").replace(".", "/")
+        path = root / (module + ".py")
+        if not path.is_file():
+            path = root / module / "__main__.py"
+        if not path.is_file():
+            return False  # No local module to replace with sealed machinery.
+    else:
+        path = root / entry
+    if protected_path(root, path):
+        return True
+    if not path.is_file():
+        return False  # Replay retains the interpreter's missing-script failure.
+    if path in seen:
+        raise ValueError("unjudged: reported script execution cannot be resolved")
+    return python_machinery(root, path.read_text(encoding="utf-8"), (*seen, path))
+
+
+def python_imports(tree):
+    aliases = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for item in node.names:
+                aliases[item.asname or item.name] = item.name
+        elif isinstance(node, ast.ImportFrom):
+            for item in node.names:
+                aliases[item.asname or item.name] = (node.module or "") + "." + item.name
+    return aliases
+
+
+def python_machinery(root, source, seen):
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False  # Replay reports the syntax failure on the described content.
+    aliases = python_imports(tree)
+    if any(
+        module.split(".")[0] in {"unittest", "pytest"}
+        or protected_path(root, module.replace(".", "/") + ".py")
+        for module in aliases.values()
+    ):
+        return True
+
+    def name(node):
+        if isinstance(node, ast.Name):
+            return aliases.get(node.id, node.id)
+        if isinstance(node, ast.Attribute):
+            return name(node.value) + "." + node.attr
+        return ""
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        called = name(node.func)
+        if python_call(root, called, node, seen):
+            return True
+    return False
+
+
+def python_call(root, called, node, seen):
+    # Dynamic loading executes code, unlike reading or hashing its bytes.
+    if called.startswith(("unittest.", "pytest.")):
+        return True
+    if called.removeprefix("builtins.") in {"exec", "eval", "compile"}:
+        return dynamic_python(root, node, seen)
+    if called in {
+        "__import__",
+        "builtins.__import__",
+        "importlib.import_module",
+        "importlib.util.spec_from_file_location",
+    } or called.endswith((".exec_module", ".load_module")):
+        raise ValueError("unjudged: reported Python dynamic import cannot be resolved")
+    return python_child(root, called, node, seen)
+
+
+def dynamic_python(root, node, seen):
+    """Resolve literal source and file-backed exec without replacing bytes read as data."""
+    if not node.args:
+        raise ValueError("unjudged: reported Python dynamic source is unavailable")
+    source = node.args[0]
+    try:
+        literal = ast.literal_eval(source)
+    except (ValueError, TypeError):
+        literal = None
+    if isinstance(literal, str):
+        return python_machinery(root, literal, seen)
+    # exec(Path('tools/check.py').read_text()) is execution of that protected file;
+    # the same wrapper around a content inspector must retain the described files.
+    if isinstance(source, ast.Call) and isinstance(source.func, ast.Attribute):
+        reader = source.func
+        if reader.attr in {"read_text", "read_bytes", "read"}:
+            path_call = reader.value
+            if isinstance(path_call, ast.Call) and path_call.args:
+                try:
+                    path = ast.literal_eval(path_call.args[0])
+                except (ValueError, TypeError):
+                    path = None
+                if isinstance(path, str):
+                    return python_execution(root, [path], None, seen)
+    raise ValueError("unjudged: reported Python dynamic source cannot be resolved")
+
+
+def python_child(root, called, node, seen):
+    process = called.startswith(("subprocess.", "os.", "asyncio.")) and called.rsplit(".", 1)[
+        -1
+    ] in {
+        "run",
+        "call",
+        "check_call",
+        "check_output",
+        "Popen",
+        "system",
+        "popen",
+        "execv",
+        "execve",
+        "execl",
+        "spawnv",
+        "create_subprocess_exec",
+        "create_subprocess_shell",
+    }
+    if not process and called not in {"runpy.run_path", "runpy.run_module"}:
+        return False
+    argument = (
+        node.args[0]
+        if node.args
+        else next(
+            (item.value for item in node.keywords if item.arg in {"args", "path_name", "mod_name"}),
+            None,
+        )
+    )
+    if argument is None:
+        raise ValueError("unjudged: reported Python child command has no argument")
+    if process and read_only_git_prefix(argument):
+        return False
+    try:
+        child = ast.literal_eval(argument)
+    except (ValueError, TypeError):
+        if process:
+            # Unresolved execution retains the sealed view. A known read-only Git
+            # prefix above needs the delivery, even with computed revision/path operands.
+            return True
+        raise ValueError("unjudged: reported Python child command cannot be resolved") from None
+    if called.startswith("runpy."):
+        args = ["-m", child] if called == "runpy.run_module" else [child]
+        return python_execution(root, args, None, seen)
+    calls = check_commands(child if isinstance(child, str) else shlex.join(child))
+    return any(protected_execution(root, call, seen=seen) for call in calls)
+
+
+def read_only_git_prefix(argument):
+    if not isinstance(argument, (ast.List, ast.Tuple)):
+        return False
+    prefix = []
+    for item in argument.elts:
+        try:
+            word = ast.literal_eval(item)
+        except (ValueError, TypeError):
+            break
+        if not isinstance(word, str):
+            break
+        prefix.append(word)
+    prefix = normalized(prefix)
+    return len(prefix) >= 2 and Path(prefix[0]).name == "git" and prefix[1] in READ_ONLY_GIT
 
 
 def shell_body(argv):
@@ -462,15 +770,13 @@ def make_modes(args, *, environment=False):
 
 
 def check_runner(argv):
+    argv = normalized(argv)
+    if not argv:
+        return ""
+    at = python_entry(argv)
+    if at is not None:
+        return argv[at + 1] if argv[at] == "-m" and at + 1 < len(argv) else ""
     if Path(argv[0]).name.startswith(("python", "pypy")):
-        args = iter(argv[1:])
-        for arg in args:
-            if arg == "-m":
-                return next(args, "")
-            if arg in {"-W", "-X"}:
-                next(args, None)
-            elif arg == "-c" or arg == "-" or not arg.startswith("-"):
-                return ""
         return ""
     return Path(argv[0]).name
 
