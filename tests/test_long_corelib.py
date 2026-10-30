@@ -19,7 +19,7 @@ import pytest
 from evals.long_sessions import Driver
 from evals.session_evidence import _native_actions
 from tests.eval_helpers import RUN
-from tests.portable import needs_posix_bash
+from tests.portable import needs_posix_bash, needs_rg
 
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "evals/fixtures"
@@ -177,7 +177,7 @@ READER = load_reader()
         ("Bash", "grep -n done records/progress.json", 0),
         ("Bash", "grep -l done records/progress.json", 1),
         ("Bash", "grep -q done records/progress.json", 1),
-        ("Bash", "rg -l done records/progress.json", 1),
+        pytest.param("Bash", "rg -l done records/progress.json", 1, marks=needs_rg),
         ("Bash", "cat records/progress.json", 0),
     ],
 )
