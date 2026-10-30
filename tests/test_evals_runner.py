@@ -1661,11 +1661,13 @@ def test_bounded_command_keeps_partial_output_and_stops_descendant(
     assert not alive, f"timed-out child still runs, state {state[:1] or 'unknown'}"
 
 
-def _process_facts(pid: int, started: list[int]) -> str:
-    """What a failure needs to tell a missed descendant from a reused id: the process's place in
-    the log, its parent, state and start, and its command line, where the host shows them."""
+def _process_facts(pid: int, started: list[int], killed: set[int]) -> str:
+    """What a failure needs to tell a missed descendant from a reused id or one slow to end:
+    the process's place in the log, whether the stop sent it SIGKILL, its parent, state and start,
+    and its command line, where the host shows them."""
 
-    facts = f"{pid} (#{started.index(pid) + 1} of {len(started)})"
+    sent = "sent SIGKILL" if pid in killed else "never sent SIGKILL"
+    facts = f"{pid} (#{started.index(pid) + 1} of {len(started)}, {sent})"
     try:
         stat = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
         command = (
@@ -1696,15 +1698,19 @@ def test_bounded_command_stops_a_descendant_made_while_its_scan_waits(tmp_path, 
 
     real_kill = os.kill
     delayed: list[int] = []
+    killed: set[int] = set()
 
     def slow_kill(pid, sig):
         # The delay comes once, before the first kill: what a starved scan costs.
         if sig == signal.SIGKILL and not delayed:
             delayed.append(pid)
             time.sleep(0.5)  # real time: the starved scan is a span the forking child must fill
+        if sig == signal.SIGKILL:
+            killed.add(pid)
         real_kill(pid, sig)
 
     pids = tmp_path / "pids"
+    # Each descendant sleeps past the wait below, so one the stop missed still runs when it ends.
     code = (
         "import os, time\n"
         f"log = open({str(pids)!r}, 'a', buffering=1)\n"
@@ -1712,7 +1718,7 @@ def test_bounded_command_stops_a_descendant_made_while_its_scan_waits(tmp_path, 
         "    pid = os.fork()\n"
         "    if pid == 0:\n"
         "        os.setsid()\n"
-        "        time.sleep(30)\n"
+        "        time.sleep(120)\n"
         "        os._exit(0)\n"
         "    log.write(str(pid) + chr(10))\n"
         "    time.sleep(0.02)\n"
@@ -1724,12 +1730,15 @@ def test_bounded_command_stops_a_descendant_made_while_its_scan_waits(tmp_path, 
         monkeypatch.setattr(os, "kill", real_kill)
         started = [int(line) for line in pids.read_text(encoding="utf-8").split()]
         assert started, "the command started no descendant"
-        deadline = time.monotonic() + 10
+        # A killed process ends only when it leaves the kernel; on a loaded hosted runner one has
+        # still been listed 10 s after its kill, so the bound is wide (an event wait, free when
+        # they end at once) and the facts say whether the stop sent each one SIGKILL.
+        deadline = time.monotonic() + 60
         while any(running(pid) for pid in started) and time.monotonic() < deadline:
             time.sleep(0.05)
         left = [pid for pid in started if running(pid)]
         assert not left, f"{len(left)} of {len(started)} descendants still run: " + "; ".join(
-            _process_facts(pid, started) for pid in left
+            _process_facts(pid, started, killed) for pid in left
         )
     finally:
         monkeypatch.setattr(os, "kill", real_kill)
