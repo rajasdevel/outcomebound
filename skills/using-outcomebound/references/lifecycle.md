@@ -34,12 +34,13 @@ an outside contract or an unsettled intent; every other choice on the route is y
 | Landing to release and deployment | Identify the artifact, destination, expected observation and recovery action. Verify identity and behavior at the requested destination under its actual grant and gate. | The outcome ends at a checked local artifact or landing; publication and deployment have no role in it. |
 | Delivery to operation | Establish the next owner, finite observation window, success or failure signals, response route and recovery bounds. Check the delivered version and its relevant user path. | No service or ongoing obligation is created or changed; existing operational coverage still fits. |
 | Incident or feedback to maintenance | Stabilize within the grant, retain relevant evidence, then use `diagnose` for an unknown cause. Return a changed need to requirements, or a defect to a bounded repair and its recurrence check. | No incident, defect, changed need or maintenance obligation calls for work. |
-| Maintenance to retirement | Find remaining consumers, data and compatibility obligations, retention requirements, and recovery needs. Complete authorized preparation; verify the removal and remaining consumers after an authorized cutover. Once the removal is authorized, add an entry to `.outcomebound/retired.json` for each path, command or process step it drops. | Nothing is being removed and no end-of-life obligation is in scope. |
+| Maintenance to retirement | Find remaining consumers, data and compatibility obligations, retention requirements, and recovery needs. Complete authorized preparation; verify the removal and remaining consumers after an authorized cutover. Once the removal is authorized, and where the project keeps `.outcomebound/retired.json`, add an entry to it for each path, command or process step it drops. | Nothing is being removed and no end-of-life obligation is in scope. |
 
-A retired term, path, command or process step gets an entry in the project's
-`.outcomebound/retired.json` in the change that retires it, so that a copy left in a guide fails
+Where the project keeps `.outcomebound/retired.json`, a retired term, path, command or process
+step gets an entry in it in the change that retires it, so that a copy left in a guide fails
 `instructions check`; `$(outcomebound home)/schemas/retired-terms.schema.json` gives the form. This
-includes a step dropped from the project's own route document, outside any transition. Where a
+includes a step dropped from the project's own route document, outside any transition. A project
+without that file gets one only when the person asks for it. Where a
 floor is installed with no `docs.retired` claim, the change that adds the first entry adds that
 claim; `outcomebound floor propose` prints it.
 
@@ -129,7 +130,8 @@ is, and what it now owes goes in the inventory. It holds:
 - what the change invalidates;
 - what still holds under a lighter route: data kept, versions supported, consumers served and
   contract duties, each with its owner or its retirement;
-- what to retire: the entries the change adds to `.outcomebound/retired.json`. Once decided, write
+- what to retire: where the project keeps `.outcomebound/retired.json`, the entries the change
+  adds to it. Once decided, write
   them in the commit that adds the "Changed —" line, and quote the old term in that line, so the
   line does not count.
 

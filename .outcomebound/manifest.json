@@ -435,7 +435,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "4f2afbbd560d540a05bd870566aed2095259606d41d7e3e6980bb256a3350050"
+      "sha256": "080ed3afff626ebbeb7a3b4d9b16a5cabb2a75df83b73ea8ee78c5d513f395d4"
     },
     {
       "kind": "skill",
@@ -795,7 +795,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "4f2afbbd560d540a05bd870566aed2095259606d41d7e3e6980bb256a3350050"
+      "sha256": "080ed3afff626ebbeb7a3b4d9b16a5cabb2a75df83b73ea8ee78c5d513f395d4"
     },
     {
       "kind": "skill",
