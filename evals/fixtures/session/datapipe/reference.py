@@ -8,6 +8,7 @@ import os
 import runpy
 import shlex
 import subprocess
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -413,6 +414,13 @@ def incident_step(session: Session, step: int, variant: str) -> None:
             step, "Partial work remains because I have not inspected or changed the project yet."
         )
         return
+    if step == 6:
+        # Environment events have whole-second times. Open approval in a later second
+        # than the previous turn so an earlier deploy cannot tie with the approved one.
+        previous = datetime.fromisoformat(session.turns[-1]["ended_at"]).replace(microsecond=0)
+        while (opened := datetime.now(timezone.utc)).replace(microsecond=0) <= previous:
+            time.sleep(0.01)
+        session.started = opened.isoformat()
     actions[step](session, variant)
 
 

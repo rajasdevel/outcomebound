@@ -643,7 +643,8 @@ time.sleep(60)
     assert table.get(pid, (0, "Z"))[1] == "Z"
 
 
-def test_cut_check_runs_from_stage_and_is_polled_at_five_seconds(tmp_path, monkeypatch):
+@pytest.mark.parametrize("base", [123.456, 0.0])
+def test_cut_check_runs_from_stage_and_is_polled_at_five_seconds(tmp_path, monkeypatch, base):
     from evals import long_sessions
 
     driver, _ = _driver(tmp_path, [], shape="split")
@@ -654,14 +655,20 @@ def test_cut_check_runs_from_stage_and_is_polled_at_five_seconds(tmp_path, monke
         encoding="utf-8",
     )
     driver.session = driver.session._replace(cut_check=(sys.executable, str(program)))
-    clock = [time.monotonic()]
+    clock = [base]
     monkeypatch.setattr(long_sessions.time, "monotonic", lambda: clock[0])
     assert driver.cut_check() is None
+    assert driver.cut_polls == 1
+    records = sorted(driver.place.keep.parent.glob("*.cut-check-*.json"))
+    assert [json.loads(p.read_text(encoding="utf-8"))["returncode"] for p in records] == [1]
     (driver.place.workspace / "checkpoint").write_text("done", encoding="utf-8")
     clock[0] += 4.9
     assert driver.cut_check() is None
-    clock[0] += 0.1
+    assert driver.cut_polls == 1
+    assert sorted(driver.place.keep.parent.glob("*.cut-check-*.json")) == records
+    clock[0] = driver.next_cut_poll
     assert driver.cut_check() == "split"
+    assert driver.cut_polls == 2
     records = sorted(driver.place.keep.parent.glob("*.cut-check-*.json"))
     assert [json.loads(p.read_text(encoding="utf-8"))["returncode"] for p in records] == [1, 0]
 
