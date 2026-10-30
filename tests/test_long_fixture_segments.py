@@ -468,6 +468,7 @@ def test_new_test_area_does_not_expand_permission_over_protected_seed_helpers(sc
     assert name in SCOPE["check"](scoped_repo, lambda value: value.startswith("tests/"))[0]
 
 
+@pytest.mark.skipif(shutil.which("make") is None, reason="no make on PATH")
 @pytest.mark.parametrize("target", ["lint", "gates", "test", "test-integration"])
 @pytest.mark.parametrize("code, expected", [(0, True), (2, False)])
 def test_every_declared_make_check_runs_the_delivered_recipe(content, target, code, expected):

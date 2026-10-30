@@ -11,6 +11,7 @@ import sys
 
 import pytest
 
+from tests.portable import needs_bash
 from tests.test_long_fixture_effects import COMMON, run
 
 DELIVERED = runpy.run_path(str(COMMON / "delivered.py"))
@@ -272,7 +273,7 @@ def test_an_error_inside_the_named_test_is_its_observed_failure(project):
     assert RECEIPTS["observed_failure"](rows, argv, root=project)
 
 
-@pytest.mark.parametrize("shell", ["sh", "bash"])
+@pytest.mark.parametrize("shell", ["sh", pytest.param("bash", marks=needs_bash)])
 @pytest.mark.parametrize("passing", [True, False])
 def test_reported_shell_checks_are_run(project, shell, passing):
     selection = "test_ok" if passing else "test_bad"
@@ -346,6 +347,7 @@ def test_parenthetical_report_description_is_a_gap_but_shell_groups_are_executed
     assert DELIVERED["report"]("true; (exit 1)", root=project) is False
 
 
+@pytest.mark.skipif(shutil.which("make") is None, reason="no make on PATH")
 def test_seed_machinery_runs_on_delivered_content_despite_workspace_edits(project, tmp_path):
     stage = tmp_path / "sealed"
     stage.mkdir()
