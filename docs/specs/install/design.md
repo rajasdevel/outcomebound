@@ -82,7 +82,7 @@ installed root as `<root>/<name>/SKILL.md`.
 
 | Skill | Read condition |
 | --- | --- |
-| `using-outcomebound` | before retiring a component, or changing the route by which a change reaches its users |
+| `using-outcomebound` | before retiring a component, or changing the route by which a change reaches its users (a release by the route it already has is not one) |
 | `review-council` | before asking another model or harness for a review |
 | `slice-tickets` | before drafting tickets, or publishing them to the ticket store |
 | `hand-off-tickets` | before handing a ticket to the agent or model that will build it |
@@ -189,6 +189,9 @@ project's dangling images; the report names each removal. Stop a check only when
 answer the question, endangers the machine or the person says so. Report it unfinished, and
 look for a lock or half-done change before the next run. A handoff names who takes the next
 action. Where no one is established, report the gap and do not call the handover done.
+A message between calls is kept to a line, and the full report comes once, at the end of the
+turn. One observation settles a state: a command's own output or one read of the remote, read
+again only when something may have changed it.
 Resume checks apply to another session's or person's work, include open handoff items, and ask
 about a pause where the checkout or a worktree has uncommitted work and nothing landed since
 the last handoff. Continue what the grant covers, and end the report with each choice still
@@ -205,7 +208,7 @@ order; each skill group uses skill order. Where any such line exists, the list s
 two lines:
 
 ```text
-Read a file below when work you have read shows its condition holds; it stays in force for the session; read it again only when the next step's rules from it are missing, uncertain or may have changed.
+Read a file below when work you have read shows its condition holds; it stays in force for the session, through its later turns and requests; read it again only when the next step's rules from it are missing, uncertain or may have changed.
 Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
 ```
 
@@ -221,7 +224,7 @@ get act-based read lines instead of names on the manual line:
 
 | Fragment | Read condition |
 | --- | --- |
-| `workspace` | before creating or removing a worktree, resuming or handing off work, or removing a container, volume or named data |
+| `workspace` | before creating or removing a worktree, resuming another session's or person's work, writing a handoff, or removing a container, volume or named data |
 | `multi-agent` | before writing a delegate's brief or integrating a delegate's work |
 | `research` | before running `outcomebound research` |
 | `explore` | before starting exploration work, and when its appetite ends or its sought signal appears |

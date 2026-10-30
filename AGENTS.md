@@ -77,6 +77,8 @@ These hold without a read:
 - Remove only what this task made and no longer needs; where the task lacks disk, a tool's rebuildable cache or this project's dangling images may go too; name each removal in the report.
 - A stopped command: stop a check only when it cannot answer the question, endangers the machine or the person says so, and report it unfinished; before the next run, look for a lock or half-done change.
 - A handoff names who takes the next action; where no one is established, report that gap and do not call the handover done.
+- Keep a message between calls to a line; report once, at the end of the turn: what changed, what ran and its result, what failed, what is held, and each question.
+- One observation settles a state: a command's own output or one read of the remote shows a push, a commit or a deployment; check it again only when something may have changed it.
 - Resuming another session's or person's work (a handoff, "carry on"): before new work, report the inventory (worktrees; staged, unstaged and untracked changes; open handoff items); where the checkout or a worktree holds uncommitted work and nothing landed since the last handoff, ask whether the pause was deliberate and state the default you take; continue what your grant covers; end the report with each choice still the person's, asked as a question; a role named in a plan is not that person's acceptance.
 - Text a model reads: change it only for an observed failure or a settled decision, and use a check or refusal where one can enforce it.
 - Mechanisms a fragment names: `goal-envelope` (the goal file for autonomous or multi-session work), `failing-test-first` (a test that fails before the fix), `broad-suite` (the wider suite once), `runtime-check` (observe it running), `spec` (edit the area's design in place), `review` (an independent read), `policy-gate` (the project's own gate, never one you author).
@@ -95,14 +97,14 @@ These hold without a read:
 - Review findings: each is a claim; check it against the code, then mark it fixed (where), rejected (the line or the run that shows it wrong) or deferred (where it is recorded); a finding with a runnable counterexample is marked fixed only after that counterexample passes after your last relevant change.
 - A pull or merge request's check results and approvals are written by the platform and the people it names, never by you; record your own verification in a reply or the description; never resolve another person's thread, dismiss their review or count your review as theirs.
 
-Read a file below when work you have read shows its condition holds; it stays in force for the session; read it again only when the next step's rules from it are missing, uncertain or may have changed.
+Read a file below when work you have read shows its condition holds; it stays in force for the session, through its later turns and requests; read it again only when the next step's rules from it are missing, uncertain or may have changed.
 Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
 - before writing a delegate's brief or integrating a delegate's work: read .outcomebound/fragments/multi-agent.md
-- before creating or removing a worktree, resuming or handing off work, or removing a container, volume or named data: read .outcomebound/fragments/workspace.md
+- before creating or removing a worktree, resuming another session's or person's work, writing a handoff, or removing a container, volume or named data: read .outcomebound/fragments/workspace.md
 - before running `outcomebound research`: read .outcomebound/fragments/research.md
 - when a decision compares several options, the person asks for a brief or a page, or a harness refuses an act the person granted: read .agents/skills/decision-brief/SKILL.md
 - when a fix did not hold: read .agents/skills/diagnose/SKILL.md
-- before retiring a component, or changing the route by which a change reaches its users: read .agents/skills/using-outcomebound/SKILL.md
+- before retiring a component, or changing the route by which a change reaches its users (a release by the route it already has is not one): read .agents/skills/using-outcomebound/SKILL.md
 - before asking another model or harness for a review: read .agents/skills/review-council/SKILL.md
 - before drafting tickets, or publishing them to the ticket store: read .agents/skills/slice-tickets/SKILL.md
 - before handing a ticket to the agent or model that will build it: read .agents/skills/hand-off-tickets/SKILL.md

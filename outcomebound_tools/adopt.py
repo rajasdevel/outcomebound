@@ -190,7 +190,8 @@ ACTS = {
         "before reading or writing a card in a tracker outside the project's ticket store"
     ),
     "using-outcomebound": (
-        "before retiring a component, or changing the route by which a change reaches its users"
+        "before retiring a component, or changing the route by which a change reaches its users "
+        "(a release by the route it already has is not one)"
     ),
     "run-acceptance": "before preparing or recording a person's acceptance of a delivered change",
     "review-council": "before asking another model or harness for a review",
@@ -229,6 +230,11 @@ RULES = {
         "a lock or half-done change.\n"
         "A handoff names who takes the next action; where no one is established, report that "
         "gap and do not call the handover done.\n"
+        "Keep a message between calls to a line; report once, at the end of the turn: what "
+        "changed, what ran and its result, what failed, what is held, and each question.\n"
+        "One observation settles a state: a command's own output or one read of the remote shows "
+        "a push, a commit or a deployment; check it again only when something may have changed "
+        "it.\n"
         "Resuming another session's or person's work (a handoff, \"carry on\"): before new "
         "work, report the inventory (worktrees; staged, unstaged and untracked changes; open "
         "handoff items); where the checkout or a worktree holds uncommitted work and nothing "

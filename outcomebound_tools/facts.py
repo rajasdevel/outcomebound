@@ -626,8 +626,8 @@ def inline(fragment: Fragment) -> str:
 
 ONCE = (
     "Read a file below when work you have read shows its condition holds; it stays in force for "
-    "the session; read it again only when the next step's rules from it are missing, uncertain "
-    "or may have changed.\n"
+    "the session, through its later turns and requests; read it again only when the next step's "
+    "rules from it are missing, uncertain or may have changed.\n"
     "Use the listed project path even if the skill catalog omits it or a personal skill has "
     "the same name."
 )
@@ -643,8 +643,8 @@ MANUAL_FRAGMENTS = frozenset(
 # Manual fragments read just before the act their condition names, never on other tasks.
 FRAGMENT_ACTS = {
     "workspace": (
-        "before creating or removing a worktree, resuming or handing off work, or removing a "
-        "container, volume or named data"
+        "before creating or removing a worktree, resuming another session's or person's work, "
+        "writing a handoff, or removing a container, volume or named data"
     ),
     "multi-agent": "before writing a delegate's brief or integrating a delegate's work",
     "research": "before running `outcomebound research`",

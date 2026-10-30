@@ -542,7 +542,8 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
         assert pointer not in note and "id=project-facts" in note, note
         assert (
             "- before retiring a component, or changing the route by which a change reaches "
-            "its users: read .agents/skills/using-outcomebound/SKILL.md"
+            "its users (a release by the route it already has is not one): read "
+            ".agents/skills/using-outcomebound/SKILL.md"
         ) in note.splitlines()
         manual = note.split("Read only when the person names it", 1)[1]
         assert "`using-outcomebound`" not in manual
@@ -897,9 +898,9 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         b"ONCE = (\n"
         b'    "Read a file below when work you have read shows its condition holds; '
         b'it stays in force for "\n'
-        b"    \"the session; read it again only when the next step's rules from it are missing, "
-        b'uncertain "\n'
-        b'    "or may have changed.\\n"\n'
+        b'    "the session, through its later turns and requests; read it again only when the '
+        b'next step\'s "\n'
+        b'    "rules from it are missing, uncertain or may have changed.\\n"\n'
         b'    "Use the listed project path even if the skill catalog omits it or a personal '
         b'skill has "\n'
         b'    "the same name."\n'
