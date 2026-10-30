@@ -14,9 +14,15 @@ from pathlib import Path, PurePath, PureWindowsPath
 
 import pytest
 
+from evals.session_permissions import seal_refusal
+
 ROOT = Path(__file__).resolve().parent.parent
 WINDOWS = os.name == "nt"
-ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
+
+
+def root_user() -> bool:
+    return hasattr(os, "geteuid") and os.geteuid() == 0
+
 
 # `scripts/outcomebound`'s own run of a checkout, under this Python: the engine as a test
 # starts it, on every platform, where the sh launcher itself is a POSIX file.
@@ -121,8 +127,33 @@ EVAL_REASON = _eval_reason()
 needs_posix_bash = pytest.mark.skipif(bool(EVAL_REASON), reason=EVAL_REASON or "-")
 posix_only = pytest.mark.skipif(WINDOWS, reason="needs a POSIX feature Windows lacks")
 not_root = pytest.mark.skipif(
-    ROOT_USER, reason="the user is root, and root ignores file modes and read-only folders"
+    root_user(), reason="the user is root, and root ignores file modes and read-only folders"
 )
+SEAL_REFUSAL = seal_refusal()
+needs_session_seal = pytest.mark.skipif(bool(SEAL_REFUSAL), reason=SEAL_REFUSAL or "-")
+# The session graders rerun a session's checks only where a long session runs, and the runner
+# refuses one on Windows (`evals.session_permissions.seal_refusal`).
+session_graders_posix = pytest.mark.skipif(
+    WINDOWS, reason="the session graders run only where a long session runs; Windows refuses one"
+)
+needs_posix_processes = pytest.mark.skipif(
+    WINDOWS, reason="needs POSIX process groups and signals; Windows does not provide them"
+)
+needs_make = pytest.mark.skipif(shutil.which("make") is None, reason="make is not installed")
+needs_rg = pytest.mark.skipif(shutil.which("rg") is None, reason="rg is not installed")
+
+
+def shell_feature(command: str, feature: str):
+    """Gate on the shell that will execute the command, including its optional features."""
+    shell = shutil.which("sh")
+    supported = (
+        shell is not None
+        and subprocess.run([shell, "-c", command], capture_output=True, check=False).returncode == 0
+    )
+    return pytest.mark.skipif(not supported, reason=f"sh does not support {feature}")
+
+
+needs_exec_a = shell_feature("exec -a check true", "exec -a")
 
 
 def run_bash(script: Path, *arguments: str | Path, **options) -> subprocess.CompletedProcess:

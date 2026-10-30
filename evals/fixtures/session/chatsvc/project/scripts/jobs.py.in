@@ -1,0 +1,25 @@
+"""Run an offline manifest. No HTTP server, real provider or real-time replay is needed."""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from chatsvc.app import build_service
+from chatsvc.job_runner import run_manifest
+from fakeprovider import FakeProvider
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("manifest")
+    args = parser.parse_args()
+    print(
+        json.dumps(run_manifest(args.manifest, build_service("config", FakeProvider(quota=10000))))
+    )
+
+
+if __name__ == "__main__":
+    main()

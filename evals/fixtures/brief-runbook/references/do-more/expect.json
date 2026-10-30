@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "owned-bounds": "FAIL",
+    "checks-ran": "PASS",
+    "worked-cases": "PASS",
+    "docs-current": "PASS",
+    "docs-wording": "PASS",
+    "owned-bounds-command-text": "FAIL"
+  }
+}

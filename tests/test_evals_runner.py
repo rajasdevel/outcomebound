@@ -21,8 +21,8 @@ from pathlib import Path
 import pytest
 
 from evals.harnesses import CallResult, Request
-from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
-from tests.portable import needs_posix_bash
+from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN, copy_fixture_sources
+from tests.portable import needs_posix_bash, needs_session_seal
 
 # The fixture runner uses bash; this marker reports unavailable platforms explicitly.
 pytestmark = needs_posix_bash
@@ -61,6 +61,7 @@ METERED = (
 # writable roots are the argv's `--add-dir` folders, as codex-cli 0.163.0 records them.
 # Where the argv carries `service_tier=T`, or $OB_FAKE_TIER sets one (`none`: no event), the
 # record gets a `thread_settings_applied` event with that tier, as codex-cli 0.163.0 writes it.
+# Native token events include per-call usage as codex-cli 0.164.0 records it.
 FAKE_CODEX = r"""#!/bin/sh
 printf '%s\n' "$*" >> "$OB_FAKE_CALLS"
 case "$1" in
@@ -149,11 +150,20 @@ if mode != "none" and os.environ.get("CODEX_HOME"):
         records.append({"type":"event_msg","payload":{"type":"item_completed","item":item}})
     if mode=="split-model":
         records.append({"type":"turn_context","payload":{**context,"model":"gpt-6-astra"}})
+    usage={"input_tokens":0,"cached_input_tokens":0,"cache_write_input_tokens":0,
+           "output_tokens":0,"reasoning_output_tokens":0,"total_tokens":0}
+    records.append({"type":"event_msg","payload":{"type":"token_count","info":{
+        "total_token_usage":usage,"last_token_usage":usage,"model_context_window":475000},
+        "rate_limits":None}})
     text="".join(json.dumps(record)+"\n" for record in records)
     name=f"rollout-2026-10-14T00-00-00-{key}.jsonl"
     if mode=="symlink":
         (home/"elsewhere.jsonl").write_text(text)
         (day/name).symlink_to(home/"elsewhere.jsonl")
+    elif "resume" in argv and (day/name).exists():
+        # A resumed turn appends to the session's one rollout, as Codex does.
+        with (day/name).open("a") as rollout:
+            rollout.write("".join(json.dumps(r)+"\n" for r in records[1:]))
     else:
         (day/name).write_text(text)
     if mode=="twice":
@@ -219,6 +229,7 @@ def _invoke(
     (tmp_path / "answer.md").write_text(REPORTED, encoding="utf-8")
     (tmp_path / "fixtures").mkdir(exist_ok=True)
     trusted = _trusted()
+    sources = copy_fixture_sources(trusted / "source", history=True)
     out = output_dir or trusted / "out"
     environment = {
         **os.environ,
@@ -232,10 +243,22 @@ def _invoke(
         "OB_FAKE_ANSWER": str(tmp_path / "answer.md"),
         "OUTCOMEBOUND_FIXTURE_ROOT": str(tmp_path / "fixtures"),
         "CODEX_HOME": str(trusted / "home"),
+        # A session fixture's person waits up to an hour between messages; the fake does not.
+        "OB_EVAL_SKIP_WAITS": "1",
         **(env or {}),
     }
     done = subprocess.run(
-        [sys.executable, str(ROOT / "evals" / "run.py"), *arguments, "--out", str(out)],
+        [
+            sys.executable,
+            "-c",
+            "import sys\nfrom pathlib import Path\nfrom evals import run\n"
+            "run.FIXTURES = Path(sys.argv[1])\n"
+            "raise SystemExit(run._main(sys.argv[2:]))\n",
+            str(sources),
+            *arguments,
+            "--out",
+            str(out),
+        ],
         capture_output=True,
         text=True,
         cwd=str(ROOT),
@@ -466,7 +489,12 @@ def test_the_current_arm_puts_the_launcher_and_its_skills_in_reach_and_no_check_
 # and under the kernel-off arm, and the other two arms on a few fixtures that cover each shape.
 _ARM_SAMPLE = ("small-fix", "slice-a-spec", "decision")
 _ARM_CASES = [
-    pytest.param(fixture, arm, id=f"{arm}-{fixture}")
+    pytest.param(
+        fixture,
+        arm,
+        id=f"{arm}-{fixture}",
+        marks=needs_session_seal if fixture.startswith(("session-", "brief-")) else (),
+    )
     for fixture in RUN.fixture_names()
     for arm in RUN.ARMS
     if arm in ("current", RUN.NONE) or fixture in _ARM_SAMPLE
@@ -1083,8 +1111,11 @@ SH
 printf 'helper = 1\\n' > unrelated.py
 """
 # The grader in the stage, rewritten during the call. The test gives the run a TMPDIR of its own,
-# so the one stage it makes is the one that this finds.
-REWRITE_THE_STAGE = """for f in "$TMPDIR"/ob-graders-*/checks/scope.sh; do
+# so the one stage it makes is the one that this finds. The stage is sealed during calls; a
+# process of the same user can lift the seal, so the rewrite does that first, and the check after
+# the call must still catch it.
+REWRITE_THE_STAGE = """for d in "$TMPDIR"/ob-graders-*; do chmod -R u+rwx "$d"; done
+for f in "$TMPDIR"/ob-graders-*/checks/scope.sh; do
   printf '#!/bin/sh\\ntouch grader-ran\\n' > "$f"
 done
 """
@@ -2040,7 +2071,11 @@ def test_NEGATIVE_CONTROL_a_run_whose_evidence_changed_is_refused_and_nothing_is
         meta["grading_files_sha256"] = "0" * 64
         (out / "small-fix.meta.json").write_text(json.dumps(meta), encoding="utf-8")
     elif what == "sealed-graders":
-        (out / "small-fix.graders" / "post.plan.json").write_text("{}\n", encoding="utf-8")
+        # The sealed copy is read-only; a tamper lifts that first, as its owner can.
+        sealed = out / "small-fix.graders" / "post.plan.json"
+        os.chmod(sealed.parent, 0o700)
+        os.chmod(sealed, 0o600)
+        sealed.write_text("{}\n", encoding="utf-8")
     elif what == "native-copy":
         (out / "small-fix.native.jsonl").write_bytes(b'{"type":"x"}\n')
     else:

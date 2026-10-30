@@ -1,0 +1,43 @@
+"""Local plan, apply and inspect commands."""
+
+import argparse
+import json
+import sqlite3
+import sys
+from datapipe.reconcile import input, plan, store
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    for name in ("plan", "apply", "inspect"):
+        command = commands.add_parser(name)
+        if name != "inspect":
+            command.add_argument("input")
+        command.add_argument("--db", required=True)
+    args = parser.parse_args()
+    try:
+        if args.command == "inspect":
+            items, _history = store.read(args.db)
+            result = {"items": [items[key] for key in sorted(items)], **plan.totals(items)}
+        else:
+            records = input.load(args.input)
+            if args.command == "apply":
+                result = store.apply(args.db, records)
+            else:
+                result, _items, _history = plan.transition(records, *store.read(args.db))
+    except input.InputError as error:
+        print(json.dumps({"code": "E102", "line": error.line}), file=sys.stderr)
+        return 2
+    except UnicodeError:
+        print(json.dumps({"code": "E102", "line": 1}), file=sys.stderr)
+        return 2
+    except (OSError, sqlite3.Error):
+        print(json.dumps({"code": "E101", "line": 0}), file=sys.stderr)
+        return 2
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

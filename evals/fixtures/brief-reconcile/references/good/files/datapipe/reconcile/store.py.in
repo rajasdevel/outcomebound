@@ -1,0 +1,50 @@
+"""SQLite state with read-only plans and one transaction per application."""
+
+import sqlite3
+from pathlib import Path
+
+from datapipe.reconcile.plan import transition
+
+
+def connect(path, write=False):
+    path = Path(path).resolve()
+    return sqlite3.connect(path if write else path.as_uri() + "?mode=ro", uri=not write)
+
+
+def snapshot(db):
+    def event(row):
+        key, version, value, deleted = row
+        return {"key": key, "version": version, "value": value, "deleted": bool(deleted)}
+    items = {row[0]: event(row) for row in db.execute("SELECT key, version, value, deleted FROM items")}
+    history = {(row[0], row[1]): event(row) for row in db.execute("SELECT key, version, value, deleted FROM history")}
+    return items, history
+
+
+def read(path):
+    if not Path(path).exists():
+        return {}, {}
+    db = connect(path)
+    try:
+        return snapshot(db)
+    finally:
+        db.close()
+
+
+def apply(path, records):
+    # A conflict in a new batch must not create a previously absent database.
+    transition(records, *read(path))
+    db = connect(path, write=True)
+    try:
+        db.execute("BEGIN IMMEDIATE")
+        db.execute("CREATE TABLE IF NOT EXISTS items (key TEXT PRIMARY KEY, version INTEGER, value INTEGER, deleted INTEGER)")
+        db.execute("CREATE TABLE IF NOT EXISTS history (key TEXT, version INTEGER, value INTEGER, deleted INTEGER, PRIMARY KEY(key, version))")
+        result, items, history = transition(records, *snapshot(db))
+        db.executemany("INSERT OR REPLACE INTO items VALUES (:key, :version, :value, :deleted)", items.values())
+        db.executemany("INSERT OR IGNORE INTO history VALUES (:key, :version, :value, :deleted)", history.values())
+        db.commit()
+        return result
+    except BaseException:
+        db.rollback()
+        raise
+    finally:
+        db.close()

@@ -1,0 +1,18 @@
+{
+  "checks": [
+    [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "tests.test_bundles"
+    ]
+  ],
+  "test": "tests.test_bundles",
+  "package": "tally",
+  "areas": [
+    "tally/bundles/",
+    "tests/test_bundles.py",
+    "docs/bundles.md"
+  ]
+}

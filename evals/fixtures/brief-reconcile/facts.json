@@ -1,0 +1,18 @@
+{
+  "checks": [
+    [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "tests.test_reconcile"
+    ]
+  ],
+  "test": "tests.test_reconcile",
+  "package": "datapipe",
+  "areas": [
+    "datapipe/reconcile/",
+    "tests/test_reconcile.py",
+    "docs/reconcile.md"
+  ]
+}

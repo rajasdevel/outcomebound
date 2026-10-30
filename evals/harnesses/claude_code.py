@@ -1,13 +1,14 @@
-"""The Claude Code harness: `claude -p` with stream-JSON output, one fresh home per cell.
+"""The Claude Code harness: `claude -p` with stream-JSON output, one fresh home per run.
 
-Each call runs with a new cell folder, the one its request names (`<workspace id>.claude-home/`,
+Each run starts with a new cell folder, the one its request names (`<workspace id>.claude-home/`,
 beside the workspace, from evals/run.py), else one beside its kept session copy:
 its own `HOME`, `CLAUDE_CONFIG_DIR` and `XDG_*` folders, so nothing of the operator's Claude Code
 setup (user settings, user `CLAUDE.md` and rules, installed plugins, skills, agents, memory, MCP
 servers) reaches the call. The folder is kept: it holds the session the CLI wrote, and session
-history is never removed. Before the call, the folders above the workspace and the machine's
-managed policy are checked for instruction files and loaders (`claude_stream.reach_rows`); a
-call that would read one is refused before the model runs.
+history is never removed. Later turns verify and reuse this run's cell. Before each call, the
+folders above the workspace and the machine's managed policy are checked for instruction files
+and loaders (`claude_stream.reach_rows`). A call that would read one is refused before the model
+runs.
 
 The call: `--permission-mode acceptEdits` with `--permission-prompts none`, so a file edit inside
 the workspace (and a root the fixture adds) is allowed and anything that would ask a person is
@@ -74,8 +75,10 @@ from evals.claude_stream import (
 from evals.codex_events import parse_events
 from evals.harnesses import Budget, CallResult, Request
 from evals.harnesses.codex import check_protected
-from evals.native_receipts import NativeCapture, copy_exact, temporary_write_roots
-from evals.watch import watched_command
+from evals.native_receipts import NativeCapture, copy_exact, parse_records, temporary_write_roots
+from evals.session_evidence import family_evidence, retain_children
+from evals.session_usage import CallUsage
+from evals.watch import tree_manifest, watched_command
 
 NAME = "claude-code"
 CLI = "claude"
@@ -158,6 +161,19 @@ class Cell(NamedTuple):
     @property
     def config(self) -> Path:
         return self.folders()["CLAUDE_CONFIG_DIR"]
+
+    @property
+    def manifest(self) -> Path:
+        return self.root.with_name(self.root.name + ".manifest.json")
+
+    def verify(self) -> None:
+        if json.loads(self.manifest.read_text(encoding="utf-8")) != tree_manifest(self.root):
+            raise ValueError("the resumed call's cell differs from its recorded manifest")
+
+    def record(self) -> None:
+        self.manifest.write_text(
+            json.dumps(tree_manifest(self.root), indent=2) + "\n", encoding="utf-8"
+        )
 
 
 def cell_for(keep: Path) -> Cell:
@@ -255,7 +271,13 @@ def _denied(folder: Path, workspace: Path, own: set[Path]) -> list[Path]:
         return [folder]
     if not folder.is_dir():
         return []
-    return [path for entry in sorted(folder.iterdir()) for path in _denied(entry, workspace, own)]
+    try:
+        entries = sorted(folder.iterdir())
+    except PermissionError:
+        # An unlistable folder (a sealed run root) hides its entries from the call's commands as
+        # well: they run as the same user.
+        return []
+    return [path for entry in entries for path in _denied(entry, workspace, own)]
 
 
 def _run_env(command: list[str], env: dict[str, str]) -> tuple[int | None, str, str]:
@@ -383,6 +405,8 @@ class ClaudeCodeHarness:
             argv += ["--add-dir", str(root)]
         for folder in self.plugin_dirs:
             argv += ["--plugin-dir", str(folder)]
+        if request.resume:
+            argv += ["--resume", request.resume]
         return argv
 
     def expected(self, cwd: Path) -> Expected:
@@ -392,6 +416,38 @@ class ClaudeCodeHarness:
         own = workspace_skills(cwd)
         foreign = tuple(skill for skill in ob_skills() if skill not in own)
         return Expected(self.plugin_dirs, own, foreign, cwd, workspace_instructions(cwd))
+
+    def prepare_cell(
+        self, request: Request, cwd: Path, write_roots: tuple[Path, ...], keep: Path
+    ) -> tuple[Cell, list[list[str]]]:
+        """Make or reuse this run's folders, with the same reach checks on every turn."""
+        cell = call_cell(request, keep)
+        NativeCapture(cell.root, keep).check_roots((cwd, *write_roots))
+        NativeCapture(cell.root, cell.manifest).check_roots((cwd, *write_roots))
+        check_protected(request.protected, (cwd, *write_roots))
+        if request.reuse_cell:
+            if not all(folder.is_dir() for folder in cell.folders().values()):
+                raise ValueError("the resumed call's cell is missing a folder")
+            folders = tuple(cell.folders().values())
+            cell.verify()
+        else:
+            folders = cell.make()
+        reach = reach_rows(cwd, () if request.reuse_cell else folders)
+        if request.reuse_cell:
+            reach.append(["run-owned-home", "PASS", "cell matches the previous turn's manifest"])
+        if failed(reach):
+            if not request.reuse_cell:
+                shutil.rmtree(cell.root)  # made by this call, and holding no session yet
+            raise ValueError(
+                "the call would read what its arm does not give it: " + "; ".join(failed(reach))
+            )
+        identity = cell.folders()["HOME"] / ".gitconfig"
+        if not request.reuse_cell:
+            identity.write_text(
+                f"[user]\n\tname = {GIT_IDENTITY[0]}\n\temail = {GIT_IDENTITY[1]}\n",
+                encoding="utf-8",
+            )
+        return cell, reach
 
     def call(
         self,
@@ -403,33 +459,42 @@ class ClaudeCodeHarness:
         keep: Path,
     ) -> CallResult:
         """One call. ValueError, before the model runs, where the cell or `keep` is within the
-        model's reach, a protected path is writable, the cell is not new, or the call would read
-        an instruction file or loader its arm does not give it; otherwise the result, whose
-        `error` names a mismatch of identity or of what loaded."""
+        model's reach, a protected path is writable, a new cell already exists, or the call
+        would read an instruction file or loader its arm does not give it. Otherwise returns
+        the result, whose `error` names a mismatch of identity or of what loaded."""
 
-        cell = call_cell(request, keep)
-        NativeCapture(cell.root, keep).check_roots((cwd, *write_roots))
-        check_protected(request.protected, (cwd, *write_roots))
+        if request.before_call:
+            request.before_call()
+        cell, reach = self.prepare_cell(request, cwd, write_roots, keep)
         expected = self.expected(cwd)
-        reach = reach_rows(cwd, cell.make())
-        if failed(reach):
-            shutil.rmtree(cell.root)  # made by this call, and holding no session yet
-            raise ValueError(
-                "the call would read what its arm does not give it: " + "; ".join(failed(reach))
-            )
-        identity = cell.folders()["HOME"] / ".gitconfig"
-        identity.write_text(
-            f"[user]\n\tname = {GIT_IDENTITY[0]}\n\temail = {GIT_IDENTITY[1]}\n", encoding="utf-8"
-        )
         denied = unreadable(request, cwd, keep)
         budget = request.budget or Budget(self._timeout)
         meter = StreamMeter()
+        before = (
+            {p: p.read_bytes() for p in cell.config.rglob("*.jsonl")} if request.session_run else {}
+        )
+        native_meter = CallUsage(NAME)
+        for source, raw in before.items():
+            native_meter.add(parse_records(raw[: raw.rfind(b"\n") + 1]), source.stem)
+        before_tokens = native_meter.total()
+        old_input, before_calls = before_tokens["input_tokens"], len(native_meter.calls)
 
         def over_cap(printed: Callable[[], str]) -> str | None:
-            if budget.input_cap is None:
-                return None
-            used = meter.input(printed())
-            return "input_cap" if used is not None and used > budget.input_cap else None
+            text = printed()
+            used = meter.input(text)
+            if request.session_run:
+                for source in cell.config.rglob("*.jsonl"):
+                    raw = source.read_bytes()
+                    native_meter.add(parse_records(raw[: raw.rfind(b"\n") + 1]), source.stem)
+                used = native_meter.total()["input_tokens"] - old_input
+            if budget.input_cap is not None and used is not None and used > budget.input_cap:
+                return "input_cap"
+            if (
+                request.cut_after_calls is not None
+                and len(native_meter.calls) - before_calls >= request.cut_after_calls
+            ):
+                return "cut_after_calls"
+            return request.cut_check() if request.cut_check else None
 
         argv = self.argv(request, cwd, write_roots, denied)
         done = watched_command(
@@ -440,6 +505,7 @@ class ClaudeCodeHarness:
             timeout=budget.seconds,
             poll=over_cap,
         )
+        cell.record()
         events = parse_events(done.stdout) or []
         observed, extras, checks, records = identify(
             events, cell.config, keep, request, cwd, stopped=bool(done.stopped)
@@ -485,13 +551,55 @@ class ClaudeCodeHarness:
             stopped=done.stopped,
             budget_requested={"seconds": budget.seconds, "input_cap": budget.input_cap},
             input_seen_at_stop=meter.last if done.stopped else None,
+            home_manifest=str(cell.manifest),
         )
+        if request.session_run and extras.get("native_copy"):
+            children = [
+                (source, source.stem, source.parent.parent.name)
+                for source in (cell.config / "projects").rglob("subagents/*.jsonl")
+            ]
+            extras["native_sessions"] = [
+                {
+                    "path": extras["native_session"],
+                    "copy": extras["native_copy"],
+                    "sha256": extras["native_sha256"],
+                    "session_id": extras["thread_id"],
+                },
+                *retain_children(children, keep),
+            ]
+            transcript = family_evidence(transcript, extras, NAME, before)
+            extras["usage_reconciliation"] = native_reconciliation(
+                cell.config, before, tokens, extras["thread_id"]
+            )
         error = next((c[2] for c in checks if c[1] == "FAIL" and c[0] != "isolation"), "")
         if not error and void:
             error = "isolation: " + "; ".join(void)
         return CallResult(
             decoded.answer, transcript, done.returncode, observed, extras, error, checks
         )
+
+
+def native_reconciliation(
+    config: Path, before: dict[Path, bytes], tokens: dict[str, Any] | None, session: str
+) -> list[dict[str, Any]]:
+    prior, current = CallUsage(NAME), CallUsage(NAME)
+    for source, raw in before.items():
+        prior.add(parse_records(raw[: raw.rfind(b"\n") + 1]), source.stem)
+    for source in config.rglob("*.jsonl"):
+        raw = source.read_bytes()
+        current.add(parse_records(raw[: raw.rfind(b"\n") + 1]), source.stem)
+    actual = {
+        k: current.total()[k] - prior.total()[k]
+        for k in (
+            "input_tokens",
+            "cached_input_tokens",
+            "output_tokens",
+            "cache_creation_input_tokens",
+        )
+    }
+    if tokens and any(actual[k] != tokens.get(k, 0) for k in actual):
+        return [{"session": session, "per_call": actual, "cumulative": tokens}]
+    return []
 
 
 START_KEYS = (
@@ -552,6 +660,13 @@ def identify(
         check("session-id", False, "", str(problem))
         return None, extras, checks, None
     check("session-id", True, key, "")
+    if request.resume:
+        check(
+            "resumed-session",
+            key == request.resume,
+            key,
+            f"the stream resumed {key}, not {request.resume}",
+        )
     extras["thread_id"] = key
     try:
         source, raw, records, tail = find_native(config, key)

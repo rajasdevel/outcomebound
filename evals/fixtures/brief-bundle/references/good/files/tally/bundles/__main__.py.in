@@ -1,0 +1,47 @@
+"""Command line for build, verify and diff."""
+
+import argparse
+import json
+import sys
+from tally.errors import TallyError
+from tally.bundles.build import build, compare, verify
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    commands = parser.add_subparsers(dest="command", required=True)
+    making = commands.add_parser("build")
+    making.add_argument("files", nargs="+")
+    making.add_argument("--out", required=True)
+    making.add_argument("--by", default="project", choices=("project", "person", "week", "day"))
+    making.add_argument("--since")
+    making.add_argument("--until")
+    checking = commands.add_parser("verify")
+    checking.add_argument("folder")
+    diff = commands.add_parser("diff")
+    diff.add_argument("old")
+    diff.add_argument("new")
+    args = parser.parse_args()
+    try:
+        if args.command == "build":
+            result = build(args.files, args.out, args.by, args.since, args.until)
+        elif args.command == "verify":
+            verify(args.folder)
+            result = {"valid": True}
+        else:
+            result = compare(args.old, args.new)
+    except TallyError as error:
+        print(json.dumps({"code": "E102" if error.code == "E103" else error.code}), file=sys.stderr)
+        return 2
+    except OSError:
+        print(json.dumps({"code": "E101"}), file=sys.stderr)
+        return 2
+    except (ValueError, KeyError, TypeError):
+        print(json.dumps({"code": "E102"}), file=sys.stderr)
+        return 2
+    print(json.dumps(result, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

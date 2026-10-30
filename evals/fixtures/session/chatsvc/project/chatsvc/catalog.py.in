@@ -1,0 +1,16 @@
+"""The public route catalog. Build it from loaded settings, never from raw INI text."""
+
+
+def route_entry(route):
+    """Only the four fields that callers need. Keys and retry settings stay private."""
+    return {
+        "path": route.path,
+        "default_model": route.default_model,
+        "aliases": dict(sorted(route.aliases.items())),
+        "max_tokens": 4096,
+    }
+
+
+def public_catalog(settings):
+    """A stable order makes it possible to compare catalogs across deployments."""
+    return {"routes": [route_entry(route) for _, route in sorted(settings.routes.items())]}

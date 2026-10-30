@@ -1,0 +1,52 @@
+import unittest
+
+from datapipe.catalog import Column, Table, changes, document, parse
+
+
+class CatalogTests(unittest.TestCase):
+    def setUp(self):
+        self.table = Table(
+            "orders", (Column("id", "integer"), Column("note", "text", True)), ("id",)
+        )
+
+    def test_identical_compatible(self):
+        self.assertEqual(changes(self.table, self.table), [])
+
+    def test_add_nullable_compatible(self):
+        after = Table("orders", (*self.table.columns, Column("tag", "text", True)), ("id",))
+        self.assertEqual(changes(self.table, after), [])
+
+    def test_remove_column_incompatible(self):
+        after = Table("orders", (Column("id", "integer"),), ("id",))
+        self.assertEqual(changes(self.table, after), ["removed note"])
+
+    def test_change_type_incompatible(self):
+        after = Table("orders", (Column("id", "text"), Column("note", "text", True)), ("id",))
+        self.assertEqual(changes(self.table, after), ["type changed for id"])
+
+    def test_require_column_incompatible(self):
+        after = Table("orders", (Column("id", "integer"), Column("note", "text")), ("id",))
+        self.assertEqual(changes(self.table, after), ["required note"])
+
+    def test_new_required_column_incompatible(self):
+        after = Table("orders", (*self.table.columns, Column("tag", "text")), ("id",))
+        self.assertEqual(changes(self.table, after), ["new required column tag"])
+
+    def test_key_change_incompatible(self):
+        after = Table("orders", self.table.columns, ("note",))
+        self.assertEqual(changes(self.table, after), ["primary key changed"])
+
+    def test_round_trip(self):
+        self.assertEqual(parse(document({"orders": self.table})), {"orders": self.table})
+
+    def test_duplicate_table_refused(self):
+        data = document({"orders": self.table})
+        data["tables"] *= 2
+        with self.assertRaisesRegex(ValueError, "duplicate table"):
+            parse(data)
+
+    def test_missing_key_refused(self):
+        data = document({"orders": self.table})
+        data["tables"][0]["key"] = ["absent"]
+        with self.assertRaisesRegex(ValueError, "existing"):
+            parse(data)

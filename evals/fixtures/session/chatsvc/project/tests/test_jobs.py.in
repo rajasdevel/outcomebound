@@ -1,0 +1,77 @@
+"""Existing console clients use a validated manifest and the released service interface."""
+
+import json
+import unittest
+
+from chatsvc.app import build_service
+from chatsvc.job_manifest import ManifestError, endpoint, parse
+from chatsvc.job_runner import run_jobs, run_manifest
+from chatsvc.provider import Response
+from wire_examples import CASES
+
+
+class Recorder:
+    def __init__(self):
+        self.calls = []
+
+    def send(self, method, path, headers, body):
+        self.calls.append((method, path, headers, json.loads(body)))
+        return Response(200, {}, b'{"output":"answer","usage":{}}')
+
+
+class ManifestTest(unittest.TestCase):
+    def test_legacy_names(self):
+        self.assertEqual(endpoint("chat"), "/v1/chat")
+        self.assertEqual(endpoint("embed"), "/v1/embed")
+
+    def test_parse_validates_the_whole_batch_before_execution(self):
+        first = '{"id":"one","path":"chat","key":"console","body":{}}'
+        for broken in ("null", "[]", "{", first, first.replace('"key":"console"', '"key":false')):
+            with self.subTest(broken=broken), self.assertRaises(ManifestError):
+                parse([first, broken])
+
+    def test_released_wire_examples_through_both_entrypoints(self):
+        for case in CASES:
+            with self.subTest(case=case["id"]):
+                provider = Recorder()
+                service = build_service("config", provider, log=lambda line: None)
+                row = {key: case[key] for key in ("id", "path", "key", "body")}
+                result = run_jobs(parse([json.dumps(row)]), service)
+                self.assertEqual(
+                    result["jobs"],
+                    [{"id": case["id"], "status": 200, "model": case["expected"]["model"]}],
+                )
+                self.assertEqual(result["upstream"]["calls"], 1)
+                self.assertEqual(provider.calls[0][1], case["expected"]["provider_path"])
+                self.assertEqual(provider.calls[0][3]["messages"], case["body"]["messages"])
+                self.assertEqual(provider.calls[0][3]["max_tokens"], case["expected"]["max_tokens"])
+                status, _, body = service.handle(
+                    "POST",
+                    case["path"],
+                    {"x-api-key": case["key"]},
+                    json.dumps(case["body"]).encode(),
+                )
+                self.assertEqual(status, case["expected"]["status"])
+                self.assertEqual(json.loads(body)["model"], case["expected"]["model"])
+
+    def test_jsonl_manifest_reaches_every_released_wire_case(self):
+        class Unrestricted:
+            def check(self, *args):
+                return None
+
+        provider = Recorder()
+        service = build_service("config", provider, limiter=Unrestricted(), log=lambda line: None)
+        result = run_manifest("traffic/compatibility.jsonl", service)
+        self.assertEqual(len(result["jobs"]), 216)
+        self.assertEqual(len(provider.calls), 216)
+        self.assertEqual({row["status"] for row in result["jobs"]}, {200})
+        self.assertEqual(
+            result["jobs"][0], {"id": "wire-0001", "status": 200, "model": "chat-large-3"}
+        )
+        self.assertEqual(
+            result["jobs"][-1], {"id": "wire-0216", "status": 200, "model": "chat-small-3"}
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

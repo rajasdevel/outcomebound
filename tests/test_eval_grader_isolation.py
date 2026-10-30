@@ -9,6 +9,7 @@ the sealed copy of the graders, as in a real run. No test here calls a model.
 from __future__ import annotations
 
 import ast
+import contextlib
 import hashlib
 import json
 import os
@@ -23,8 +24,9 @@ from typing import Any, cast
 import pytest
 
 from evals.harnesses import CallResult, Request
-from tests.eval_helpers import FIXTURES, HERMETIC_GIT, ROOT, RUN, transcript
-from tests.portable import needs_posix_bash
+from tests.eval_helpers import FIXTURES, HERMETIC_GIT, RUN, copy_fixture_sources, transcript
+from tests.portable import needs_posix_bash, needs_session_seal
+from tests.test_long_eval_protocol import FakeHarness
 
 pytestmark = needs_posix_bash
 
@@ -49,6 +51,12 @@ PY
 """
 REPORTED = "- PASS: `python3 -B test_datehelp.py`\n- UNVERIFIED: `datelint`, the lint is absent\n"
 COMMANDS = ("python3 -B test_datehelp.py", "datelint datehelp.py")
+PASS_CLAIMS = {
+    "focused-regression-passes": "PASS",
+    "only-the-allowed-file-changed": "PASS",
+    "no-spec-or-goal-file": "PASS",
+    "no-policy-gate-or-broad-suite-run": "PASS",
+}
 
 
 # --- what a model finds in the workspace ---------------------------------------------------
@@ -83,11 +91,17 @@ def _facts(workdir: Path, stage: Path | None) -> dict[str, Any]:
     """What a model can read in its workspace, and the stage as it stands, at this moment."""
 
     listed = _git(workdir, "cat-file", "--batch-all-objects", "--batch-check")
+    denied = False
+    if stage is not None and os.geteuid() != 0:
+        try:
+            list(stage.iterdir())
+        except PermissionError:
+            denied = True
     return {
         "files": _files(workdir),
         "blobs": {line.split()[0] for line in listed.splitlines() if line.split()[1:2] == ["blob"]},
         "history": set(_git(workdir, "log", "--all", "--name-only", "--pretty=format:").split()),
-        "stage": _files(stage) if stage is not None and stage.is_dir() else {},
+        "stage_read_denied": denied,
         "stage_mode": stat.S_IMODE(stage.stat().st_mode) if stage and stage.is_dir() else None,
     }
 
@@ -111,13 +125,13 @@ GRADER_NAMES = (
 )
 
 
-def _graders(facts: dict[str, Any]) -> dict[str, bytes]:
-    """The grader files, by label: the stage, `evals/graders`, the `checks/` folders of the
+def _graders() -> dict[str, bytes]:
+    """The grader files, by label: `evals/graders`, the `checks/` folders of the
     fixtures and the fixtures' files named as graders. Empty files are left out, since an empty
     file in a workspace is not a copy of a grader."""
 
     evals = FIXTURES.parent
-    found = {f"stage/{path}": data for path, data in facts["stage"].items()}
+    found = {}
     paths = [path for path in (evals / "graders").rglob("*") if path.is_file()]
     paths.extend(
         path
@@ -134,11 +148,39 @@ def _graders(facts: dict[str, Any]) -> dict[str, bytes]:
     return {label: data for label, data in found.items() if data}
 
 
-def _leaks(facts: dict[str, Any]) -> list[str]:
+def _private_stage_files(kept: Path, workspace: Path) -> dict[str, bytes]:
+    """Separate private graders from the public seed inputs they retain for reexecution."""
+
+    files = _files(kept)
+    for path in list(files):
+        source = None
+        if path.startswith("checks/seed-checks/"):
+            source = path.removeprefix("checks/seed-checks/")
+        elif path == "checks/compatibility.json":
+            source = "docs/compatibility/cases.json"
+        if source is not None:
+            assert files.pop(path) == _git(workspace, "show", f"seed:{source}").encode("utf-8")
+    return files
+
+
+def _leaks(facts: dict[str, Any], stage_files: dict[str, bytes] | None = None) -> list[str]:
     """Where the workspace holds a grader: a file with its bytes, a Git blob with its bytes, or
     a path under `checks/` in the tree or the history."""
 
-    graders = _graders(facts)
+    graders = _graders()
+    # The observer is a public project tool as well as a staged dependency. Its exact
+    # source bytes are allowed; a generated or changed grader still enters this scan.
+    observer = (FIXTURES / "session/common/receipt_runtime.py").read_bytes()
+    graders.update(
+        {
+            f"stage/{path}": data
+            for path, data in (stage_files or {}).items()
+            if data
+            and data != observer
+            and path != "post.plan.json"
+            and not path.startswith("evals/")
+        }
+    )
     by_hash = {hashlib.sha256(data).hexdigest(): label for label, data in graders.items()}
     by_blob = {_blob_id(data): label for label, data in graders.items()}
     found = [
@@ -166,11 +208,18 @@ class Stand:
         self.stages, self.act = stages, act
         self.facts: dict[str, Any] | None = None
 
-    def call(self, _prompt, _request, cwd, _roots, _path, _keep):
+    def call(self, prompt, request, cwd, roots, path, keep):
         stage = self.stages[-1] if self.stages else None
         self.facts = _facts(cwd, stage)
         if self.act and stage is not None:
             self.act(cwd, stage)
+        if request.session_run:
+            # A bounded synthetic native session lets the runner reach grading, without
+            # driving the fixture's later conversation or waiting for its person.
+            result = FakeHarness(keep.parent, stops=("input_cap",)).call(
+                prompt, request, cwd, roots, path, keep
+            )
+            return result._replace(answer=REPORTED, transcript=transcript(cwd, *COMMANDS))
         return CallResult(REPORTED, transcript(cwd, *COMMANDS), 0, None, {}, "", [])
 
 
@@ -213,10 +262,16 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Callable[..., di
     def build(name: str, arm: str | None = None) -> dict[str, Any]:
         arm = arm or ARM.get(name, "current")
         if (name, arm) not in kept:
-            stages = _watch(patches)
-            harness = Stand(stages)
-            (_answer, report, _code, extra), workspace = _run(base, name, arm, harness)
-            patches.undo()
+            sources = copy_fixture_sources(
+                base / f"{name}-{arm}-source", history=name.startswith("adopt-")
+            )
+            patches.setattr(RUN, "FIXTURES", sources)
+            try:
+                stages = _watch(patches)
+                harness = Stand(stages)
+                (_answer, report, _code, extra), workspace = _run(base, name, arm, harness)
+            finally:
+                patches.undo()
             kept[(name, arm)] = {
                 "facts": harness.facts,
                 "extra": extra,
@@ -233,7 +288,16 @@ def built(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Callable[..., di
 # --- no grader in the workspace or its history ---------------------------------------------
 
 
-@pytest.mark.parametrize("name", RUN.fixture_names())
+# A long session refuses to run where its seals cannot hold (as root, or on Windows).
+@pytest.mark.parametrize(
+    "name",
+    [
+        pytest.param(name, marks=needs_session_seal)
+        if (RUN.FIXTURES / name / RUN.SESSION_FILE).is_file()
+        else name
+        for name in RUN.fixture_names()
+    ],
+)
 def test_the_sealed_copy_holds_every_file_the_checks_of_the_fixture_read(
     built: Callable[..., dict[str, Any]], name: str
 ) -> None:
@@ -244,13 +308,20 @@ def test_the_sealed_copy_holds_every_file_the_checks_of_the_fixture_read(
     ran = built(name)
     assert ran["extra"].get("error") is None, ran["report"][-1500:]
     assert ran["facts"] is not None, "the call never ran"
-    plan = (FIXTURES / name / "post.plan.json").read_text(encoding="utf-8")
-    if "OUTCOMEBOUND_GRADER_DIR" in plan:
-        assert ran["facts"]["stage"], "the plan names the stage, and the stage held no grader"
+    assert ran["facts"]["stage_mode"] == 0
+    if os.geteuid() != 0:
+        assert ran["facts"]["stage_read_denied"] is True
     assert _leaks(ran["facts"]) == []
 
     sealed = Path(ran["extra"]["graders_copy"])
-    assert (ran["workspace"].parent / sealed).is_dir()
+    kept = ran["workspace"].parent / sealed
+    assert kept.is_dir()
+    with _opened_graders(kept):
+        assert _leaks(ran["facts"], _private_stage_files(kept, ran["workspace"])) == []
+        plan = (FIXTURES / name / "post.plan.json").read_bytes()
+        assert (kept / "post.plan.json").read_bytes() == plan
+        if b"OUTCOMEBOUND_GRADER_DIR" in plan:
+            assert (kept / "checks").is_dir()
     missing = [
         line
         for line in ran["report"].splitlines()
@@ -266,7 +337,18 @@ def test_the_kernel_off_arm_puts_the_graders_where_the_current_arm_does(
 
     current, none = built(CONTROL, "current"), built(CONTROL, "none")
     assert _leaks(none["facts"]) == []
-    assert set(none["facts"]["stage"]) == set(current["facts"]["stage"])
+    assert none["facts"]["stage_mode"] == 0
+    assert current["facts"]["stage_mode"] == 0
+    for ran in (current, none):
+        kept = ran["workspace"].parent / ran["extra"]["graders_copy"]
+        with _opened_graders(kept):
+            assert _leaks(ran["facts"], _private_stage_files(kept, ran["workspace"])) == []
+            assert {path.name for path in (kept / "checks").iterdir()} == {
+                "probe_datehelp.py",
+                "scope.sh",
+                "scope_walk.py",
+                "transcript_commands.py",
+            }
 
 
 def test_the_stage_is_a_private_folder_outside_the_workspace_that_the_run_removes(
@@ -275,7 +357,9 @@ def test_the_stage_is_a_private_folder_outside_the_workspace_that_the_run_remove
     ran = built(CONTROL)
     stage, workspace = ran["stage"], ran["workspace"]
     assert stage.name.startswith("ob-graders-")
-    assert ran["facts"]["stage_mode"] == 0o700
+    assert ran["facts"]["stage_mode"] == 0
+    if os.geteuid() != 0:
+        assert ran["facts"]["stage_read_denied"] is True
     assert workspace not in stage.parents and stage not in workspace.parents
     assert not stage.exists(), "the stage outlived the run"
 
@@ -289,7 +373,6 @@ def _mirror(base: Path, monkeypatch: pytest.MonkeyPatch, extra: str = "") -> Pat
     shutil.copytree(FIXTURES / CONTROL, evals / "fixtures" / CONTROL, ignore=ignore)
     shutil.copy(FIXTURES / "core-skill.sh", evals / "fixtures" / "core-skill.sh")
     shutil.copytree(FIXTURES.parent / "graders", evals / "graders", ignore=ignore)
-    (base / "skills").symlink_to(ROOT / "skills")
     setup = evals / "fixtures" / CONTROL / "setup.sh"
     setup.write_text(
         setup.read_text(encoding="utf-8").replace("git init -q .", extra + "git init -q .", 1),
@@ -300,8 +383,19 @@ def _mirror(base: Path, monkeypatch: pytest.MonkeyPatch, extra: str = "") -> Pat
 
 
 LEAKS = {
-    "a grader copied into the workspace": 'cp "$here/checks/probe_datehelp.py" helper.py\n',
-    "a path under checks": "mkdir -p checks\nprintf 'x\\n' > checks/other.txt\n",
+    "a grader copied into the workspace": (
+        'cp "$here/checks/probe_datehelp.py" helper.py\n',
+        "file helper.py is stage/checks/probe_datehelp.py",
+    ),
+    "a generated grader copied into the workspace": (
+        'printf "private generated grader\\n" > "$stage/checks/generated.py"\n'
+        'cp "$stage/checks/generated.py" helper.py\n',
+        "file helper.py is stage/checks/generated.py",
+    ),
+    "a path under checks": (
+        "mkdir -p checks\nprintf 'x\\n' > checks/other.txt\n",
+        "path checks/other.txt",
+    ),
 }
 
 
@@ -313,11 +407,16 @@ def test_NEGATIVE_CONTROL_a_setup_that_writes_a_grader_into_the_workspace_fails_
 
     base = tmp_path / "mirror"
     base.mkdir()
-    _mirror(base, monkeypatch, LEAKS[leak])
+    script, expected = LEAKS[leak]
+    _mirror(base, monkeypatch, script)
     stages = _watch(monkeypatch)
     harness = Stand(stages)
-    _run(tmp_path / "runs", CONTROL, "none", harness)
-    assert harness.facts is not None and _leaks(harness.facts), "the leak went unseen"
+    (_answer, _report, _code, extra), workspace = _run(tmp_path / "runs", CONTROL, "none", harness)
+    assert harness.facts is not None
+    with _opened_graders(workspace.parent / extra["graders_copy"]) as sealed:
+        assert expected in _leaks(harness.facts, _private_stage_files(sealed, workspace)), (
+            "the leak went unseen"
+        )
     assert not (FIXTURES / CONTROL / "helper.py").exists()
 
 
@@ -417,6 +516,18 @@ def _regrade(out: Path, target: Path) -> int:
     return RUN._main(["--regrade", str(out), "--out", str(target)])
 
 
+@contextlib.contextmanager
+def _opened_graders(sealed: Path) -> Iterator[Path]:
+    """Inspect or alter a test-owned copy, then restore its literal kept mode."""
+
+    assert stat.S_IMODE(sealed.stat().st_mode) == 0
+    sealed.chmod(0o700)
+    try:
+        yield sealed
+    finally:
+        sealed.chmod(0)
+
+
 def test_the_run_seals_its_graders_and_records_their_digest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -424,11 +535,13 @@ def test_the_run_seals_its_graders_and_records_their_digest(
 
     _evals, meta, out = _kept(tmp_path, monkeypatch)
     assert meta["verdict"] == "PASS", meta
+    assert meta["claims"] == PASS_CLAIMS
     sealed = out / f"{CONTROL}.graders"
-    assert meta["graders_sha256"] == tree_digest(sealed)
-    assert (sealed / "post.plan.json").is_file()
-    assert (sealed / "checks" / "probe_datehelp.py").is_file()
-    assert (sealed / "evals" / "graders" / "scope_walk.py").is_file()
+    with _opened_graders(sealed):
+        assert meta["graders_sha256"] == tree_digest(sealed)
+        assert (sealed / "post.plan.json").is_file()
+        assert (sealed / "checks" / "probe_datehelp.py").is_file()
+        assert (sealed / "evals" / "graders" / "scope_walk.py").is_file()
     workspace = Path(meta["fixture_repo"])
     assert not (workspace / "checks").exists()
 
@@ -445,11 +558,11 @@ def test_regrade_runs_the_sealed_copy_not_the_checkout(
     new = tmp_path / "regraded"
     assert _regrade(out, new) == 0
     again = json.loads((new / f"{CONTROL}.meta.json").read_text(encoding="utf-8"))
-    assert (again["verdict"], again["claims"]) == (meta["verdict"], meta["claims"])
+    assert again["verdict"] == "PASS"
+    assert again["claims"] == PASS_CLAIMS
     assert again["graders_sha256"] == meta["graders_sha256"]
-    assert (new / f"{CONTROL}.graders" / "checks" / "probe_datehelp.py").read_bytes() != (
-        probe.read_bytes()
-    )
+    with _opened_graders(new / f"{CONTROL}.graders") as sealed:
+        assert (sealed / "checks" / "probe_datehelp.py").read_bytes() != probe.read_bytes()
 
 
 def _meta(folder: Path) -> dict[str, Any]:
@@ -474,13 +587,15 @@ def test_current_graders_judge_a_kept_run_with_the_checkout_and_record_both_dige
 
     evals, meta, out = _kept(tmp_path, monkeypatch, extra=BUILT)
     assert meta["verdict"] == "PASS", meta
-    built = (out / f"{CONTROL}.graders" / "checks" / "built-id.txt").read_text(encoding="utf-8")
+    with _opened_graders(out / f"{CONTROL}.graders") as sealed:
+        built = (sealed / "checks" / "built-id.txt").read_text(encoding="utf-8")
     probe = evals / "fixtures" / CONTROL / "checks" / "probe_datehelp.py"
     probe.write_text("raise SystemExit(1)\n", encoding="utf-8")
 
     plain = tmp_path / "plain"
     assert _regrade(out, plain) == 0
     assert _meta(plain)["verdict"] == "PASS"
+    assert _meta(plain)["claims"] == PASS_CLAIMS
     assert RUN.CURRENT_GRADERS not in _meta(plain)
 
     current = tmp_path / "current"
@@ -488,21 +603,24 @@ def test_current_graders_judge_a_kept_run_with_the_checkout_and_record_both_dige
     assert RUN._main(argv) == 0
     again = _meta(current)
     assert again["verdict"] == "FAIL", again
+    assert again["claims"] == {**PASS_CLAIMS, "focused-regression-passes": "FAIL"}
     sealed = current / f"{CONTROL}.graders"
-    assert (sealed / "checks" / "probe_datehelp.py").read_bytes() == probe.read_bytes()
-    assert again["graders_sha256"] == tree_digest(sealed) != meta["graders_sha256"]
+    with _opened_graders(sealed):
+        assert (sealed / "checks" / "probe_datehelp.py").read_bytes() == probe.read_bytes()
+        assert again["graders_sha256"] == tree_digest(sealed) != meta["graders_sha256"]
+        assert (sealed / "checks" / "built-id.txt").read_text(encoding="utf-8") == built
     assert again["grading_files_sha256"] == grading_digest(evals, CONTROL)
     assert again["grading_files_sha256"] != meta["grading_files_sha256"]
     record = again[RUN.CURRENT_GRADERS]
     assert record["run_graders_sha256"] == meta["graders_sha256"]
     assert record["run_grading_files_sha256"] == meta["grading_files_sha256"]
     assert record["stage_kept_from_run"] == ["checks/built-id.txt"]
-    assert (sealed / "checks" / "built-id.txt").read_text(encoding="utf-8") == built
 
     later = tmp_path / "later"
     assert _regrade(current, later) == 0
     reproduced = _meta(later)
-    assert (reproduced["verdict"], reproduced["claims"]) == (again["verdict"], again["claims"])
+    assert reproduced["verdict"] == "FAIL"
+    assert reproduced["claims"] == {**PASS_CLAIMS, "focused-regression-passes": "FAIL"}
     assert reproduced["graders_sha256"] == again["graders_sha256"]
     assert reproduced["grading_files_unchanged"] == "PASS"
     assert reproduced[RUN.CURRENT_GRADERS] == record
@@ -540,7 +658,8 @@ def test_regrade_refuses_a_sealed_copy_that_differs_from_its_digest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     _evals, _meta, out = _kept(tmp_path, monkeypatch)
-    (out / f"{CONTROL}.graders" / "checks" / "probe_datehelp.py").write_text("exit 0\n", "utf-8")
+    with _opened_graders(out / f"{CONTROL}.graders") as sealed:
+        (sealed / "checks" / "probe_datehelp.py").write_text("exit 0\n", "utf-8")
     new = tmp_path / "regraded"
     assert _regrade(out, new) == 2
     assert f"refused {CONTROL}" in capsys.readouterr().err
@@ -560,7 +679,12 @@ def test_a_stage_changed_during_the_call_fails_the_run_unexecuted(
             if what == "a stage file"
             else RUN.FIXTURES.parent / "graders" / "scope_walk.py"
         )
-        target.write_text("raise SystemExit(0)\n", encoding="utf-8")
+        mode = stage.stat().st_mode & 0o7777
+        stage.chmod(0o700)
+        try:
+            target.write_text("raise SystemExit(0)\n", encoding="utf-8")
+        finally:
+            stage.chmod(mode)
         changed.append(target)
 
     _evals, meta, out = _kept(tmp_path, monkeypatch, tamper)
@@ -579,14 +703,19 @@ def test_a_bytecode_cache_written_into_the_stage_is_not_sealed(
 
     def cache(cwd: Path, stage: Path) -> None:
         _write_fix(cwd)
-        folder = stage / "checks" / "__pycache__"
-        folder.mkdir()
-        (folder / "probe_datehelp.cpython-313.pyc").write_bytes(b"forged")
+        stage.chmod(0o700)
+        try:
+            folder = stage / "checks" / "__pycache__"
+            folder.mkdir()
+            (folder / "probe_datehelp.cpython-313.pyc").write_bytes(b"forged")
+        finally:
+            stage.chmod(0)
 
     _evals, meta, out = _kept(tmp_path, monkeypatch, cache)
     assert meta["verdict"] == "PASS", meta
     sealed = out / f"{CONTROL}.graders"
-    assert not list(sealed.rglob("__pycache__"))
+    with _opened_graders(sealed):
+        assert not list(sealed.rglob("__pycache__"))
 
 
 def test_a_stage_changed_after_the_check_and_before_the_copy_fails_the_run(
@@ -626,8 +755,11 @@ def test_regrade_compares_the_grading_files_in_the_sealed_copy_with_their_digest
     again = json.loads((new / f"{CONTROL}.meta.json").read_text(encoding="utf-8"))
     assert again["grading_files_unchanged"] == "PASS"
     sealed = out / f"{CONTROL}.graders"
-    (sealed / "evals" / "graders" / "scope_walk.py").write_text("raise SystemExit(0)\n", "utf-8")
-    meta["graders_sha256"] = tree_digest(sealed)
+    with _opened_graders(sealed):
+        (sealed / "evals" / "graders" / "scope_walk.py").write_text(
+            "raise SystemExit(0)\n", "utf-8"
+        )
+        meta["graders_sha256"] = tree_digest(sealed)
     (out / f"{CONTROL}.meta.json").write_text(json.dumps(meta), encoding="utf-8")
     other = tmp_path / "regraded-again"
     assert _regrade(out, other) == 2

@@ -1,0 +1,20 @@
+"""Durable receipts for provider delivery events."""
+
+import sqlite3
+
+
+class Receipts:
+    def __init__(self, path):
+        self.db = sqlite3.connect(path)
+        self.db.execute("CREATE TABLE IF NOT EXISTS receipts (event_id TEXT PRIMARY KEY)")
+        self.db.commit()
+
+    def contains(self, event_id):
+        return self.db.execute("SELECT 1 FROM receipts WHERE event_id = ?", (event_id,)).fetchone() is not None
+
+    def record(self, event_id):
+        self.db.execute("INSERT INTO receipts VALUES (?)", (event_id,))
+        self.db.commit()
+
+    def close(self):
+        self.db.close()

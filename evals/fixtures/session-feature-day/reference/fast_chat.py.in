@@ -1,0 +1,43 @@
+def fast_chat(service, route, request):
+    import json
+    from math import ceil
+
+    from chatsvc.provider import ProviderError, model_path
+    from chatsvc.retry import RETRYABLE
+    from chatsvc.routes import BadRequest, max_tokens_of, messages_of, provider_failure, reply
+    from chatsvc.wait_policy import BoundedPolicy
+
+    messages = messages_of(request)
+    max_tokens = max_tokens_of(request)
+    if isinstance(max_tokens, bool):
+        raise BadRequest("max_tokens must be an integer")
+    model = route.resolve(request.get("model"))
+    policy = BoundedPolicy(max_attempts=route.max_attempts)
+    body = json.dumps({"messages": messages, "max_tokens": max_tokens}).encode()
+    headers = {"authorization": f"Bearer {route.key}", "content-type": "application/json"}
+    path = model_path(model)
+    for attempt in range(1, policy.max_attempts + 1):
+        response = service.transport.send("POST", path, headers, body)
+        service.log(f"upstream path={path} attempt={attempt} status={response.status}")
+        if response.status == 200:
+            answer = response.json()
+            return reply(
+                200,
+                {
+                    "model": model,
+                    "output": answer.get("output", ""),
+                    "usage": answer.get("usage", {}),
+                },
+            )
+        if response.status not in RETRYABLE or attempt == policy.max_attempts:
+            break
+        service.sleep(policy.delay(attempt, response.headers))
+    if response.status == 429:
+        return reply(
+            503,
+            {"error": "provider_busy", "attempts": attempt},
+            {"retry-after": str(max(1, ceil(policy.hint(response.headers) or 1)))},
+        )
+    return provider_failure(
+        ProviderError(response.status, response.json().get("error", "provider error"), attempt)
+    )

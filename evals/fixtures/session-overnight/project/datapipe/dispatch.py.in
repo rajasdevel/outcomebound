@@ -1,0 +1,12 @@
+"""Coalesce pending jobs against delivery receipts."""
+
+
+def pending(jobs, receipts):
+    """Return sorted requests that still need delivery."""
+    seen = {row["feed"] for row in receipts}
+    result = []
+    for job in jobs:
+        if job["feed"] not in seen:
+            result.append(job)
+            seen.add(job["feed"])
+    return result

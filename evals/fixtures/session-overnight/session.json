@@ -1,0 +1,29 @@
+{
+  "shape": "unattended",
+  "max_turns": 5,
+  "max_nudges": 2,
+  "session_timeout_seconds": 14400,
+  "input_cap": 150000000,
+  "cut_after_calls": null,
+  "cut_check": null,
+  "resume_message": "Resume the work from where it stopped.",
+  "next_turn": [
+    "python3",
+    "-I",
+    "-B",
+    "${OUTCOMEBOUND_GRADER_DIR}/checks/next_turn.py"
+  ],
+  "labels": [
+    "answer",
+    "answers",
+    "clarify",
+    "correct",
+    "nudge",
+    "opener",
+    "refuse",
+    "restate",
+    "resume",
+    "unknown",
+    "yourcall"
+  ]
+}

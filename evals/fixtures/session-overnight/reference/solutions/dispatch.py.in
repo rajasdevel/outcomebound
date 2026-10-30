@@ -1,0 +1,15 @@
+"""Coalesce retries by source identity and committed delivery."""
+
+
+def pending(jobs, receipts):
+    def key(row):
+        return row["feed"], row["part"], row["generation"]
+
+    unique = {}
+    for job in jobs:
+        identity = key(job)
+        if identity in unique and unique[identity]["file"] != job["file"]:
+            raise ValueError("conflicting retry files")
+        unique[identity] = job
+    done = {key(row) for row in receipts if row["status"] == "committed"}
+    return [dict(unique[identity]) for identity in sorted(unique) if identity not in done]

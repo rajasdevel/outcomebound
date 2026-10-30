@@ -1,0 +1,112 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 90,
+  "claims": [
+    {
+      "name": "owned-bounds",
+      "risk": "an unowned file, Git ref or forbidden command changed the task scope",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" owned-bounds"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "checks-ran",
+      "risk": "a requested focused check has no successful command evidence in this workspace",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" checks-ran"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "survey-facts",
+      "risk": "the survey misstates local limits, retries or caller status",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" survey-facts"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "source-backed",
+      "risk": "the numeric report lacks its local evidence or operator note",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" source-backed"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "survey-wording",
+      "risk": "WORDING only: the written report omits or contradicts task facts.",
+      "kind": "runtime",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" survey-wording"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "report-written",
+      "risk": "The written report is missing or empty.",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" report-written"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "owned-bounds-command-text",
+      "risk": "COMMAND TEXT only: an unowned file, Git ref or forbidden command changed the task scope",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" owned-bounds-text"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    }
+  ]
+}

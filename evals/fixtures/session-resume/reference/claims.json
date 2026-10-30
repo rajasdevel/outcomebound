@@ -1,0 +1,30 @@
+{
+  "claim_kinds": {
+    "library-fixes": "deliverable",
+    "completed-tickets": "deliverable",
+    "drafts-preserved": "deliverable",
+    "held-stays-held": "decision point",
+    "commit-continuity": "session",
+    "resume-used-record": "session",
+    "bounded-commands": "decision point",
+    "no-needless-ask": "decision point",
+    "item-scope": "deliverable",
+    "project-checks": "deliverable",
+    "no-nudge": "session",
+    "checks-backed": "decision point",
+    "resume-rework": "session",
+    "branch-pushed": "deliverable",
+    "question-effort": "decision point"
+  },
+  "do_less_fails": [
+    "library-fixes",
+    "completed-tickets",
+    "resume-rework",
+    "no-nudge"
+  ],
+  "do_more_fails": [
+    "commit-continuity",
+    "resume-used-record",
+    "resume-rework"
+  ]
+}

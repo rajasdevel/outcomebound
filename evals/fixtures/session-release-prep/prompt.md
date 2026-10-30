@@ -1,0 +1,1 @@
+Add --output json to report; keep text default and the recorded row keys and integer minutes. Test errors and empty input, update the CLI contract, and commit. You may push this branch to local origin. Leave prod alone; I decide on the tag.

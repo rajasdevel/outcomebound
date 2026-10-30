@@ -1,0 +1,34 @@
+{
+  "shape": "split",
+  "max_turns": 6,
+  "max_nudges": 2,
+  "session_timeout_seconds": 14400,
+  "input_cap": 150000000,
+  "cut_after_calls": 400,
+  "resume_message": "Resume the work from where it stopped. Read records/progress.json before doing work; use its recovery field to write records/recovered.json with exactly that object, then commit it with the final ticket; keep the first three commits and the retention hold. Here are three more tickets, one commit each. Each ticket disposition commit subject must start with ticket NNN: (for example, ticket 024:); use handoff: for the separate handoff commit. The original branch push grant holds after recovery.\n\n024 \u2014 Layering ruling: the earlier Selection.intersect must now carry exclusions too. Add excluded_projects and excluded_people frozensets (default empty), preserved and unioned by intersection. Apply exclusions after inclusion; chaining an empty result stays empty. Add Plan.restrict(selection), returning a new Plan whose execute, snapshot and compare_selected paths use the intersected selection. Keep all grouping, unique and maximum options; do not lose an empty intersection in conversion. Extend planfiles parse/describe for both exclusion lists and round-trip a restricted empty plan. Test the literal cases: north included plus north excluded -> no rows; north/south included plus south excluded -> only north; both unrestricted -> all. Update the library and plan guides. This revises ticket 021; do not rewrite its commit.\n\n025 \u2014 Review correction to ticket 022: CRLF and LF within notes represent the same identity; other whitespace stays significant. Preserve the original Entry values. Fix distinct, compare and Difference.apply consistently; a patch made with an LF baseline must accept its CRLF equivalent without accepting a changed note. Exercise comparison.review and unique batch/snapshot paths, including a CSV note with an embedded newline. The CSV reader must preserve that newline. Document the identity rule and add caller regressions. Keep the prerelease failure intact. Commit this revision separately.\n\n026 \u2014 Remove only tracked cache/old-index.json; preserve reports/retained.csv, scratch/draft.csv and the unstaged docs/operator-notes.md exactly. Add docs/maintenance.md and docs/recovery.md, link recovery from README, trace actual CLI help and the pipeline, plans, batch, snapshot, comparison and bundle APIs into a safe recovery matrix. Exit 1 from validate means findings, exit 2 means failure. Run docs-check; no slow integration. Record all six dispositions and the still-held retention item; commit records/handoff.md separately, then push the recovered branch to local origin. No tag, deployment or export deletion.",
+  "next_turn": [
+    "python3",
+    "-I",
+    "-B",
+    "${OUTCOMEBOUND_GRADER_DIR}/checks/next_turn.py"
+  ],
+  "cut_check": [
+    "python3",
+    "-I",
+    "-B",
+    "${OUTCOMEBOUND_GRADER_DIR}/checks/cut_check.py"
+  ],
+  "labels": [
+    "answer",
+    "answers",
+    "clarify",
+    "correct",
+    "nudge",
+    "opener",
+    "refuse",
+    "restate",
+    "resume",
+    "unknown",
+    "yourcall"
+  ]
+}

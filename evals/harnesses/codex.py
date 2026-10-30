@@ -19,7 +19,7 @@ import tempfile
 from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 from evals.codex_events import (
     command_transcript,
@@ -41,6 +41,8 @@ from evals.native_receipts import (
     temporary_write_roots,
     thread_id,
 )
+from evals.session_evidence import family_evidence, retain_children
+from evals.session_usage import CallUsage, codex_children
 from evals.watch import watched_command
 
 NAME = "codex"
@@ -199,6 +201,25 @@ class CodexHarness:
         if request.sandbox == FIELD:
             grant = argv.index(str(Path(cwd) / NOTES))
             del argv[grant - 1 : grant + 1]
+        if request.resume:
+            # Resume has no -C, -s or --add-dir; keep their global config equivalents.
+            argv[2:2] = ["resume"]
+            for flag in ("-C", "-s", "--add-dir"):
+                while flag in argv:
+                    at = argv.index(flag)
+                    del argv[at : at + 2]
+            roots = [str(cwd / ".git")] if (cwd / ".git").is_dir() else []
+            if request.sandbox != FIELD:
+                roots.append(str(cwd / NOTES))
+            roots += [str(root) for root in write_roots]
+            argv += [
+                "-c",
+                'sandbox_mode="workspace-write"',
+                "-c",
+                "sandbox_workspace_write.writable_roots=" + json.dumps(roots),
+                request.resume,
+                "-",
+            ]
         return argv
 
     def call(
@@ -215,17 +236,30 @@ class CodexHarness:
         `request.local_listener` is set the sandbox lets a command bind a port, and the native
         session must show it."""
 
+        if request.before_call:
+            request.before_call()
         sessions = self.home() / "sessions"
         NativeCapture(sessions, keep).check_roots((cwd, *write_roots))
         check_protected(request.protected, (cwd, *write_roots))
         budget = request.budget or Budget(self._timeout)
-        meter = SessionMeter(sessions)
+        before = (
+            {file: file.read_bytes() for file in sessions.rglob(f"*-{request.resume}.jsonl")}
+            if request.resume
+            else {}
+        )
+        if request.session_run and request.resume:
+            before.update(
+                {p: p.read_bytes() for p, _, _ in codex_children(sessions, {request.resume})}
+            )
+        meter = SessionMeter(sessions, before, request.session_run)
 
         def over_cap(printed: Callable[[], str]) -> str | None:
-            if budget.input_cap is None:
-                return None
             used = meter.input(printed())
-            return "input_cap" if used is not None and used > budget.input_cap else None
+            if budget.input_cap is not None and used is not None and used > budget.input_cap:
+                return "input_cap"
+            if request.cut_after_calls is not None and meter.calls >= request.cut_after_calls:
+                return "cut_after_calls"
+            return request.cut_check() if request.cut_check else None
 
         with tempfile.NamedTemporaryFile(
             "r+", suffix=".md", delete=False, encoding="utf-8"
@@ -246,11 +280,25 @@ class CodexHarness:
             last_message.unlink(missing_ok=True)
         transcript = command_transcript(stdout, stderr)
         events = parse_events(stdout) or []
-        observed, extras, checks, session = identify(
-            stdout, sessions, keep, request, cwd, stopped=bool(done.stopped)
+        sources = (
+            tuple(
+                file
+                for file in sessions.rglob(f"*-{request.resume}.jsonl")
+                if file.read_bytes() != before.get(file)
+            )
+            if request.resume
+            else None
+        )
+        observed, extras, checks, session = _identified(
+            stdout, Capture(sessions, keep, bool(done.stopped), sources), request, cwd
         )
         # The stream gives no working directory for a command; the native session does.
-        transcript, filled = fill_directories(transcript, session)
+        current = []
+        for item in extras.get("native_sessions", []):
+            source = Path(item["path"])
+            raw = Path(item["copy"]).read_bytes()
+            current += parse_records(raw[len(before.get(source, b"")) :].rsplit(b"\n", 1)[0])
+        transcript, filled = fill_directories(transcript, current if before else session)
         extras.update(filled)
         extras.update(
             harness=NAME,
@@ -267,6 +315,10 @@ class CodexHarness:
             budget_requested={"seconds": budget.seconds, "input_cap": budget.input_cap},
             input_seen_at_stop=meter.last if done.stopped else None,
         )
+        if request.session_run and extras.get("native_sessions"):
+            children = codex_children(sessions, {extras["thread_id"]})
+            extras["native_sessions"] += retain_children(children, keep)
+            transcript = family_evidence(transcript, extras, NAME, before)
         failed = next((check[2] for check in checks if check[1] == "FAIL"), "")
         return CallResult(answer, transcript, code, observed, extras, failed, checks)
 
@@ -319,41 +371,81 @@ def _first_thread(printed: str) -> str | None:
 class SessionMeter:
     """The input a running call has used, read from its native session as the file grows.
 
-    The session is found once, by the stream's first `thread.started` id, as the one file
-    `*-<id>.jsonl` under `sessions`; each read takes only the bytes written since the last one
-    and the complete lines among them. The input is the running total (`input_tokens`, cached
-    input among it) of the last `token_count` event; None until one is read. This bounds spend
-    only: identity and cost are read from the copied session after the call."""
+    Files match the stream's first `thread.started` id under `sessions`. Each read takes only
+    new complete lines. `before` holds a resumed turn's earlier bytes: input and model calls
+    count only the new work, whether it appends to an old file or writes another. None until
+    a count is read. Identity and final cost come from the copies after the call."""
 
-    def __init__(self, sessions: Path) -> None:
+    def __init__(
+        self, sessions: Path, before: dict[Path, bytes] | None = None, per_call: bool = False
+    ) -> None:
         self._sessions = sessions
-        self._file: Path | None = None
-        self._offset = 0
-        self._tail = b""
+        self._before = before or {}
+        self._offsets: dict[Path, int] = {}
+        self._tails: dict[Path, bytes] = {}
+        self._totals: dict[Path, int] = {}
+        self.calls = 0
         self.last: int | None = None
+        self.per_call = per_call
+        self.usage = CallUsage(NAME)
+        for path, raw in self._before.items():
+            if per_call:
+                self.usage.add(parse_records(raw[: raw.rfind(b"\n") + 1]), str(path))
+        self.old_calls = len(self.usage.calls)
+        self.old_input = self.usage.total()["input_tokens"]
 
     def input(self, printed: str) -> int | None:
-        if self._file is None:
-            key = _first_thread(printed)
-            if key is None or not self._sessions.is_dir():
-                return None
-            matches = list(self._sessions.rglob(f"*-{key}.jsonl"))
-            if len(matches) != 1:
-                return None
-            self._file = matches[0]
+        key = _first_thread(printed)
+        if key is None or not self._sessions.is_dir():
+            return self.last
+        matches = list(self._sessions.rglob(f"*-{key}.jsonl"))
+        if self.per_call:
+            matches += [p for p, _, _ in codex_children(self._sessions, {key})]
+            for file in matches:
+                raw = file.read_bytes()
+                self.usage.add(parse_records(raw[: raw.rfind(b"\n") + 1]), str(file))
+            self.calls = len(self.usage.calls) - self.old_calls
+            self.last = self.usage.total()["input_tokens"] - self.old_input
+            return self.last
+        if not self._before and len(matches) != 1:
+            return self.last
+        for file in matches:
+            self._read(file)
+        if self._totals:
+            self.last = sum(self._totals.values())
+        return self.last
+
+    def _read(self, file: Path) -> None:
+        prior = self._before.get(file, b"")
+        offset = self._offsets.get(file, len(prior))
         try:
-            with self._file.open("rb") as handle:
-                handle.seek(self._offset)
+            with file.open("rb") as handle:
+                handle.seek(offset)
                 data = handle.read()
         except OSError:
-            return self.last
-        self._offset += len(data)
-        *lines, self._tail = (self._tail + data).split(b"\n")
+            return
+        self._offsets[file] = offset + len(data)
+        *lines, self._tails[file] = (self._tails.get(file, b"") + data).split(b"\n")
+        old = session_tokens(parse_records(prior)) if prior else None
+        old_input = int(old["input_tokens"]) if old else 0
         for line in lines:
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            payload = record.get("payload")
+            if (
+                record.get("type") == "event_msg"
+                and isinstance(payload, dict)
+                and payload.get("type") == "token_count"
+                and isinstance(payload.get("info"), dict)
+            ):
+                self.calls += 1
             total = _running_input(line)
             if total is not None:
-                self.last = total
-        return self.last
+                self._totals[file] = total - old_input
 
 
 def _running_input(line: bytes) -> int | None:
@@ -474,18 +566,18 @@ def _service_tier(records: Records) -> tuple[str | None, str]:
 
 
 def _session(
-    sessions: Path, key: str, stopped: bool, extras: dict[str, Any]
+    sessions: Path, key: str, stopped: bool, extras: dict[str, Any], source: Path | None = None
 ) -> tuple[Path, bytes, Records]:
     """`find_session`; for a call the harness stopped, whose tool was ended while it wrote, the
     same file read again with the unfinished last line left out of the records (the copy keeps
     every byte). ValueError as `find_session` gives it, for any other problem."""
 
     try:
-        return find_session(sessions, key)
+        return find_session(sessions, key, source)
     except ValueError:
         if not stopped:
             raise
-        matches = list(sessions.rglob(f"*-{key}.jsonl"))
+        matches = [source] if source is not None else list(sessions.rglob(f"*-{key}.jsonl"))
         source = matches[0] if len(matches) == 1 else None
         if source is None or source.is_symlink():
             raise
@@ -549,8 +641,43 @@ def _network_access(records: list[dict[str, Any]]) -> tuple[bool | None, str]:
     return values[0], ""
 
 
+class Capture(NamedTuple):
+    sessions: Path
+    keep: Path
+    stopped: bool = False
+    sources: tuple[Path, ...] | None = None
+
+
+def _capture(capture: Capture, key: str, extras: dict[str, Any]) -> Records:
+    sessions, keep, stopped, sources = capture
+    if sources == ():
+        raise ValueError("the resumed call wrote no native session")
+    records: Records = []
+    copies = []
+    for index, selected in enumerate(sources if sources is not None else (None,)):
+        destination = keep if index == 0 else keep.with_name(f"{keep.stem}.{index + 1}.jsonl")
+        source, raw, rows = _session(sessions, key, stopped, extras, selected)
+        digest = copy_exact(source, raw, destination)
+        copies.append({"path": str(source), "copy": str(destination), "sha256": digest})
+        records += rows
+    first = copies[0]
+    extras.update(
+        native_session=first["path"],
+        native_copy=first["copy"],
+        native_sha256=first["sha256"],
+        native_sessions=copies,
+    )
+    return records
+
+
 def identify(
     stdout: str, sessions: Path, keep: Path, request: Request, cwd: Path, stopped: bool = False
+) -> tuple[dict[str, str | None] | None, dict[str, Any], list[list[str]], Records | None]:
+    return _identified(stdout, Capture(sessions, keep, stopped), request, cwd)
+
+
+def _identified(
+    stdout: str, capture: Capture, request: Request, cwd: Path
 ) -> tuple[dict[str, str | None] | None, dict[str, Any], list[list[str]], Records | None]:
     """What the call's native session says it ran, set against what was asked for.
 
@@ -579,14 +706,19 @@ def identify(
         return None, extras, checks, None
     check("thread-id", True, key, "")
     extras["thread_id"] = key
+    if request.resume:
+        check(
+            "resumed-thread",
+            key == request.resume,
+            key,
+            f"the stream resumed {key}, not {request.resume}",
+        )
     try:
-        source, raw, records = _session(sessions, key, stopped, extras)
-        extras["native_sha256"] = copy_exact(source, raw, keep)
+        records = _capture(capture, key, extras)
     except (OSError, ValueError) as problem:
         check("native-session", False, "", f"no native session for {key}: {problem}")
         return None, extras, checks, None
-    extras.update(native_session=str(source), native_copy=str(keep))
-    check("native-session", True, str(source), "")
+    check("native-session", True, extras["native_session"], "")
 
     payload = records[0].get("payload", {})
     version = payload.get("cli_version")

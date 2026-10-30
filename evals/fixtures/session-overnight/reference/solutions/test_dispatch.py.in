@@ -1,0 +1,20 @@
+"""Regression examples for shard and generation retry identity."""
+
+import unittest
+
+from datapipe.dispatch import pending
+
+
+class DispatchRegression(unittest.TestCase):
+    def test_sibling_parts_and_failed_attempts(self):
+        job = {"feed": "orders", "part": 1, "generation": 2, "file": "a.csv"}
+        receipts = [
+            {"feed": "orders", "part": 0, "generation": 2, "status": "committed"},
+            {"feed": "orders", "part": 1, "generation": 2, "status": "failed"},
+        ]
+        self.assertEqual(pending([job, job], receipts), [job])
+        with self.assertRaisesRegex(ValueError, "conflicting"):
+            pending([job, {**job, "file": "b.csv"}], receipts)
+        self.assertEqual(
+            pending([job], [{**job, "status": "committed"}, {**job, "status": "failed"}]), []
+        )

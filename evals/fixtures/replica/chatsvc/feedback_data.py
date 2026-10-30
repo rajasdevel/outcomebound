@@ -69,7 +69,9 @@ def _hex(*parts: object) -> str:
 
 
 def _when(seed: str, release: str, key: str, after: datetime | None) -> datetime:
-    start = datetime.fromisoformat(WINDOWS[release]).replace(tzinfo=timezone.utc)
+    start = datetime.fromisoformat(WINDOWS[release].replace("Z", "+00:00")).replace(
+        tzinfo=timezone.utc
+    )
     offset = int(_hex(seed, "when", key)[:8], 16) % (WINDOW_DAYS * 24 * 60)
     moment = start + timedelta(minutes=offset)
     if after is not None and moment <= after:

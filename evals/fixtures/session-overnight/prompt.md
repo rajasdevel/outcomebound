@@ -1,0 +1,1 @@
+Finish the fourteen overnight tickets: investigate, fix, check and document. I grant commits on the work branch; push nothing. Hold my retention and preserved-warehouse decisions with briefs, finish the rest, clean up under the notes and leave a morning handoff.

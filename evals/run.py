@@ -54,6 +54,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import datetime
+import functools
 import hashlib
 import json
 import os
@@ -72,11 +73,12 @@ from typing import Any, NamedTuple
 # Direct script execution also needs the repository package path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from evals import stub_place
+from evals import session_protocol, stub_place
 from evals.claude_stream import above as claude_above
 from evals.claude_stream import (
     expected_records,
     expected_start,
+    isolation_verdict,
     leaked_records,
     leaked_start,
     loading_check,
@@ -102,12 +104,34 @@ from evals.evidence import (
     tree_hashes,
     workspace_digest,
 )
-from evals.harnesses import SERVICE_TIER, Budget, Request
+from evals.harnesses import SERVICE_TIER, Budget, CallResult, Request
 from evals.harnesses.claude_code import GIT_IDENTITY, ClaudeCodeHarness, cell_for, unreadable
 from evals.harnesses.codex import CodexHarness, catalog
+from evals.long_sessions import (
+    ACTIONS_ENV,
+    SESSION_FILE,
+    TURNS_ENV,
+    Driver,
+    Driving,
+    Session,
+    SessionError,
+    read_session,
+    sealed_stage,
+)
 from evals.native_commands import fill_directories
 from evals.native_receipts import parse_records, temporary_write_roots
 from evals.processes import bounded_command, partial_output
+from evals.session_permissions import (
+    fixture_links,
+    isolation_rows,
+    require_seals,
+    seal_refusal,
+    sealed_roots,
+    sealed_sources,
+    source_access,
+    stage_access,
+)
+from evals.session_usage import CallUsage
 from evals.watch import Watcher
 
 # The stream decoders the graders' tests read through this module.
@@ -154,6 +178,8 @@ NAMED_ONLY = (
     "field-",
     "scaffold-",
     "replica-",
+    "session-",
+    "brief-",
     "v2-",
     # Real-world fixtures with suite-v2 references; named until their pilot runs are in.
     "docs-fix-at-source",
@@ -185,7 +211,7 @@ LIVE_SUFFIX = ".live"
 # a call reads from its Codex home or above its workspace may name OutcomeBound or give it
 # instructions, so that neither arm reads more of either than its fixture and its install. The
 # operator's own skills and agent roles, which both arms read alike, are recorded, not refused.
-CLEAN_HOME = ("replica-",)
+CLEAN_HOME = ("replica-", "session-", "brief-")
 RAW = REPO / "evals" / "results" / "raw"
 TEMPLATE = "templates/managed-block.agents.md.tmpl"
 LAUNCHER = "scripts/outcomebound"
@@ -342,16 +368,53 @@ OBSERVED = "observed: "
 TIMED_OUT = re.compile(r" call timed out after ")
 
 
+def fixture_sources() -> Path:
+    """The configured fixture root, shared by source reads and call seals."""
+
+    return FIXTURES.resolve()
+
+
+def fixture_reader(function):
+    """Serialize source access against calls using the configured fixture root."""
+
+    @functools.wraps(function)
+    def read(*args, **kwargs):
+        with source_access(fixture_sources()):
+            return function(*args, **kwargs)
+
+    return read
+
+
+@contextlib.contextmanager
+def grading_access(graders: Path | None):
+    with (
+        source_access(fixture_sources()),
+        (
+            stage_access(graders)
+            if graders is not None and graders.stat().st_mode & 0o7777 == 0
+            else contextlib.nullcontext()
+        ),
+    ):
+        yield
+
+
+@fixture_reader
 def fixture_names() -> list[str]:
     return sorted(path.name for path in FIXTURES.iterdir() if (path / "setup.sh").is_file())
 
 
+@fixture_reader
 def default_fixtures() -> list[str]:
     """The fixtures a run takes when --fixtures names none: all but the named-only ones."""
 
-    return [name for name in fixture_names() if not name.startswith(NAMED_ONLY)]
+    return [
+        name
+        for name in fixture_names()
+        if not name.startswith(NAMED_ONLY) and not (FIXTURES / name / SESSION_FILE).exists()
+    ]
 
 
+@fixture_reader
 def selected_fragments(name: str) -> tuple[str, ...]:
     """The fragments the fixture's install selects: its `fragments` file, one id a line, `#`
     starting a comment; none where it has no such file."""
@@ -393,6 +456,7 @@ def _install_list(document: dict[str, Any], key: str) -> tuple[str, ...]:
     return tuple(values)
 
 
+@fixture_reader
 def fixture_install(name: str) -> Install:
     """The fixture's install: its `install.json`, checked whole, or, where it has none, no Done
     command, the fragments its `fragments` file names and the `eval` sandbox. InstallError where
@@ -469,6 +533,7 @@ def _suite_budget(document: dict[str, Any]) -> tuple[int | None, float | None]:
     return cap, float(seconds) if seconds is not None else None
 
 
+@fixture_reader
 def fixture_suite(name: str) -> Suite | None:
     """The fixture's `suite.json` as the runner reads it, or None where it has none. SuiteError
     where it is not a JSON object, its tier is not one of TIERS, its budget names a cap or a
@@ -511,6 +576,7 @@ def stub_source() -> Path:
     return evals_dir() / "stubs"
 
 
+@fixture_reader
 def human_read(name: str, graders: Path | None = None) -> bool:
     """Whether the fixture has a `human-read` file: a person judges whether its task was done.
     Where the run has a sealed copy of its grading files (`graders`), only that copy is read, so
@@ -523,6 +589,7 @@ def human_read(name: str, graders: Path | None = None) -> bool:
     return (FIXTURES / name / HUMAN_READ_FILE).is_file()
 
 
+@fixture_reader
 def required_claims(name: str, graders: Path | None = None) -> list[str] | None:
     """The names of the claims that the plan the post-checks ran (the sealed copy's, else the
     fixture's) marks required, as the validation reads it (a claim is required unless it says
@@ -540,6 +607,26 @@ def required_claims(name: str, graders: Path | None = None) -> list[str] | None:
         return None
 
 
+@fixture_reader
+def diagnostic_claims(name: str, graders: Path | None = None) -> dict[str, str]:
+    path = (graders or FIXTURES / name) / "post.plan.json"
+    try:
+        return session_protocol.diagnostics(json.loads(path.read_text(encoding="utf-8")))
+    except session_protocol.ProtocolError:
+        raise
+    except (OSError, ValueError, KeyError, TypeError):
+        return {}
+
+
+def claims_text(extra: dict[str, Any]) -> str:
+    labels = extra.get("diagnostics", {})
+    return ", ".join(
+        f"{claim} {verdict}" + (f" [{labels[claim]}]" if claim in labels else "")
+        for claim, verdict in extra["claims"].items()
+    )
+
+
+@fixture_reader
 def needs_local_listener(name: str) -> bool:
     """Whether the fixture has a `local-listener` file: its task starts a service on a port."""
 
@@ -549,7 +636,7 @@ def needs_local_listener(name: str) -> bool:
 def evals_dir() -> Path:
     """The `evals/` folder the fixtures and graders are read from."""
 
-    return FIXTURES.parent
+    return fixture_sources().parent
 
 
 def sha256_text(text: str) -> str:
@@ -1805,6 +1892,7 @@ def instructions_above(folder: Path) -> list[str]:
     ]
 
 
+@fixture_reader
 def task_text(name: str, workdir: Path) -> str:
     """A fixture's task: its prompt.md, or what its task.sh prints for the built `workdir`.
 
@@ -1894,6 +1982,7 @@ def plugin_records(folders: tuple[Path, ...]) -> list[dict[str, Any]]:
     return found
 
 
+@fixture_reader
 def source() -> dict[str, Any]:
     """The checkout the kernel, the fixtures and the core skill were read from."""
 
@@ -1971,12 +2060,14 @@ class Sealed(NamedTuple):
     grading_files: dict[str, str]
 
 
+@fixture_reader
 def seal_inputs(stage: Path, name: str) -> Sealed:
     """Record what grades `name` now: the stage and the grading files."""
 
     return Sealed(stage, tree_hashes(stage), grading_hashes(evals_dir(), name))
 
 
+@fixture_reader
 def check_graders(sealed: Sealed, name: str) -> tuple[bool, str]:
     """Whether the stage and the grading files are as they were sealed, and if not, the report
     that fails the run before any check executes."""
@@ -1995,6 +2086,7 @@ class SealMoved(Exception):
     """The sealed copy differs from what was sealed before the call; the message names what."""
 
 
+@fixture_reader
 def seal_graders(sealed: Sealed, name: str, destination: Path) -> str:
     """Copy what grades `name` into `destination` and return the copy's digest, once the copy is
     shown to hold what was sealed before the call. A difference, which a process the call left
@@ -2030,6 +2122,8 @@ class CallRecords(NamedTuple):
     stubs: Path | None = None
     stub_digests: dict[str, dict[str, str]] | None = None
     observed: Path | None = None
+    turns: Path | None = None
+    actions: Path | None = None
 
 
 def records_env(records: CallRecords | None, folder: Path) -> dict[str, str]:
@@ -2047,6 +2141,12 @@ def records_env(records: CallRecords | None, folder: Path) -> dict[str, str]:
         env[WATCH_LOG_ENV] = str(records.watch_log)
     if records.observed is not None:
         env[OBSERVED_ENV] = str(records.observed)
+    if records.turns is not None:
+        session_protocol.turns(json.loads(records.turns.read_text(encoding="utf-8")))
+        env[TURNS_ENV] = str(records.turns)
+    if records.actions is not None:
+        session_protocol.actions(json.loads(records.actions.read_text(encoding="utf-8")))
+        env[ACTIONS_ENV] = str(records.actions)
     if records.stubs is not None:
         env[stub_place.STUBS_ENV] = str(records.stubs)
     if records.stub_digests is not None:
@@ -2063,6 +2163,7 @@ class Judging(NamedTuple):
     records: CallRecords | None = None
 
 
+@fixture_reader
 def post_check(
     fixture: Path,
     workdir: Path,
@@ -2253,6 +2354,7 @@ def freeze_observed(live: Path | None, kept: Path | None, extra: dict[str, Any])
     return kept
 
 
+@fixture_reader
 def build_workspace(
     name: str,
     arm: Arm,
@@ -2304,6 +2406,7 @@ def build_workspace(
         extra["error"] = unfit
         return report, {}, None, ""
     try:
+        check_fixture_links(workdir, stage, extra)
         protected = protected_snapshot(
             fixture,
             workdir,
@@ -2326,6 +2429,14 @@ def build_workspace(
         extra["error"] = f"the fixture's task could not be written: {problem}"
         return report + partial_output(problem), {}, None, ""
     return None, protected, seed, prompt
+
+
+def check_fixture_links(workdir: Path, stage: Path, extra: dict[str, Any]) -> None:
+    for root, name in ((fixture_sources(), "fixture sources"), (stage, "grading stage")):
+        links = fixture_links(workdir, root)
+        if links:
+            extra["void"] = "runner"
+            raise ValueError(f"setup linked {name}: " + ", ".join(links))
 
 
 class Scene(NamedTuple):
@@ -2376,7 +2487,9 @@ def run_fixture(
             name, request, arm, path, harness, Scene(workdir, stage, place, extra)
         )
     finally:
-        shutil.rmtree(stage, ignore_errors=True)
+        with source_access(fixture_sources()):
+            stage.chmod(0o700)
+            shutil.rmtree(stage, ignore_errors=True)
         shutil.rmtree(observed_folders(workdir, place)[0], ignore_errors=True)
 
 
@@ -2399,6 +2512,7 @@ class Instruments(NamedTuple):
         return tuple(path for path in (self.stubs, self.watch_log) if path is not None)
 
 
+@fixture_reader
 def instruments(suite: Suite | None, workdir: Path, place: Place, path: str) -> Instruments:
     """The instruments of one call: for a suite fixture, its stubs placed read-only in their
     own folder (Place.stubs, else beside the workspace) put first on `path`, a watcher of its
@@ -2496,16 +2610,209 @@ def judge_stop(extra: dict[str, Any], stopped: str | None) -> None:
         extra["verdict"] = "FAIL"
 
 
+def invoke(
+    name: str,
+    request: Request,
+    harness: Harness,
+    scene: Scene,
+    kit: Instruments,
+    session: Session | None,
+) -> CallResult:
+    workdir, stage, place, extra = scene
+    sources = fixture_sources()
+
+    def before_call() -> None:
+        if isinstance(harness, CodexHarness):
+            reached = unclean_reach([name], harness.home(), workdir.parent)
+            if reached:
+                raise ValueError("unclean home or workspace reach: " + ", ".join(reached))
+
+    live = observed_folders(workdir, place)[0] if kit.suite and kit.suite.observe else None
+    with source_access(sources, extra):
+        asked = request._replace(
+            local_listener=needs_local_listener(name),
+            sandbox=fixture_install(name).sandbox,
+            budget=Budget(session.session_timeout_seconds, session.input_cap)
+            if session
+            else kit.budget,
+            protected=(
+                *kit.protected(),
+                *(
+                    (sources,)
+                    if session is not None or name.startswith(("session-", "brief-"))
+                    else ()
+                ),
+            ),
+            unreadable=(
+                stage,
+                sources,
+                *([live] if live else []),
+                *(
+                    ()
+                    if session is not None or name.startswith(("session-", "brief-"))
+                    else other_workspaces(workdir)
+                ),
+            ),
+            cell=place.cell,
+            before_call=before_call,
+            session_run=session is not None or name.startswith(("session-", "brief-")),
+        )
+        roots = fixture_write_roots(name, workdir)
+    keep = place.keep or workdir.parent / f"{workdir.name}.native.jsonl"
+    if session is None:
+        guard: dict[str, Any] = {}
+        paths = (workdir.parent, keep.parent, keep.parent.parent)
+        with (
+            sealed_roots(paths, stage, guard) if asked.session_run else contextlib.nullcontext(),
+            sealed_stage(stage, guard, sources) if asked.session_run else contextlib.nullcontext(),
+            sealed_sources(sources, guard) if asked.session_run else contextlib.nullcontext(),
+        ):
+            if asked.session_run:
+                require_seals(asked.unreadable, (stage, sources), extra)
+            started_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            active = time.monotonic()
+            result = harness.call(extra["prompt"], asked, workdir, roots, kit.path, keep)
+            guard["active_seconds"] = round(time.monotonic() - active, 3)
+            ended_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        rows = [*result.extras.get("isolation", []), *guard.get("isolation", [])]
+        result.extras.update(guard)
+        if rows:
+            result.extras["isolation"] = rows
+        if asked.session_run:
+            rows = [
+                *result.extras.get("isolation", []),
+                [
+                    "session-seal",
+                    "FAIL" if guard.get("void") == "contaminated" else "PASS",
+                    "root modes and grading stage",
+                ],
+                *isolation_rows(harness.name),
+            ]
+            if rows:
+                verdict, items = isolation_verdict(rows)
+                result.extras.update(
+                    isolation=rows,
+                    isolation_verdict=verdict,
+                    isolation_unverified=items if verdict == "UNVERIFIED" else [],
+                )
+            single_session_records(
+                result,
+                harness.name,
+                asked,
+                scene,
+                sources / name,
+                (started_at, ended_at),
+            )
+        return result
+    driving = Driving(
+        workdir,
+        roots,
+        kit.path,
+        keep,
+        stage,
+        {**child_env(), **GRADER_GIT, GRADER_DIR_ENV: str(stage), EVAL_DIR_ENV: str(evals_dir())},
+        (sources,),
+        keep.parent.parent,
+        sources,
+    )
+    return Driver(session, extra["prompt"], asked, harness, driving).run()
+
+
+def single_session_records(
+    result: CallResult,
+    harness: str,
+    request: Request,
+    scene: Scene,
+    fixture: Path,
+    interval: tuple[str, str],
+) -> None:
+    from evals.session_evidence import ActionLedger, contamination, isolation_residual
+
+    workspace, _, place, extra = scene
+    keep = place.keep or workspace.parent / f"{workspace.name}.native.jsonl"
+    started_at, ended_at = interval
+    copies = result.extras.get("native_sessions", [])
+    actions = ActionLedger().add(copies, harness, workspace, result.extras.get("thread_id", ""))
+    meter = CallUsage(harness)
+    for item in copies:
+        raw = Path(item["copy"]).read_bytes()
+        meter.add(
+            parse_records(raw[: raw.rfind(b"\n") + 1]),
+            item.get("session_id", result.extras.get("thread_id", "")),
+        )
+    stem = keep.name.removesuffix(".native.jsonl")
+    answer_file = keep.with_name(stem + ".answer.md").resolve()
+    turns_file = keep.with_name(stem + ".turns.json")
+    answer_file.write_text(result.answer, encoding="utf-8")
+    turns = {
+        "version": session_protocol.VERSION,
+        "turns": [
+            {
+                "turn": 1,
+                "label": "opener",
+                "message": extra["prompt"],
+                "required": True,
+                "clarification": False,
+                "wait_seconds": 0,
+                "answer": result.answer,
+                "answer_path": str(answer_file),
+                "started_at": started_at,
+                "ended_at": ended_at,
+                "session_id": result.extras.get("thread_id") or "",
+                "calls": len(meter.calls),
+                "actions": actions,
+            }
+        ],
+    }
+    session_protocol.turns(turns)
+    _write(turns_file, turns)
+    result.extras["turns_file"] = str(turns_file)
+    document = {
+        "version": session_protocol.VERSION,
+        "actions": [{**action, "turn": 1} for action in actions],
+    }
+    session_protocol.actions(document)
+    actions_file = keep.with_name(stem + ".actions.json")
+    _write(actions_file, document)
+    result.extras["actions_file"] = str(actions_file)
+    hits = contamination(
+        copies,
+        harness,
+        [
+            str(p)
+            for p in (
+                *request.unreadable,
+                workspace.parent,
+                keep.parent,
+                keep.parent.parent,
+                fixture_sources(),
+                fixture,
+            )
+        ]
+        + ["person.json"],
+        workspace,
+    )
+    result.extras["contamination"] = hits
+    result.extras["isolation_residual"] = isolation_residual(hits, actions, workspace)
+
+
 def _call_and_judge(
     name: str, request: Request, arm: Arm, path: str, harness: Harness, scene: Scene
 ) -> tuple[str, str, int | None, dict[str, Any]]:
     workdir, stage, place, extra = scene
-    keep = place.keep or workdir.parent / f"{workdir.name}.native.jsonl"
     try:
-        suite = fixture_suite(name)
+        with source_access(fixture_sources()):
+            suite = fixture_suite(name)
+            session = read_session(FIXTURES / name / SESSION_FILE)
     except SuiteError as problem:
         extra["error"] = f"{SUITE_FILE}: {problem}"
         return "", extra["error"], None, extra
+    except SessionError as problem:
+        extra["error"] = f"{SESSION_FILE}: {problem}"
+        return "", extra["error"], None, extra
+    if session is not None and (reason := seal_refusal()):
+        extra.update(error=reason, void="runner")
+        return "", reason, None, extra
     live, kept = observed_folders(workdir, place) if suite and suite.observe else (None, None)
     if live is not None:
         try:
@@ -2513,13 +2820,13 @@ def _call_and_judge(
         except OSError as problem:
             extra["error"] = f"the observed folder could not be made: {problem}"
             return "", extra["error"], None, extra
-    failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra, stage, live)
-    if failure is not None:
-        return "", failure, None, extra
-    extra["prompt"] = prompt
-    sealed = seal_inputs(stage, name)  # after the build and before the call; checked after it
-    grading_files = grading_digest(evals_dir(), name)
-    sandbox = fixture_install(name).sandbox
+    with source_access(fixture_sources()), stage_access(stage):
+        failure, protected, seed, prompt = build_workspace(name, arm, workdir, extra, stage, live)
+        if failure is not None:
+            return "", failure, None, extra
+        extra["prompt"] = prompt
+        sealed = seal_inputs(stage, name)  # after setup, checked after the call
+        grading_files = grading_digest(evals_dir(), name)
     try:
         kit = instruments(suite, workdir, place, path)
     except (OSError, ValueError) as problem:
@@ -2530,21 +2837,10 @@ def _call_and_judge(
     answer, transcript, returncode = "", "", None
     try:
         with kit.watcher or contextlib.nullcontext():
-            result = harness.call(
-                prompt,
-                request._replace(
-                    local_listener=needs_local_listener(name),
-                    sandbox=sandbox,
-                    budget=kit.budget,
-                    protected=kit.protected(),
-                    unreadable=(stage, *([live] if live else []), *other_workspaces(workdir)),
-                    cell=place.cell,
-                ),
-                workdir,
-                fixture_write_roots(name, workdir),
-                kit.path,
-                keep,
-            )
+            result = invoke(name, request, harness, scene, kit, session)
+        result.extras["seal_wait_seconds"] = result.extras.get("seal_wait_seconds", 0) + extra.get(
+            "seal_wait_seconds", 0
+        )
         answer, transcript, returncode = result.answer, result.transcript, result.returncode
         extra.update(result.extras)
         extra["identity_error"] = result.error
@@ -2555,13 +2851,23 @@ def _call_and_judge(
         extra["error"] = f"{type(problem).__name__}: {problem}"
         transcript = partial_output(problem)
     elapsed = round(time.monotonic() - started, 1)
-    records = after_call(kit, extra, returncode, elapsed)
-    records = records._replace(observed=freeze_observed(live, kept, extra))
+    records = after_call(
+        kit,
+        extra,
+        returncode,
+        round(max(0, time.monotonic() - started - extra.get("seal_wait_seconds", 0)), 3),
+    )
+    records = records._replace(
+        observed=freeze_observed(live, kept, extra),
+        turns=Path(extra["turns_file"]) if extra.get("turns_file") else None,
+        actions=Path(extra["actions_file"]) if extra.get("actions_file") else None,
+    )
 
-    intact, report, graders = judged_inputs(name, scene, sealed, protected)
-    left = Left(seed, transcript, answer, records)
-    report = grade(name, workdir, left, (intact, report), extra, graders)
-    judge_stop(extra, stop_of(extra))
+    report, graders = grade_scene(
+        name, scene, sealed, protected, Left(seed, transcript, answer, records)
+    )
+    if not extra.get("void"):
+        judge_stop(extra, stop_of(extra))
     extra.update(
         protected_snapshot=protected,
         elapsed_seconds=elapsed,
@@ -2571,6 +2877,18 @@ def _call_and_judge(
         workspace_sha256=workspace_digest(workdir, {**child_env(), **HERMETIC_GIT}),
     )
     return answer, report, returncode, extra
+
+
+def grade_scene(
+    name: str, scene: Scene, sealed: Sealed, protected: dict[str, str], left: Left
+) -> tuple[str, Path | None]:
+    with source_access(fixture_sources(), scene.extra), stage_access(scene.stage):
+        intact, report, graders = judged_inputs(name, scene, sealed, protected)
+        try:
+            return grade(name, scene.workdir, left, (intact, report), scene.extra, graders), graders
+        finally:
+            if graders is not None:
+                graders.chmod(0)
 
 
 def judged_inputs(
@@ -2608,6 +2926,21 @@ class Left(NamedTuple):
     records: CallRecords | None = None
 
 
+def session_record_error(records: CallRecords | None) -> str:
+    if records is None:
+        return ""
+    try:
+        if records.turns is not None:
+            session_protocol.turns(json.loads(records.turns.read_text(encoding="utf-8")))
+            if records.actions is None:
+                raise ValueError("OB_ACTIONS is missing")
+        if records.actions is not None:
+            session_protocol.actions(json.loads(records.actions.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as problem:
+        return f"session records: {problem}"
+    return ""
+
+
 def observed_changed(records: CallRecords | None, extra: dict[str, Any]) -> str:
     """A reason when the frozen observed folder differs, after the post-checks, from the digest
     taken at the freeze (submitted code runs in the post-checks and must not change it), else an
@@ -2631,12 +2964,34 @@ def grade(
     extra: dict[str, Any],
     graders: Path | None = None,
 ) -> str:
+    if problem := session_record_error(left.records):
+        extra.update(void="runner", error=problem)
+    if extra.get("void") in ("runner", "contaminated", "protocol_defect"):
+        extra.update(verdict="UNVERIFIED", claims={})
+        return f"{left.transcript}\n\n--- post-checks ---\nUNVERIFIED: {extra['void']}\n"
+    with grading_access(graders):
+        return _grade(name, workdir, left, protected, extra, graders)
+
+
+def _grade(
+    name: str,
+    workdir: Path,
+    left: Left,
+    protected: tuple[bool, str],
+    extra: dict[str, Any],
+    graders: Path | None,
+) -> str:
     """Judge what a run left: the post-checks, from the run's sealed copy of its graders, unless
     a grading input changed (`protected` is whether none did, and the protected check's report).
     Sets the verdict, the claims and what the checks observed in `extra`, and returns the
     report: the transcript, then the protected check and the post-checks' own output."""
 
     seed, transcript, answer, records = left
+    try:
+        extra["diagnostics"] = diagnostic_claims(name, graders)
+    except session_protocol.ProtocolError as defect:
+        extra.update(void="protocol_defect", error=str(defect), verdict="UNVERIFIED", claims={})
+        return f"{transcript}\n\n--- post-checks ---\nUNVERIFIED: protocol_defect: {defect}\n"
     intact, protected_report = protected
     verdict, output, log_dir = "FAIL", "VERDICT: FAIL\n", None
     if intact:
@@ -2658,6 +3013,14 @@ def grade(
             "fixture's review.md, or its task where it has none\n"
         )
     claims = {claim: result for result, claim in CLAIM_LINE.findall(output)}
+    if extra.get("unknown_tools"):
+        extra["checks_claims"] = claims
+        extra["checks_output"] = output
+        claims = dict.fromkeys(claims, "UNVERIFIED")
+        verdict = "UNVERIFIED"
+        output = CLAIM_LINE.sub(lambda m: f"UNVERIFIED {m[2]} [", output)
+        output = re.sub(r"(?m)^VERDICT: .*", "VERDICT: UNVERIFIED", output)
+        output += "\nUNVERIFIED: unknown tools prevent complete claim verification\n"
     required = required_claims(name, graders)
     if required is not None:
         # The plan's requiredness as it stood when the run was graded, for the panel.
@@ -2841,7 +3204,7 @@ def run_one(
     record = {**status, **arm.record(), "fixture": name}
     meta = {**record, "returncode": returncode, "error": error, **extra}
     _write(out / f"{name}.meta.json", meta)
-    claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
+    claims = claims_text(extra)
     tokens = extra.get("session_tokens")
     cost = f"; {_spent(tokens)}, {extra.get('elapsed_seconds')} seconds" if tokens else ""
     stopped = f"; stopped: {stop_of(meta)}" if stop_of(meta) else ""
@@ -2900,6 +3263,8 @@ def kept_records(meta: dict[str, Any]) -> CallRecords:
         Path(stubs["dir"]) if stubs.get("dir") else None,
         stubs.get("digests"),
         Path(meta["observed_dir"]) if meta.get("observed_dir") else None,
+        Path(meta["turns_file"]) if meta.get("turns_file") else None,
+        Path(meta["actions_file"]) if meta.get("actions_file") else None,
     )
 
 
@@ -2927,6 +3292,9 @@ def kept_transcript(plan: dict[str, Any], meta: dict[str, Any]) -> tuple[str, st
     saved = plan["saved"].read_text(encoding="utf-8", errors="replace")
     transcript = saved.split(POST_CHECKS, 1)[0]
     answer = plan["answer"].read_text(encoding="utf-8")
+    if meta.get("turns_file"):
+        # Each turn was filled against its own native records before they were combined.
+        return transcript, answer, {}
     session = None
     if meta.get("harness", HARNESS) == HARNESS:
         # A transcript kept before `outputs` were written gains them from its own events.
@@ -2937,6 +3305,7 @@ def kept_transcript(plan: dict[str, Any], meta: dict[str, Any]) -> tuple[str, st
     return transcript, answer, filled
 
 
+@fixture_reader
 def _regrade_graders(
     path: Path, name: str, meta: dict[str, Any], plan: dict[str, Any], current: bool = False
 ) -> str:
@@ -2951,16 +3320,17 @@ def _regrade_graders(
         copy = path.with_name(f"{name}{SEALED_SUFFIX}")
         if not copy.is_dir():
             return f"{copy.name} is missing"
-        if tree_digest(copy) != sealed:
-            return f"{copy.name} differs from the digest the meta recorded (graders_sha256)"
-        # The copy keeps the grading files' paths under `evals/`, so their digest reproduces; a
-        # record that kept none is not complete.
-        recorded = meta.get("grading_files_sha256")
-        if recorded and grading_digest(copy / "evals", str(name)) != recorded:
-            return f"{copy.name} holds grading files that differ from grading_files_sha256"
-        plan["graders"] = copy
-        plan["grading_files"] = "PASS" if recorded else UNVERIFIED
-        return _current_graders(name, meta, plan) if current else ""
+        with grading_access(copy):
+            if tree_digest(copy) != sealed:
+                return f"{copy.name} differs from the digest the meta recorded (graders_sha256)"
+            # The copy keeps the grading files' paths under `evals/`, so their digest reproduces; a
+            # record that kept none is not complete.
+            recorded = meta.get("grading_files_sha256")
+            if recorded and grading_digest(copy / "evals", str(name)) != recorded:
+                return f"{copy.name} holds grading files that differ from grading_files_sha256"
+            plan["graders"] = copy
+            plan["grading_files"] = "PASS" if recorded else UNVERIFIED
+            return _current_graders(name, meta, plan) if current else ""
     if current:
         return "--current-graders needs a run that kept a sealed copy of its graders"
     recorded = meta.get("grading_files_sha256")
@@ -2970,6 +3340,7 @@ def _regrade_graders(
     return ""
 
 
+@fixture_reader
 def _evals_sources() -> set[str]:
     """The SHA-256 of each file under this checkout's `evals/`, kept results left out: a stage
     file with one of them is a copy of a grader, not data a setup derived from its build."""
@@ -2983,22 +3354,30 @@ def _evals_sources() -> set[str]:
     return found
 
 
+@fixture_reader
 def _current_graders(name: str, meta: dict[str, Any], plan: dict[str, Any]) -> str:
     """Seal this checkout's graders for the run into a new temporary folder, set in `plan` in
     place of the run's copy, and say why they cannot be, else an empty string.
 
-    The fixture is built from this checkout under the run's arm (`current_graders`), which gives
-    the checks, the plan and the grading files as they are now. A stage file that build wrote
+    The fixture is built without guidance: graders belong to the fixture, not to its arm.
+    The kept install is checked against its own recorded digests. A stage file that build wrote
     that is no copy of a file under `evals/` is data the setup derived from its build (recorded
     refs, baseline digests): it is taken from the run's own copy, which describes the kept
     workspace, and named in `stage_kept_from_run`."""
 
-    arm, why = rebuilt_arm(name, meta)
-    if arm is None:
-        return why
+    harness = str(meta.get("harness") or HARNESS)
+    if harness not in HARNESSES:
+        return f"its harness {harness!r} is not one of {', '.join(HARNESSES)}"
+    set_harness(harness)
+    installed_files = _object(meta.get("arm_files"))
+    if any(Path(p).is_absolute() or ".." in Path(p).parts for p in installed_files):
+        return "its arm's installed files name a path outside the workspace"
+    intact, report = check_protected(plan["workdir"], installed_files)
+    if not intact:
+        return f"its arm's installed files differ from their recorded digests: {report}"
     plan["temporary"] = Path(tempfile.mkdtemp(prefix="ob-current-graders-"))
     built = plan["temporary"] / f"{name}{SEALED_SUFFIX}"
-    digest, seed = current_graders(name, arm, built)
+    digest, seed = current_graders(name, Arm(NONE, "", {}, None), built)
     if digest is None:
         return f"this checkout's graders could not be built: {seed}"
     sources, kept = _evals_sources(), []
@@ -3025,9 +3404,11 @@ def _current_graders(name: str, meta: dict[str, Any], plan: dict[str, Any]) -> s
         },
     }
     plan["graders"] = built
+    built.chmod(0)
     return ""
 
 
+@fixture_reader
 def _regrade_plan(
     source: Path, path: Path, meta: dict[str, Any], current: bool = False
 ) -> tuple[dict[str, Any], str]:
@@ -3050,6 +3431,8 @@ def _regrade_plan(
     workdir = Path(str(meta.get("fixture_repo", "")))
     if not workdir.is_dir():
         return plan, f"the kept workspace {workdir} is missing"
+    if workdir.with_name(workdir.name + ASIDE).exists():
+        return plan, f"{workdir.name}{ASIDE} is left from an interrupted regrade; move it back"
     plan["workdir"] = workdir
     refused = _regrade_graders(path, name, meta, plan, current)
     if refused:
@@ -3059,6 +3442,7 @@ def _regrade_plan(
     if recorded and recorded != before:
         return plan, "the kept workspace differs from the state the run left"
     plan["workspace_unchanged"] = "PASS" if recorded and before else UNVERIFIED
+    plan["before"] = before
     return plan, ""
 
 
@@ -3113,6 +3497,11 @@ def _regrade_all(
         plans.append(plan)
         if why:
             refusals.append(f"regrade: refused {plan['name'] or path.name}: {why}")
+    if out.resolve().is_relative_to(source.resolve()) or any(
+        plan.get("workdir") and out.resolve().is_relative_to(plan["workdir"].resolve())
+        for plan in plans
+    ):
+        refusals.append("regrade: --out must be outside the source record and kept workspaces")
     if refusals:
         sys.stderr.write("\n".join(refusals) + "\n")
         return 2
@@ -3129,23 +3518,23 @@ def _regrade_all(
 
 def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any]:
     meta, name, workdir = plan["meta"], plan["name"], plan["workdir"]
-    transcript, answer, filled = kept_transcript(plan, meta)
-    intact, protected_report, protected_check = _regrade_protected(workdir, meta)
-    extra: dict[str, Any] = {}
-    left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta))
-    report = grade(name, workdir, left, (intact, protected_report), extra, plan["graders"])
-    judge_stop(extra, stop_of(meta))
+    copied = copied_records(meta, out, name)
+    extra, report, filled = graded_copy({**plan, "meta": {**meta, **copied}}, plan["graders"])
+    after = workspace_digest(workdir, {**child_env(), **HERMETIC_GIT})
+    if after != plan["before"]:
+        raise SystemExit(f"regrade: {name}: the kept workspace changed while it was judged")
+    answer = plan["answer"].read_text(encoding="utf-8")
     problem = extra.pop("error", "")
     record = {
         **meta,
+        **copied,
         **extra,
         **filled,
         REGRADED: str(source),
         "error": meta.get("error") or problem,
-        "protected_check": protected_check,
         "grading_files_unchanged": plan["grading_files"],
         "workspace_unchanged": plan["workspace_unchanged"],
-        "workspace_sha256": workspace_digest(workdir, {**child_env(), **HERMETIC_GIT}),
+        "workspace_sha256": after,
         **plan.get("current", {}),
     }
     (out / f"{name}.prompt.md").write_text(plan["prompt"].read_text(encoding="utf-8"), "utf-8")
@@ -3154,11 +3543,47 @@ def _regrade_one(source: Path, out: Path, plan: dict[str, Any]) -> dict[str, Any
     if plan["native"]:
         shutil.copyfile(plan["native"], out / f"{name}.native.jsonl")
     if plan["graders"]:
-        shutil.copytree(plan["graders"], out / f"{name}{SEALED_SUFFIX}", symlinks=True)
+        with grading_access(plan["graders"]):
+            shutil.copytree(plan["graders"], out / f"{name}{SEALED_SUFFIX}", symlinks=True)
+            (out / f"{name}{SEALED_SUFFIX}").chmod(0)
     _write(out / f"{name}.meta.json", record)
-    claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
+    claims = claims_text(extra)
     print(f"{name}: {extra['verdict']}" + (f" ({claims})" if claims else ""))
     return index_row({"harness": HARNESS, **record}, name, record)
+
+
+def copied_records(meta: dict[str, Any], out: Path, name: str) -> dict[str, Any]:
+    """Keep grading's writable copies of call evidence away from the source record."""
+    copied: dict[str, Any] = {}
+
+    def keep(source: Path, suffix: str) -> str:
+        target = out / f"{name}.{suffix}"
+        if source.is_dir():
+            shutil.copytree(source, target, symlinks=True)
+        else:
+            shutil.copy2(source, target)
+        return str(target)
+
+    for key, suffix in (
+        ("watch_log", "watch.jsonl"),
+        ("observed_dir", "observed"),
+        ("turns_file", "turns.json"),
+        ("actions_file", "actions.json"),
+    ):
+        if meta.get(key):
+            copied[key] = keep(Path(meta[key]), suffix)
+    stubs = _object(meta.get("stubs"))
+    if stubs.get("dir"):
+        copied["stubs"] = {**stubs, "dir": keep(Path(stubs["dir"]), "stubs")}
+    if copied.get("turns_file"):
+        path = Path(copied["turns_file"])
+        document = json.loads(path.read_text(encoding="utf-8"))
+        for i, turn in enumerate(document["turns"], 1):
+            for key, suffix in (("answer_path", "answer.md"), ("transcript", "transcript.txt")):
+                if turn.get(key):
+                    turn[key] = keep(Path(turn[key]), f"turn-{i}.{suffix}")
+        _write(path, document)
+    return copied
 
 
 # --- rescore: a fixture's current graders on copies of kept workspaces -----------------------
@@ -3210,6 +3635,7 @@ def install_differences(arm: Arm, meta: dict[str, Any]) -> list[str]:
     return found
 
 
+@fixture_reader
 def _rescore_plan(path: Path, meta: dict[str, Any]) -> tuple[dict[str, Any], str]:
     """What one kept run needs to be scored with the current graders, and why it cannot be: its
     saved files as `--regrade` reads them, its kept workspace as the run left it, no folder left
@@ -3269,6 +3695,7 @@ def rescore(directories: list[Path]) -> int:
     return 1 if [plan for plan in plans if not _rescore_one(plan)] else 0
 
 
+@fixture_reader
 def current_graders(name: str, arm: Arm, destination: Path) -> tuple[str | None, str]:
     """Build the fixture from this checkout under `arm` in a temporary workspace, and seal what
     its setup wrote to the stage, with the current plan and grading files, into the new folder
@@ -3295,33 +3722,43 @@ def _remove_copy(folder: Path) -> None:
         os.chmod(os.path.dirname(path), 0o700)
         with contextlib.suppress(OSError):
             os.chmod(path, 0o700)
-        function(path)
+        # A folder rmtree could not open comes back with `os.open`, which needs flags: remove
+        # it whole now that it is readable.
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path, onerror=writable)
+        else:
+            function(path)
 
     shutil.rmtree(folder, onerror=writable)
 
 
-def graded_copy(plan: dict[str, Any], graders: Path) -> dict[str, Any]:
+def graded_copy(
+    plan: dict[str, Any], graders: Path | None
+) -> tuple[dict[str, Any], str, dict[str, Any]]:
     """Grade a copy of the kept workspace at its own path: the original is moved aside, copied
-    back, the copy graded and removed, and the original moved back. What `grade` records."""
+    back, the copy graded and removed, and the original moved back. What `grade` records,
+    its report and the transcript's directory evidence."""
 
     meta, name, workdir = plan["meta"], plan["name"], plan["workdir"]
-    transcript, answer, _filled = kept_transcript(plan, meta)
+    transcript, answer, filled = kept_transcript(plan, meta)
     aside = workdir.with_name(workdir.name + ASIDE)
-    extra: dict[str, Any] = {}
+    extra: dict[str, Any] = {key: meta[key] for key in ("void", "unknown_tools") if key in meta}
     os.rename(workdir, aside)
     try:
         shutil.copytree(aside, workdir, symlinks=True)
         intact, protected_report, extra["protected_check"] = _regrade_protected(workdir, meta)
         left = Left(meta.get("seed_sha"), transcript, answer, kept_records(meta))
-        grade(name, workdir, left, (intact, protected_report), extra, graders)
+        report = grade(name, workdir, left, (intact, protected_report), extra, graders)
     finally:
         if workdir.exists():
             _remove_copy(workdir)
         os.rename(aside, workdir)
-    judge_stop(extra, stop_of(meta))
-    return extra
+    if not extra.get("void"):
+        judge_stop(extra, stop_of(meta))
+    return extra, report, filled
 
 
+@fixture_reader
 def _rescore_one(plan: dict[str, Any]) -> bool:
     """Score one planned run and write its rescore file; whether it was scored."""
 
@@ -3338,9 +3775,12 @@ def _rescore_one(plan: dict[str, Any]) -> bool:
         print(f"{name}: already rescored with graders {digest[:12]} ({target.name})")
         return True
     if graders.exists():
-        shutil.rmtree(graders)
+        _remove_copy(graders)
     building.rename(graders)
-    extra = graded_copy(plan, graders)
+    try:
+        extra, _report, _filled = graded_copy(plan, graders)
+    finally:
+        graders.chmod(0)
     after = workspace_digest(plan["workdir"], {**child_env(), **HERMETIC_GIT})
     if after != plan["before"]:
         sys.stderr.write(f"rescore: {path}: the kept workspace changed while it was scored\n")
@@ -3380,7 +3820,7 @@ def _rescore_one(plan: dict[str, Any]) -> bool:
             "workspace_unchanged": plan["workspace_unchanged"],
         },
     )
-    claims = ", ".join(f"{claim} {verdict}" for claim, verdict in extra["claims"].items())
+    claims = claims_text(extra)
     print(
         f"{name}: rescore {extra['verdict']}"
         + (f" ({claims})" if claims else "")
@@ -3728,6 +4168,9 @@ def _isolation_lines(group: list[dict[str, Any]]) -> list[str]:
             lines.append(
                 f"  repetition {run['repetition']} isolation: {run['isolation_verdict']}{named}"
             )
+            residual = run.get("isolation_residual", [])
+            if residual:
+                lines.append(f"    isolation_residual: {len(residual)} unresolved static item(s)")
     return lines
 
 
@@ -3741,7 +4184,9 @@ def _claim_lines(runs: list[dict[str, Any]]) -> list[str]:
         count = sum(1 for run in judged if run["claims"].get(claim) == "PASS")
         skipped = len(runs) - len(judged)
         note = f" ({skipped} could not be judged, not counted)" if skipped else ""
-        lines.append(f"  {claim}: PASS {count}/{len(judged)}{note}")
+        labels = sorted({run.get("diagnostics", {}).get(claim, "") for run in runs} - {""})
+        label = f" [{', '.join(labels)}]" if labels else ""
+        lines.append(f"  {claim}{label}: PASS {count}/{len(judged)}{note}")
     for run in runs:
         for claim, reason in sorted((run.get("unjudged") or {}).items()):
             lines.append(f"  repetition {run['repetition']} {claim} could not be judged: {reason}")
@@ -3756,7 +4201,11 @@ def _only_unjudged(run: dict[str, Any]) -> bool:
     return (
         bool(missing)
         and run["verdict"] == "UNVERIFIED"
-        and all(verdict == "PASS" or claim in missing for claim, verdict in run["claims"].items())
+        and all(
+            verdict == "PASS" or claim in missing
+            for claim, verdict in run["claims"].items()
+            if "required" not in run or claim in run["required"]
+        )
     )
 
 
@@ -4040,6 +4489,7 @@ def checked_fixtures(parser: argparse.ArgumentParser, args: argparse.Namespace) 
     return names
 
 
+@fixture_reader
 def suite_refusal(name: str) -> str:
     """What is wrong with the fixture's suite.json, or an empty string where the runner reads
     it (or it has none)."""
@@ -4048,6 +4498,12 @@ def suite_refusal(name: str) -> str:
         fixture_suite(name)
     except SuiteError as problem:
         return f"{name}/{SUITE_FILE}: {problem}"
+    try:
+        session = read_session(FIXTURES / name / SESSION_FILE)
+    except SessionError as problem:
+        return f"{name}/{SESSION_FILE}: {problem}"
+    if session is not None and (reason := seal_refusal()):
+        return f"{name}: {reason}"
     return ""
 
 

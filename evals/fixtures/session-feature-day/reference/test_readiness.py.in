@@ -1,0 +1,66 @@
+from copy import deepcopy
+
+
+class ReadinessTest(unittest.TestCase):
+    def test_snapshot_changes_fail_independently_without_mutation(self):
+        from chatsvc.readiness import assess
+
+        catalog = {
+            "routes": [
+                {
+                    "path": "/v2/chat",
+                    "default_model": "chat-fast-2",
+                    "aliases": {"fast": "chat-fast-2"},
+                    "max_tokens": 4096,
+                }
+            ]
+        }
+        base = {
+            "env": "stage",
+            "revision": "candidate",
+            "dirty": False,
+            "checks": [{"name": "route", "revision": "candidate", "ok": True}],
+            "smoke": {"revision": "candidate", "ok": True},
+            "catalog": catalog,
+            "deployed_files": {"chatsvc/app.py": "a", "config/chatsvc.ini": "b"},
+            "current_files": {
+                "chatsvc/app.py": "a",
+                "config/chatsvc.ini": "b",
+                "docs/test.md": "new",
+            },
+        }
+        for changes, reasons in (
+            ({}, []),
+            ({"dirty": 0}, ["dirty"]),
+            ({"env": "prod", "checks": []}, ["checks", "environment"]),
+            ({"smoke": {"revision": "old", "ok": True}}, ["smoke"]),
+            ({"current_files": {"chatsvc/app.py": "new", "config/chatsvc.ini": "b"}}, ["code"]),
+            ({"catalog": {"routes": []}}, ["catalog"]),
+        ):
+            snapshot = deepcopy(base | changes)
+            before = deepcopy(snapshot)
+            self.assertEqual(
+                assess(snapshot, "candidate", catalog),
+                {"ready": not reasons, "reasons": reasons, "revision": "candidate"},
+            )
+            self.assertEqual(snapshot, before)
+
+    def test_missing_evidence_refuses_every_claim(self):
+        from chatsvc.readiness import assess
+
+        self.assertEqual(
+            assess({}, "candidate", {}),
+            {
+                "ready": False,
+                "reasons": [
+                    "catalog",
+                    "checks",
+                    "code",
+                    "dirty",
+                    "environment",
+                    "revision",
+                    "smoke",
+                ],
+                "revision": "",
+            },
+        )

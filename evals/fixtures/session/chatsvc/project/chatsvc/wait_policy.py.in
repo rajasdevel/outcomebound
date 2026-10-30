@@ -1,0 +1,17 @@
+"""The fast route policy described in docs/specs/feature-day.md."""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class BoundedPolicy:
+    max_attempts: int = 4
+    base_delay: float = 0.1
+    max_delay: float = 2.0
+    now: float = 0.0
+
+    def hint(self, headers):
+        raise NotImplementedError("finish the numeric fast-route policy")
+
+    def delay(self, attempt, headers):
+        raise NotImplementedError("finish the fast-route backoff")

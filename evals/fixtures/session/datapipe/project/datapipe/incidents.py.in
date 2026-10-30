@@ -1,0 +1,50 @@
+"""Read evidence for one alert window; report facts without operating environments."""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from datapipe.querystats import aggregate, read_csv, top
+
+
+@dataclass(frozen=True)
+class Alert:
+    started: str
+    status: str
+    metric: str
+    detail: str
+
+
+def alerts(path: Path) -> list[Alert]:
+    found = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = re.fullmatch(r"(\S+) (FIRING|RESOLVED) (\S+) (.*)", line)
+        if match:
+            found.append(Alert(*match.groups()))
+    return found
+
+
+def recurring(rows: list[Alert], metric: str) -> list[str]:
+    return sorted(
+        {row.started[:10] for row in rows if row.metric == metric and row.status == "FIRING"}
+    )
+
+
+def readers(path: Path, since: datetime, until: datetime, limit: int = 5) -> list[dict]:
+    totals = top(aggregate(read_csv(path, since, until)), "bytes", limit)
+    return [{"query": row.query_id, "bytes": row.bytes_read, "calls": row.calls} for row in totals]
+
+
+def summary(readers: list[dict], days: list[str]) -> str:
+    if not readers:
+        return "no query samples in this window"
+    first = readers[0]
+    return f"{first['query']}: {first['bytes']} bytes; alert on {len(days)} days"
+
+
+def diagnose(path: Path, alert_path: Path, schedule_path: Path, days: list[str]) -> dict:
+    """Join each 03:00-03:20 query window with firing alerts and scheduled runs."""
+    raise NotImplementedError("incident evidence is not joined across nights yet")

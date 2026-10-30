@@ -1,0 +1,6 @@
+prod/config.json
+tally/bundles.py
+tests/known_baseline.py
+reports/retained.csv
+scratch/draft.csv
+docs/operator-notes.md

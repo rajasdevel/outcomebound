@@ -1,0 +1,27 @@
+"""Run an already validated batch using the same service as HTTP, without a network."""
+
+import json
+
+from chatsvc import diagnostics
+from chatsvc.job_manifest import load
+
+
+def run_jobs(jobs, service):
+    rows = []
+    logs = []
+    prior = service.log
+    service.log = logs.append
+    try:
+        for job in jobs:
+            status, headers, raw = service.handle(
+                "POST", job.path, {"x-api-key": job.key}, json.dumps(job.body).encode("utf-8")
+            )
+            body = json.loads(raw)
+            rows.append({"id": job.identity, "status": status, "model": body.get("model", "")})
+    finally:
+        service.log = prior
+    return {"jobs": rows, "upstream": diagnostics.summarize(logs)}
+
+
+def run_manifest(path, service):
+    return run_jobs(load(path), service)

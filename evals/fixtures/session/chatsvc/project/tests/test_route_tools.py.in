@@ -1,0 +1,57 @@
+"""The public catalog must never publish a provider key; logs count calls, not ratings."""
+
+import dataclasses
+import unittest
+
+from chatsvc import config
+from chatsvc.catalog import public_catalog
+from chatsvc.diagnostics import parse_attempt, summarize
+from chatsvc.replay_cases import TrafficError, inventory, load
+from chatsvc.route_audit import audit
+
+
+class RouteToolsTest(unittest.TestCase):
+    def test_catalog_uses_an_allowlist(self):
+        settings = config.load("config")
+        first = public_catalog(settings)["routes"][0]
+        self.assertEqual(set(first), {"path", "default_model", "aliases", "max_tokens"})
+        self.assertEqual(first["path"], "/v1/chat")
+        self.assertEqual(first["aliases"]["small"], "chat-small-3")
+        self.assertEqual(first["max_tokens"], 4096)
+
+    def test_log_parser_ignores_inbound_refusals(self):
+        self.assertIsNone(parse_attempt("inbound path=/v2/chat status=429"))
+        self.assertEqual(
+            parse_attempt("upstream path=/v1/models/chat-fast-2:generate attempt=2 status=429"),
+            {"path": "/v1/models/chat-fast-2:generate", "attempt": 2, "status": 429},
+        )
+
+    def test_empty_summary_has_no_implied_calls(self):
+        self.assertEqual(summarize([])["calls"], 0)
+        self.assertEqual(summarize([])["paths"], {})
+        self.assertEqual(summarize([])["statuses"], {})
+        self.assertEqual(summarize([])["models"], {})
+
+    def test_audit_accepts_shipped_configuration(self):
+        self.assertEqual(audit(config.load("config")), [])
+
+    def test_audit_rejects_attempts_outside_the_safe_range(self):
+        settings = config.load("config")
+        route = settings.routes["/v1/chat"]
+        bad = dataclasses.replace(route, max_attempts=0)
+        self.assertEqual(
+            audit(dataclasses.replace(settings, routes={"/v1/chat": bad})),
+            ["/v1/chat: max_attempts must be from 1 to 8"],
+        )
+
+    def test_traffic_inventory_omits_bodies(self):
+        records = load(['{"path":"/v2/chat","body":{"messages":[]}}', ""])
+        self.assertEqual(inventory(records), {"/v2/chat": 1})
+
+    def test_traffic_refuses_non_object(self):
+        with self.assertRaisesRegex(TrafficError, "line 1: expected an object$"):
+            load(["[]"])
+
+
+if __name__ == "__main__":
+    unittest.main()

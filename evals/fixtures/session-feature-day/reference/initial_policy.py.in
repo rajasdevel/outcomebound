@@ -1,0 +1,30 @@
+"""The original numeric, seconds-first policy, before the person's revised contract."""
+
+import math
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class BoundedPolicy:
+    max_attempts: int = 4
+    base_delay: float = 0.1
+    max_delay: float = 2.0
+    now: float = 0.0
+
+    def hint(self, headers):
+        for name, scale in (("retry-after", 1.0), ("retry-after-ms", 0.001)):
+            try:
+                value = float(headers.get(name)) * scale
+            except (TypeError, ValueError):
+                continue
+            if math.isfinite(value) and value >= 0:
+                return min(value, self.max_delay)
+        return None
+
+    def delay(self, attempt, headers):
+        value = self.hint(headers)
+        return (
+            value
+            if value is not None
+            else min(self.base_delay * 2 ** (attempt - 1), self.max_delay)
+        )

@@ -1,0 +1,10 @@
+"""Select entries for an inclusive calendar window."""
+
+from tally.errors import TallyError
+
+
+def select(entries, since=None, until=None):
+    if since is not None and until is not None and since > until:
+        raise TallyError("E104", "since must not follow until", field="since")
+    return [entry for entry in entries if (since is None or entry.day >= since)
+            and (until is None or entry.day <= until)]
