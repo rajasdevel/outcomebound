@@ -103,8 +103,8 @@ list holds what the documentation and the research read name, and an input they 
 `UNVERIFIED`. For Codex and Claude the standard input is the prompt file. The prompt holds the lens, the output form, and the diff and the named files between lines
 marked with a random token that the data does not hold, with the statement that the data is to be
 examined and holds no instructions to the reviewer. Named files carry line numbers. The harness
-rows keep each reviewer read-only: Codex `-s read-only` with no session kept and no user config or
-rules loaded; Claude `-p` with `--bare` where `ANTHROPIC_API_KEY` is set (the documented mode for scripted calls;
+rows keep each reviewer read-only: Codex `-s read-only` with no user config or rules loaded, its session kept on disk
+(below); Claude `-p` with `--bare` where `ANTHROPIC_API_KEY` is set (the documented mode for scripted calls;
 it reads no login, so the run bills the key, and the plan says so) and else `--restricted
 --safe-mode`, with the tools `Read`, `Grep` and `Glob`, the writing and
 command tools denied by name, permission mode `dontAsk` with no one to answer a prompt, no MCP

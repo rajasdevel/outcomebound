@@ -68,7 +68,8 @@ def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) ->
     [
         (
             "workspace",
-            "before creating or removing a worktree, or removing a container, volume or named data",
+            "before creating or removing a worktree, resuming or handing off work, or removing a "
+            "container, volume or named data",
         ),
         ("multi-agent", "before writing a delegate's brief or integrating a delegate's work"),
         ("research", "before running `outcomebound research`"),

@@ -976,8 +976,9 @@ def test_an_import_block_whose_file_became_a_link_is_dropped_not_followed(
             "# Project notes\nUse the project's build command.\n",
             True,
         ),
+        ("@AGENTS.md\n", False),
     ],
-    ids=["whitespace", "managed", "project-text"],
+    ids=["whitespace", "managed", "project-text", "import-only"],
 )
 def test_guidance_file_warning_keeps_project_text_and_ignores_managed_blocks(
     tmp_path: Path, capsys: Capture, name: str, text: str, warns: bool

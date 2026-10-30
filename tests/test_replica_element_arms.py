@@ -547,8 +547,8 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
     [
         (
             "fragment:workspace",
-            "- before creating or removing a worktree, or removing a container, volume or named "
-            "data: read .outcomebound/fragments/workspace.md",
+            "- before creating or removing a worktree, resuming or handing off work, or removing a "
+            "container, volume or named data: read .outcomebound/fragments/workspace.md",
             "Read only when the person names it or a file you are reading directs you to it: "
             "`.outcomebound/fragments/workspace.md`.",
         ),
