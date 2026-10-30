@@ -192,8 +192,8 @@ ACTS = {
     "using-outcomebound": (
         "before retiring what people or other systems rely on or relied on (an interface, "
         "command, format, data or route), or changing the route by which a change reaches its "
-        "users (removing internal code, tests or tools, or a release by the route it already "
-        "has, is not one)"
+        "users (removing internal code, tests or tools that no user, retained data, format "
+        "or recovery still depends on, or a release by the route it already has, is not one)"
     ),
     "run-acceptance": "before preparing or recording a person's acceptance of a delivered change",
     "review-council": "before asking another model or harness for a review",

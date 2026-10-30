@@ -104,7 +104,7 @@ Use the listed project path even if the skill catalog omits it or a personal ski
 - before running `outcomebound research`: read .outcomebound/fragments/research.md
 - when a decision compares several options, the person asks for a brief or a page, or a harness refuses an act the person granted: read .agents/skills/decision-brief/SKILL.md
 - when a fix did not hold: read .agents/skills/diagnose/SKILL.md
-- before retiring what people or other systems rely on or relied on (an interface, command, format, data or route), or changing the route by which a change reaches its users (removing internal code, tests or tools, or a release by the route it already has, is not one): read .agents/skills/using-outcomebound/SKILL.md
+- before retiring what people or other systems rely on or relied on (an interface, command, format, data or route), or changing the route by which a change reaches its users (removing internal code, tests or tools that no user, retained data, format or recovery still depends on, or a release by the route it already has, is not one): read .agents/skills/using-outcomebound/SKILL.md
 - before asking another model or harness for a review: read .agents/skills/review-council/SKILL.md
 - before drafting tickets, or publishing them to the ticket store: read .agents/skills/slice-tickets/SKILL.md
 - before handing a ticket to the agent or model that will build it: read .agents/skills/hand-off-tickets/SKILL.md

@@ -578,8 +578,9 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
             "skill:using-outcomebound",
             "- before retiring what people or other systems rely on or relied on (an interface, "
             "command, format, data or route), or changing the route by which a change reaches its "
-            "users (removing internal code, tests or tools, or a release by the route it already "
-            "has, is not one): read "
+            "users (removing internal code, tests or tools that no user, retained data, format "
+            "or recovery still depends on, or a release by the route it already has, is not "
+            "one): read "
             ".agents/skills/using-outcomebound/SKILL.md",
             "Read only when the person names it or a file you are reading directs you to it "
             "(skills under `.agents/skills/<name>/SKILL.md`): `using-outcomebound`.",
