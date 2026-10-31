@@ -908,6 +908,8 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
             str(ROOT),
             "log",
             "-1",
+            "-S",
+            "CONDITIONS =",
             "--format=%H",
             "--",
             "outcomebound_tools/adopt.py",
@@ -1059,6 +1061,7 @@ def test_an_older_engine_without_manual_routing_keeps_its_rule_order(
         RUN,
         "earlier_engine",
         lambda request: {
+            "skill_root": ".historical/skills",
             "skills": ["diagnose", "decision-brief"],
             "conditions": {"diagnose": "old diagnosis", "decision-brief": "old brief"},
             "rules": {
@@ -1116,7 +1119,14 @@ def test_an_earlier_engine_without_rules_or_references_renders_as_before(
     package = source / "outcomebound_tools"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("", "utf-8")
-    (package / "adopt.py").write_text('CONDITIONS = {"diagnose": "old condition"}\n', "utf-8")
+    (package / "adopt.py").write_text(
+        "from collections import namedtuple\n"
+        'CONDITIONS = {"diagnose": "old condition"}\n'
+        "def routes(root, names):\n"
+        "    assert names == ['codex']\n"
+        "    return [namedtuple('Route', 'skills')('.historical/skills')]\n",
+        "utf-8",
+    )
     (package / "fragments.py").write_text('SKILLS = ("diagnose",)\n', "utf-8")
     (package / "facts.py").write_text(
         "from collections import namedtuple\n"
@@ -1136,8 +1146,9 @@ def test_an_earlier_engine_without_rules_or_references_renders_as_before(
                 "    return render(target, selected, chosen.done, files, skills)\n"
             )
     monkeypatch.setattr(RUN, "earlier_source", lambda: source)
-    guidance = RUN.earlier_engine({"op": "guidance"})
+    guidance = RUN.earlier_engine({"op": "guidance", "harness": "codex"})
     assert guidance == {
+        "skill_root": ".historical/skills",
         "skills": ["diagnose"],
         "conditions": {"diagnose": "old condition"},
         "rules": {},
