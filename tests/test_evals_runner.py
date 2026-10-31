@@ -832,7 +832,7 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
         capture_output=True,
         check=True,
     ).stdout
-    changed = template.replace(b"the core work the outcome requires", b"a variant's own words", 1)
+    changed = template.replace(b"do the core work the outcome needs", b"a variant's own words", 1)
     assert changed != template
     # The whole folder of a skill goes, as a variant would drop it.
     tree = subprocess.run(
