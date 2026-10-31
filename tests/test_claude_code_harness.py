@@ -246,6 +246,19 @@ def test_manual_installed_skills_need_not_appear_in_either_catalog(tmp_path: Pat
     assert stray["skills"] == "FAIL" and stray["skill-listing"] == "FAIL"
 
 
+@pytest.mark.parametrize("manual", ["diagnose", "review"])
+@pytest.mark.parametrize("catalog", [(), ("automatic",)])
+def test_NEGATIVE_CONTROL_an_installed_manual_skill_in_either_catalog_fails(
+    manual: str, catalog: tuple[str, ...]
+) -> None:
+    """An installed skill excluded from the catalog must fail even with a built-in name."""
+
+    expected = cs.Expected(skills=(manual, *catalog), catalog=catalog)
+    names = [*catalog, manual]
+    rows = _verdicts(cs.loading_check([_start(skills=names)], expected, [_listing(*names)]))
+    assert rows["skills"] == "FAIL" and rows["skill-listing"] == "FAIL"
+
+
 def test_workspace_catalog_excludes_only_frontmatter_manual_skills(tmp_path: Path) -> None:
     """Catch manual files being omitted from the installed inventory or listed implicitly."""
 

@@ -558,8 +558,10 @@ What stays `UNVERIFIED` until that probe runs:
     listing every installed working skill and copied fragment at its real path. All skills
     are manual. Element arms keep or remove each optional path with its skill or fragment.
     Historical arms use the engine from their selected ref, including that engine's renderer.
-- `unsized`: `current` without the whole `Size` section, its heading and five rule lines.
-  Every other section stays. Against `current`, it measures the effect of that section.
+- `unsized`: `current` without only the first `Size` rule, the line that opens
+  `- Size every step to the changed risk:`. Every other byte stays, including the heading
+  and the rules for required process, test selection, reuse and fixing repeated defects.
+  Against `current`, it measures the effect of the sizing rule.
 - `none`: the task alone. It has no kernel, no skill and no launcher. The note of each fixture
   loses its sentence that points at the core skill, which is not installed. Against `current`, it
   measures what the text of OutcomeBound adds at all.

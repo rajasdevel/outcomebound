@@ -2855,7 +2855,7 @@ def test_a_report_counts_skill_files_and_keeps_every_other_file_on_its_own_line(
 
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
 
-    _, out, _ = run(capsys, str(target), "--harness", "claude-code,codex,gemini", "--dry-run")
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code,codex,cursor", "--dry-run")
     lines = out.splitlines()
     assert len(lines) < 60
     assert (
@@ -2868,7 +2868,7 @@ def test_a_report_counts_skill_files_and_keeps_every_other_file_on_its_own_line(
     assert not any("SKILL.md" in line for line in lines)
     assert any(line.startswith("create   AGENTS.md") for line in lines)
 
-    run(capsys, str(target), "--harness", "claude-code,codex,gemini")
+    run(capsys, str(target), "--harness", "claude-code,codex,cursor")
     path = target / ".claude" / "skills" / "diagnose" / "SKILL.md"
     path.write_text("changed\n", encoding="utf-8")
     _, out, _ = run(capsys, str(target), "--force")

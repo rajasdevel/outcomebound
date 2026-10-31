@@ -636,7 +636,7 @@ def earlier_source() -> Path:
 def earlier_engine(request: dict[str, Any]) -> Any:
     """What the engine at EARLIER_REF answers to `request`, run in a Python of its own with that
     engine first on its path: `{"op": "guidance"}`, its conditions, rules and references, and the
-    short `SKILL.md` it installs for each skill where it writes one; or `{"op": "render", ...}`, the
+    skill files and installed root its own route selects; or `{"op": "render", ...}`, the
     facts and pointers blocks its own renderer writes for a target."""
 
     source = earlier_source()
@@ -656,6 +656,7 @@ def earlier_engine(request: dict[str, Any]) -> Any:
         "    if hasattr(adopt, 'ACTS'):\n"
         "        answer['acts'] = adopt.ACTS\n"
         "    root = Path(sys.argv[1])\n"
+        "    answer['skill_root'] = adopt.routes(root, [ask['harness']])[0].skills\n"
         "    answer['files'] = {}\n"
         "    answer['optional'] = hasattr(facts, 'optional_line')\n"
         "    for name in fragments.SKILLS if hasattr(adopt, 'skill_files') else ():\n"
@@ -782,11 +783,14 @@ def kernel(arm: str) -> str:
 def without_sizing(text: str) -> str:
     """The kernel with its sizing rule removed and every other byte kept."""
 
-    if text.count("\nSize\n") != 1 or text.count("\nEvidence\n") != 1:
-        raise SystemExit("run: the kernel has no single Size section to remove")
-    start = text.index("\nSize\n")
-    end = text.index("\nEvidence\n", start)
-    return text[:start] + text[end:]
+    rules = [
+        line
+        for line in text.splitlines(keepends=True)
+        if line.startswith("- Size every step to the changed risk:")
+    ]
+    if len(rules) != 1:
+        raise SystemExit("run: the kernel has no single sizing rule to remove")
+    return text.replace(rules[0], "", 1)
 
 
 class Edit(NamedTuple):
@@ -973,13 +977,15 @@ def load_arm(
             adopted=adopted and name == "current",
         )
     root = earlier_source()
-    guidance = earlier_engine({"op": "guidance", "selected": list(selected)})
+    guidance = earlier_engine(
+        {"op": "guidance", "selected": list(selected), "harness": INSTALL_HARNESS}
+    )
     try:
-        (route,) = adopt.routes(root, [INSTALL_HARNESS])
+        skill_root = guidance["skill_root"]
         present = carried_skills(root)
         carried = tuple(skill for skill in guidance["skills"] if skill in present)
         files = {
-            f"{route.skills}/{path}": data.encode("utf-8")
+            f"{skill_root}/{path}": data.encode("utf-8")
             for path, data in guidance["files"].items()
             if path.split("/", 1)[0] in carried
         }
@@ -990,21 +996,21 @@ def load_arm(
             }
         )
         pointers = (
-            tuple(("", f"{route.skills}/{skill}/SKILL.md") for skill in carried)
+            tuple(("", f"{skill_root}/{skill}/SKILL.md") for skill in carried)
             if guidance.get("optional")
             else (
                 tuple(
-                    (guidance["conditions"][skill], f"{route.skills}/{skill}/SKILL.md")
+                    (guidance["conditions"][skill], f"{skill_root}/{skill}/SKILL.md")
                     for skill in carried
                     if skill not in guidance.get("manual", ())
                 )
                 + tuple(
-                    (guidance["acts"][skill], f"{route.skills}/{skill}/SKILL.md")
+                    (guidance["acts"][skill], f"{skill_root}/{skill}/SKILL.md")
                     for skill in carried
                     if skill in guidance.get("acts", {})
                 )
                 + tuple(
-                    (condition, f"{route.skills}/{path}")
+                    (condition, f"{skill_root}/{path}")
                     for condition, path in guidance["references"]
                 )
             )
@@ -1017,7 +1023,7 @@ def load_arm(
             if skill in guidance["rules"] and skill in carried
         )
         manual = (
-            route.skills,
+            skill_root,
             tuple(
                 skill
                 for skill in carried

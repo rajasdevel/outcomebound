@@ -20,12 +20,14 @@ limits of the Git and offline-browser evidence.
 ## What `adopt` does for a harness
 
 - `AGENTS.md` holds the project instructions and the contract.
-- `adopt` puts one copy of each skill in the folder where the harness reads skills.
+- `adopt` puts skills in native folders only when all selected routes except `generic` have
+  a recorded manual invocation mechanism. Otherwise every copy uses `.outcomebound/skills/`, outside
+  native discovery. The optional line points to the selected root.
 - If the harness reads another file in place of `AGENTS.md`, `adopt` writes an `@AGENTS.md`
   import block into that file.
 - `adapters/harnesses.json` is the harness table. It is the source of record for this page.
-  `adopt` reads these fields of each row: `skill_install_path`, `pointer_mechanism`, `verified`,
-  and `reads_agents_md`. `outcomebound instructions check` reads what each row says
+  `adopt` reads these fields of each row: `skill_install_path`, `manual_skill_invocation`, `native_skills`,
+  `pointer_mechanism`, `verified` and `reads_agents_md`. `outcomebound instructions check` reads what each row says
   the harness loads (`reads`, `nested`, `overrides` and `config`) and its `recheck_on` date.
 
 ## The harnesses
@@ -34,8 +36,8 @@ limits of the Git and offline-browser evidence.
 | --- | --- | --- | --- | --- |
 | Claude Code | `claude-code` | `.claude/skills/` | `CLAUDE.md` with `@AGENTS.md` | 2026-08 |
 | Codex | `codex` | `.agents/skills/` | `AGENTS.md` | 2026-09 |
-| Amp | `amp` | `.agents/skills/` | `AGENTS.md` | 2026-08 |
-| Gemini CLI | `gemini` | `.gemini/skills/` | `GEMINI.md` with `@AGENTS.md` | 2026-08-23 |
+| Amp | `amp` | `.outcomebound/skills/` | `AGENTS.md` | 2026-08 |
+| Gemini CLI | `gemini` | `.outcomebound/skills/` | `GEMINI.md` with `@AGENTS.md` | 2026-08-23 |
 | Cursor | `cursor` | `.cursor/skills/` | `AGENTS.md` | 2026-08-23 |
 
 `adopt` installs no hook for any harness. Versions before 1.7.0 wrote finish-check entries into
@@ -64,12 +66,16 @@ The refusal lists the harnesses that can.
 
 ### Amp
 
-Amp shares `.agents/skills/` with Codex. If you name both, `adopt` installs one copy.
+Amp discovers `.agents/skills/` and `.claude/skills/`, and no manual invocation mechanism is
+recorded for it. An install that names Amp puts every skill copy in `.outcomebound/skills/`,
+including when Codex or Claude Code is selected beside it.
 
 ### Gemini CLI
 
 Gemini CLI reads `GEMINI.md`, not `AGENTS.md`. The import block in `GEMINI.md` brings in
-`AGENTS.md`.
+`AGENTS.md`. Its skill loader reads no manual flag, so an install that names Gemini CLI puts
+every skill copy in `.outcomebound/skills/`, outside both `.gemini/skills/` and the
+`.agents/skills/` alias.
 
 ### Cursor
 

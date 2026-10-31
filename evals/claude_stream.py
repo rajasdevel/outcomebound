@@ -788,9 +788,14 @@ def _skill_problems(
     neither the workspace's nor built in, and a workspace skill the list lacks."""
 
     namespaces = (*plugins.own, *plugins.builtin)
-    stray = [name for name in names if _stray(name, expected, namespaces)]
-    listed = {name.rpartition(":")[2] for name in names}
     required = expected.catalog if catalog and expected.catalog is not None else expected.skills
+    excluded = set(expected.skills) - set(required)
+    stray = [
+        name
+        for name in names
+        if _stray(name, expected, namespaces) or name.rpartition(":")[2] in excluded
+    ]
+    listed = {name.rpartition(":")[2] for name in names}
     missing = [name for name in required if name not in listed]
     problems = [f"not the arm's: {', '.join(stray)}"] if stray else []
     problems += [f"the workspace's skills did not load: {', '.join(missing)}"] if missing else []

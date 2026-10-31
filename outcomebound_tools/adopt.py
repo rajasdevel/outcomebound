@@ -51,7 +51,7 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence, Set
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -364,7 +364,8 @@ class Route:
     """How one harness reaches the contract: where its skills live, the file that must
     import AGENTS.md (None when the harness reads AGENTS.md itself), the files whose
     absence lets it read AGENTS.md itself from version `since` (none: it always needs one), and
-    whether it lists the skills in its skill directory itself (`native_skills`)."""
+    whether it lists skills itself (`native_skills`), and whether its native directory
+    supports a manual invocation flag. Without that flag, skills use the generic root."""
 
     harness: str
     skills: str
@@ -372,6 +373,7 @@ class Route:
     unless: tuple[str, ...] = ()
     since: str = ""
     native: bool = False
+    manual: bool = False
 
 
 def _reads_itself(row: dict[str, Any]) -> tuple[tuple[str, ...], str]:
@@ -419,14 +421,20 @@ def route(name: str, row: object) -> Route | str:
     skills = str(row.get("skill_install_path") or "").rstrip("/")
     if not paths.admits(skills):
         return f"{name}: the harness table names no skill directory inside the target"
+    manual = row.get("manual_skill_invocation") in (
+        "disable-model-invocation",
+        "policy.allow_implicit_invocation",
+    )
+    if not manual:
+        skills = GENERIC_SKILLS
     mechanism = str(row.get("pointer_mechanism") or "")
     native = row.get("native_skills") is True
     if mechanism in (AGENTS, "native"):
-        return Route(name, skills, None, native=native)
+        return Route(name, skills, None, native=native, manual=manual)
     host, _, reference = mechanism.partition("@")
     if reference == AGENTS and paths.admits(host):
         unless, since = _reads_itself(row)
-        return Route(name, skills, host, unless, since, native)
+        return Route(name, skills, host, unless, since, native, manual)
     return f"{name} cannot be made to load AGENTS.md: the harness table routes it by {mechanism!r}"
 
 
@@ -445,7 +453,12 @@ def routes(source: Path, names: Sequence[str]) -> list[Route]:
     if reasons:
         listed = ", ".join([*loadable(table), GENERIC])
         raise AdoptError(*reasons, f"harnesses that load AGENTS.md: {listed}")
-    return [item for item in found if isinstance(item, Route)]
+    selected = [item for item in found if isinstance(item, Route)]
+    # A harness may also discover another route's native directory. Keep all copies outside
+    # discovery when any selected harness has no recorded manual mechanism.
+    if any(item.harness != GENERIC and not item.manual for item in selected):
+        selected = [replace(item, skills=GENERIC_SKILLS) for item in selected]
+    return selected
 
 
 def _imports(text: str) -> bool:
@@ -1228,7 +1241,7 @@ def desired(
 
     The facts record holds the selection, the harnesses among them, whatever skills they get.
     A facts-only install (`chosen.mode`) has no kernel and no fragment file, and its skills go
-    only to the harnesses that list them natively: nothing points at them.
+    only to harnesses with native skill support, using manual placement: nothing points at them.
     """
 
     mode = chosen.mode
@@ -2727,7 +2740,9 @@ commit messages, specs and handovers) in the style of ASD-STE100 Simplified Tech
 and not replies in conversation; Precedence); and the guidance pointers: the local
 fragment inline, then one optional line naming the fourteen working skills at their installed
 paths and each copied fragment under .outcomebound/fragments/. No skill or fragment is read by
-default. Every installed skill is manual, with its source description unchanged. The workspace
+default. Every installed skill is manual, with its source description unchanged. Native skill
+paths are used only when every selected route except generic has a recorded manual mechanism;
+otherwise all copies use .outcomebound/skills/, outside discovery. The workspace
 fragment also gets .agents/.gitignore, which keeps its four folders out of Git. Every install gets
 .outcomebound/.gitignore, which keeps OutcomeBound's local records (the research inbox, the
 validation logs) out of Git. A fact it cannot observe is left out, and the install report names

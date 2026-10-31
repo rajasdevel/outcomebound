@@ -47,6 +47,20 @@ def test_instruction_file_is_the_file_of_the_route_never_the_import_syntax():
         assert "@" not in (row["instruction_file"] or ""), name
 
 
+def test_every_route_records_its_manual_invocation_mechanism() -> None:
+    """Keep every route in the manual-placement audit, including the refused pi route."""
+
+    assert {name: row["manual_skill_invocation"] for name, row in TABLE.items()} == {
+        "claude-code": "disable-model-invocation",
+        "codex": "policy.allow_implicit_invocation",
+        "amp": None,
+        "gemini": None,
+        "cursor": "disable-model-invocation",
+        "pi": "disable-model-invocation",
+    }
+    assert TABLE["pi"]["verified"] is False
+
+
 def test_a_declared_cap_carries_its_provenance_note() -> None:
     for name, row in TABLE.items():
         if row["doc_byte_cap"] is not None:

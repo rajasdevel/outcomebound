@@ -319,17 +319,26 @@ def test_each_arm_is_its_kernel_file_or_the_block_adopt_installs() -> None:
     assert prompt == RUN.kernel("current") + "\n\nTask:\nFix it.\n"
 
 
-def test_the_unsized_arm_removes_the_whole_size_section() -> None:
-    """Catch a partial ablation that leaves any of the five sizing rules behind."""
+def test_the_unsized_arm_removes_only_the_first_size_rule() -> None:
+    """Catch an ablation that also removes required process, test selection, reuse or repair."""
 
     current, unsized = RUN.load_arm("current"), RUN.load_arm(RUN.UNSIZED)
-    section = current.kernel.split("\nSize\n", 1)[1].split("\nEvidence\n", 1)[0]
-    assert len(section.splitlines()) == 5
-    assert unsized.kernel == current.kernel.replace("\nSize\n" + section, "")
-    assert "\nEvidence\n" in unsized.kernel
+    rule = (
+        "- Size every step to the changed risk: a spec, ticket, review, loop, abstraction, "
+        "record or test is work; add one only where the outcome needs it.\n"
+    )
+    assert current.kernel.count(rule) == 1
+    assert rule not in unsized.kernel
+    assert unsized.kernel == current.kernel.replace(rule, "", 1)
+    assert "\nSize\n" in unsized.kernel and "\nEvidence\n" in unsized.kernel
+    remaining = current.kernel.split("\nSize\n", 1)[1].split("\nEvidence\n", 1)[0].splitlines()[1:]
+    assert len(remaining) == 4
+    assert all(line in unsized.kernel.splitlines() for line in remaining)
     assert current.files == unsized.files and current.launcher == unsized.launcher
-    with pytest.raises(SystemExit, match="Size section"):
+    with pytest.raises(SystemExit, match="single sizing rule"):
         RUN.without_sizing("a kernel with no such section")
+    with pytest.raises(SystemExit, match="single sizing rule"):
+        RUN.without_sizing(current.kernel + "\n" + rule)
 
 
 def test_a_runs_tokens_are_the_last_count_codex_printed() -> None:

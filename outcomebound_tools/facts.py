@@ -3,8 +3,8 @@
 What this module decides: the lines of the `project-facts` block, each a label and the fact
 verbatim (Done, Setup, CI test, Irreversible edges, Text for people, Precedence), a fact it cannot
 observe left out and named UNVERIFIED; the `guidance-pointers` block, the project's own `local`
-fragment inline and then one `- <condition>: read <path>` line per selected fragment and per
-installed skill, or, in a facts-only install, the `local` fragment alone;
+fragment inline and then one optional line naming every installed working skill and copied
+fragment at its installed path, or, in a facts-only install, the `local` fragment alone;
 and how the test command a project's CI runs is read: lexically, from GitHub Actions `run:`
 steps, each from its working directory, and GitLab CI `script:` entries, running nothing and
 following no symlink, and leaving out, named, each command the reading cannot settle; and the

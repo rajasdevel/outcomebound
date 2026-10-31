@@ -89,36 +89,49 @@ def test_NEGATIVE_CONTROL_an_unquoted_colon_or_hash_in_a_value_is_reported():
 
 
 @pytest.mark.parametrize(
-    "harness",
+    ("harness", "roots"),
     [
-        "codex",
-        "claude-code",
-        "amp",
-        "cursor",
-        "gemini",
-        "generic",
-        "codex,claude-code",
-        "codex,generic",
-        "codex,claude-code,generic",
+        ("codex", {".agents/skills"}),
+        ("claude-code", {".claude/skills"}),
+        ("amp", {".outcomebound/skills"}),
+        ("cursor", {".cursor/skills"}),
+        ("gemini", {".outcomebound/skills"}),
+        ("generic", {".outcomebound/skills"}),
+        ("codex,claude-code", {".agents/skills", ".claude/skills"}),
+        ("codex,generic", {".agents/skills", ".outcomebound/skills"}),
+        ("codex,claude-code,generic", {".agents/skills", ".claude/skills", ".outcomebound/skills"}),
+        ("gemini,codex", {".outcomebound/skills"}),
+        ("codex,gemini", {".outcomebound/skills"}),
+        ("amp,claude-code", {".outcomebound/skills"}),
+        ("claude-code,amp", {".outcomebound/skills"}),
+        ("gemini,cursor", {".outcomebound/skills"}),
+        ("amp,codex,claude-code,cursor,gemini,generic", {".outcomebound/skills"}),
     ],
 )
 @pytest.mark.parametrize("facts_only", [False, True])
 def test_every_installed_skill_is_manual_and_keeps_its_description(
-    tmp_path: Path, capsys: Capture, harness: str, facts_only: bool
+    tmp_path: Path, capsys: Capture, harness: str, roots: set[str], facts_only: bool
 ) -> None:
-    """Catch missing manual flags, changed source descriptions or wrong pointer roots."""
+    """Catch discoverable copies without a manual mechanism, missing flags or wrong pointers."""
 
     target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
     flags = ["--facts-only"] if facts_only else []
     code, _, err = run(capsys, str(target), "--harness", harness, *flags)
     assert code == 0, err
     routes = adopt.routes(ROOT, harness.split(","))
-    for route in routes:
+    installed = {p.parent.parent.relative_to(target).as_posix() for p in target.rglob("SKILL.md")}
+    expected = roots
+    if (
+        facts_only
+        and "generic" in harness.split(",")
+        and not {"amp", "gemini"}.intersection(harness.split(","))
+    ):
+        expected = roots - {".outcomebound/skills"}
+    assert installed == expected
+    carriers = [route for route in routes if not facts_only or route.native]
+    for route in carriers:
         for name in adopt.SKILLS:
             file = target / route.skills / name / "SKILL.md"
-            if facts_only and not route.native:
-                assert not file.exists()
-                continue
             assert_native_skill(file.read_bytes(), name)
             assert (file.parent / "agents/openai.yaml").read_text("utf-8") == (
                 "policy:\n  allow_implicit_invocation: false\n"
@@ -129,8 +142,7 @@ def test_every_installed_skill_is_manual_and_keeps_its_description(
     if facts_only:
         assert "Optional:" not in agents
     else:
-        roots = sorted({route.skills for route in routes})
-        root = ".outcomebound/skills" if ".outcomebound/skills" in roots else roots[0]
+        root = ".outcomebound/skills" if ".outcomebound/skills" in roots else sorted(roots)[0]
         (optional,) = [line for line in agents.splitlines() if line.startswith("Optional: ")]
         assert re.findall(r"`([^`]+)`", optional) == [
             f"{root}/{name}/SKILL.md" for name in adopt.SKILLS
@@ -138,6 +150,59 @@ def test_every_installed_skill_is_manual_and_keeps_its_description(
         assert "adopt-outcomebound" not in optional
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
+
+
+@pytest.mark.parametrize("mechanism", [None, "unknown"])
+def test_a_missing_or_unknown_manual_mechanism_keeps_all_copies_outside_discovery(
+    tmp_path: Path, capsys: Capture, mechanism: str | None
+) -> None:
+    """A new route must not gain implicit invocation from another route's shared directory."""
+
+    source = engine_copy(tmp_path)
+    table_path = source / "adapters/harnesses.json"
+    table = json.loads(table_path.read_text(encoding="utf-8"))
+    table["probe"] = {**table["codex"]}
+    if mechanism is None:
+        table["probe"].pop("manual_skill_invocation")
+    else:
+        table["probe"]["manual_skill_invocation"] = mechanism
+    write(table_path, json.dumps(table))
+    target = repo(tmp_path / "project")
+    assert run(capsys, str(target), "--harness", "codex,probe", source=source)[0] == 0
+    assert not (target / ".agents/skills").exists()
+    assert (target / ".outcomebound/skills/diagnose/SKILL.md").is_file()
+    assert run(capsys, str(target), "--check", source=source)[0] == 0
+
+
+@pytest.mark.parametrize("harness", ["gemini", "amp"])
+@pytest.mark.parametrize("facts_only", [False, True])
+def test_an_upgrade_removes_native_copies_that_have_no_manual_mechanism(
+    tmp_path: Path, capsys: Capture, harness: str, facts_only: bool
+) -> None:
+    """An upgrade must remove recorded discoverable copies, including other routes' aliases."""
+
+    source = engine_copy(tmp_path)
+    table_path = source / "adapters/harnesses.json"
+    table = json.loads(table_path.read_text(encoding="utf-8"))
+    table[harness]["manual_skill_invocation"] = "disable-model-invocation"
+    write(table_path, json.dumps(table))
+    target = repo(tmp_path / "project")
+    flags = ["--facts-only"] if facts_only else []
+    assert (
+        run(
+            capsys, str(target), "--harness", f"{harness},codex,claude-code", *flags, source=source
+        )[0]
+        == 0
+    )
+    assert (target / ".agents/skills/diagnose/SKILL.md").is_file()
+    assert (target / ".claude/skills/diagnose/SKILL.md").is_file()
+    table[harness]["manual_skill_invocation"] = None
+    write(table_path, json.dumps(table))
+    assert run(capsys, str(target), source=source)[0] == 0
+    assert {p.parent.parent.relative_to(target).as_posix() for p in target.rglob("SKILL.md")} == {
+        ".outcomebound/skills"
+    }
+    assert run(capsys, str(target), "--check", source=source)[0] == 0
 
 
 @pytest.mark.parametrize("harness", ["codex,probe", "probe,codex"])

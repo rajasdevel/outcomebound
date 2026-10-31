@@ -13,6 +13,7 @@
     "nested_instructions",
     "rules_path",
     "native_skills",
+    "manual_skill_invocation",
     "verified",
     "verified_on",
     "source",
@@ -85,6 +86,18 @@
     },
     "native_skills": {
       "type": "boolean"
+    },
+    "manual_skill_invocation": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "disable-model-invocation",
+        "policy.allow_implicit_invocation",
+        null
+      ],
+      "description": "The recorded mechanism that prevents implicit model invocation of a native skill. null means no verified mechanism: adopt uses the generic skill root for every selected route, outside harness discovery."
     },
     "verified": {
       "type": "boolean",
