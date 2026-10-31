@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from evals.harnesses import CallResult, Request
-from tests.adopt_helpers import ACT_READS, MANUAL_SKILLS, assert_native_skill
+from tests.adopt_helpers import MANUAL_SKILLS, assert_native_skill
 from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN
 from tests.portable import needs_posix_bash
 
@@ -319,23 +319,17 @@ def test_each_arm_is_its_kernel_file_or_the_block_adopt_installs() -> None:
     assert prompt == RUN.kernel("current") + "\n\nTask:\nFix it.\n"
 
 
-def test_the_unsized_arm_is_the_current_arm_less_the_sizing_rule_alone() -> None:
+def test_the_unsized_arm_removes_the_whole_size_section() -> None:
+    """Catch a partial ablation that leaves any of the five sizing rules behind."""
+
     current, unsized = RUN.load_arm("current"), RUN.load_arm(RUN.UNSIZED)
-    assert RUN.SIZING in current.kernel and RUN.SIZING not in unsized.kernel
-    sizing = (
-        "- Size every step to the changed risk: specs, tickets, reviews, checks and records count; "
-        "the full suite only where that risk reaches it or the project requires it.\n"
-    )
-    assert current.kernel.count(sizing) == 1
-    assert unsized.kernel == current.kernel.replace(sizing, "")
-    assert "- Preserve unrelated work." in unsized.kernel
-    assert (
-        "- Underengineered: fragile, unchecked or uncertain where failure matters."
-        in unsized.kernel
-    )
-    assert unsized.files == current.files and unsized.launcher == current.launcher
-    with pytest.raises(SystemExit):
-        RUN.without_sizing("a kernel with no such paragraph")
+    section = current.kernel.split("\nSize\n", 1)[1].split("\nEvidence\n", 1)[0]
+    assert len(section.splitlines()) == 5
+    assert unsized.kernel == current.kernel.replace("\nSize\n" + section, "")
+    assert "\nEvidence\n" in unsized.kernel
+    assert current.files == unsized.files and current.launcher == unsized.launcher
+    with pytest.raises(SystemExit, match="Size section"):
+        RUN.without_sizing("a kernel with no such section")
 
 
 def test_a_runs_tokens_are_the_last_count_codex_printed() -> None:
@@ -540,27 +534,14 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     pointer = "before planning work here"
     if arm in RUN.INSTALLED:
         assert pointer not in note and "id=project-facts" in note, note
-        assert (
-            "- before retiring what people or other systems rely on or relied on (an interface, "
-            "command, format, data or route), or changing the route by which a change reaches its "
-            "users (removing internal code, tests or tools that no user, retained data, format "
-            "or recovery still depends on, or a release by the route it already has, is not "
-            "one): read "
-            ".agents/skills/using-outcomebound/SKILL.md"
-        ) in note.splitlines()
-        manual = note.split("Read only when the person names it", 1)[1]
-        assert "`using-outcomebound`" not in manual
-        assert "`slice-tickets`" not in manual
-        assert (
-            "- before drafting tickets, or publishing them to the ticket store: "
-            "read .agents/skills/slice-tickets/SKILL.md"
-        ) in note.splitlines()
-        assert "- when a fix did not hold: read .agents/skills/diagnose/SKILL.md" in note
-        assert "read .outcomebound/fragments/tickets.md" in note
+        (optional,) = [line for line in note.splitlines() if line.startswith("Optional: ")]
+        for skill in MANUAL_SKILLS:
+            assert f"`.agents/skills/{skill}/SKILL.md`" in optional
+        assert "`.outcomebound/fragments/tickets.md`" in optional
         assert seed_note == note
     elif arm in (RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS):
         assert pointer not in note and "id=project-facts" in note, note
-        assert "id=operating-contract" not in note and ": read " not in note, note
+        assert "id=operating-contract" not in note and "Optional:" not in note, note
         assert seed_note == note
     else:
         assert "id=project-facts" not in note
@@ -620,7 +601,9 @@ def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_pa
 
     def at_head(path: str) -> bytes:
         return subprocess.run(
-            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"], capture_output=True, check=True
+            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"],
+            capture_output=True,
+            check=True,
         ).stdout
 
     done, out = _invoke(tmp_path, ("--arm", "earlier", "--earlier-ref", "HEAD", *SMALL_FIX[2:]))
@@ -641,13 +624,28 @@ def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_pa
     repo = Path(meta["fixture_repo"])
     skill = at_head("skills/using-outcomebound/SKILL.md")
     native = (repo / ".agents/skills/using-outcomebound/SKILL.md").read_bytes()
-    assert_native_skill(native, "using-outcomebound")
-    assert (repo / ".outcomebound/skills/using-outcomebound/SKILL.md").read_bytes() == skill
+    assert (
+        hashlib.sha256(native).hexdigest()
+        == meta["arm_files"][".agents/skills/using-outcomebound/SKILL.md"]
+    )
+    generic = (repo / ".outcomebound/skills/using-outcomebound/SKILL.md").read_bytes()
+    from outcomebound_tools import adopt
+
+    assert adopt.description(generic) == adopt.description(skill)
+    assert generic.split(b"\n---\n", 1)[1] == skill.split(b"\n---\n", 1)[1]
     assert (repo / ".agents/skills/decision-brief/SKILL.md").is_file()
     prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
     assert "Task:" in prompt and "id=operating-contract" not in prompt
     assert "id=operating-contract" in (repo / "AGENTS.md").read_text(encoding="utf-8")
-    assert hashlib.sha256(RUN.kernel("current").encode()).hexdigest() == meta["kernel_sha256"]
+    from outcomebound_tools import identity
+
+    installed_kernel = adopt.block_text((repo / "AGENTS.md").read_text("utf-8"), adopt.KERNEL)
+    assert installed_kernel is not None
+    assert hashlib.sha256(installed_kernel).hexdigest() == meta["kernel_sha256"]
+    expected = identity.parse_managed_block(at_head(RUN.TEMPLATE).decode("utf-8"), adopt.KERNEL)
+    actual = identity.parse_managed_block(installed_kernel.decode("utf-8"), adopt.KERNEL)
+    assert actual.body == expected.body
+    assert actual.version == at_head("VERSION").decode("utf-8").strip()
 
 
 def test_the_earlier_ref_is_refused_for_another_arm_and_for_an_unknown_ref(tmp_path: Path) -> None:
@@ -889,12 +887,31 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
 
     def at_head(path: str) -> bytes:
         return subprocess.run(
-            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"], capture_output=True, check=True
+            ["git", "-C", str(ROOT), "show", f"{historical}:{path}"],
+            capture_output=True,
+            check=True,
         ).stdout
 
-    from outcomebound_tools import adopt, facts
-
-    condition = adopt.CONDITIONS["diagnose"].encode()
+    historical = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "log",
+            "-1",
+            "--format=%H",
+            "--",
+            "outcomebound_tools/adopt.py",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
+    # The deletion commit has no constants; its parent is the historical engine.
+    if b"CONDITIONS =" not in at_head("outcomebound_tools/adopt.py"):
+        historical += "^"
+    condition = b"when a fix did not hold"
     adopt_text = at_head("outcomebound_tools/adopt.py")
     facts_text = at_head("outcomebound_tools/facts.py")
     read_guidance = (
@@ -935,7 +952,7 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
             "outcomebound_tools/fragments.py": at_head("outcomebound_tools/fragments.py")
             + b"\nSKILLS = tuple(reversed(SKILLS))\n",
         },
-        base="HEAD",
+        base=historical,
     )
     for fixture in ("small-fix", "slice-a-spec"):
         assert (ROOT / "evals/fixtures" / fixture / "install.json").is_file() == (
@@ -948,29 +965,30 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
         assert "a ref's own condition" in notes
         assert "a ref's own reread.\nA ref's own listed path." in notes
-        assert adopt.CONDITIONS["diagnose"] not in notes
+        assert "when a fix did not hold" not in notes
         assert (
             "- a ref act for review-council: read .agents/skills/review-council/SKILL.md"
         ) in notes.splitlines()
         assert (
             "- a ref act for land-change: read .agents/skills/land-change/SKILL.md"
         ) in notes.splitlines()
-        for act_condition in ACT_READS.values():
-            assert f"- {act_condition}: read " not in notes
-        assert all(line not in notes for line in facts.once_lines())
-        assert "A ref rules lead:" in notes and facts.RULES_LEAD not in notes
-        for skill, rule in adopt.RULES.items():
-            assert f"- A ref rule for {skill}." in notes
-            assert rule not in notes
-        ordered_rules = [notes.index(f"- A ref rule for {skill}.") for skill in adopt.RULES]
+        assert "Read a file below when work you have read shows its condition holds" not in notes
+        assert "A ref rules lead:" in notes
+        historical_rules = (
+            "using-outcomebound",
+            "diagnose",
+            "tests-worth-keeping",
+            "gather-requirements",
+            "decision-brief",
+            "review-findings",
+            "land-change",
+        )
+        ordered_rules = [notes.index(f"- A ref rule for {skill}.") for skill in historical_rules]
         assert ordered_rules == sorted(ordered_rules)
         assert (
             "- a ref reference condition: read "
             ".agents/skills/using-outcomebound/references/ref-only.md"
         ) in notes
-        for reference_condition, path in adopt.REFERENCE_POINTERS:
-            assert reference_condition not in notes
-            assert f": read .agents/skills/{path}" not in notes
 
 
 def test_the_current_arm_without_install_json_has_the_full_installs_pointers(
@@ -992,11 +1010,15 @@ def test_the_current_arm_without_install_json_has_the_full_installs_pointers(
     assert failure is None, (failure, extra)
     manual = adopt.block_text((workspace / "AGENTS.md").read_text("utf-8"), facts.POINTERS)
     assert manual is not None
-    for rule in adopt.RULES.values():
-        for line in facts.rule_lines(rule):
-            assert f"{line}\n".encode() in manual
-    for condition, path in adopt.REFERENCE_POINTERS:
-        assert f"- {condition}: read .agents/skills/{path}\n".encode() in manual
+    (optional,) = [
+        line for line in manual.decode("utf-8").splitlines() if line.startswith("Optional: ")
+    ]
+    import re
+
+    assert re.findall(r"`([^`]+)`", optional) == [
+        *(f".agents/skills/{name}/SKILL.md" for name in adopt.SKILLS),
+        ".outcomebound/fragments/tickets.md",
+    ]
     installed = subprocess.run(
         [
             str(ROOT / LAUNCHER),
@@ -1035,6 +1057,7 @@ def test_an_older_engine_without_manual_routing_keeps_its_rule_order(
                 "diagnose": "An older diagnosis rule.",
             },
             "references": [],
+            "files": {},
         },
     )
     assert RUN.load_arm("earlier").rules == (
@@ -1046,18 +1069,17 @@ def test_an_older_engine_without_manual_routing_keeps_its_rule_order(
 @pytest.mark.parametrize(
     "skill", ["tests-worth-keeping", "decision-brief", "using-outcomebound", "land-change"]
 )
-def test_dropping_a_skill_removes_its_rule_and_reference_pointers(
+def test_dropping_a_skill_removes_its_optional_path_and_keeps_the_kernel(
     tmp_path: Path, skill: str
 ) -> None:
-    """Breaks if an ablation leaks a rule or reference, or its check accepts a planted leak."""
+    """Catch a skill ablation dropping default rules or keeping its optional path."""
 
-    from outcomebound_tools import adopt, facts
+    from outcomebound_tools import adopt
 
     arm = RUN.fixture_arms(
         RUN._parser(), "current", ["small-fix"], RUN.Elements(dropped=(f"skill:{skill}",))
     )["small-fix"]
-    workspace = tmp_path / "workspace"
-    stage = tmp_path / "stage"
+    workspace, stage = tmp_path / "workspace", tmp_path / "stage"
     workspace.mkdir()
     stage.mkdir()
     extra: dict = {}
@@ -1067,34 +1089,12 @@ def test_dropping_a_skill_removes_its_rule_and_reference_pointers(
     assert failure is None, (failure, extra)
     note = workspace / "AGENTS.md"
     text = note.read_text("utf-8")
-    for line in facts.rule_lines(adopt.RULES[skill]):
-        assert f"{line}\n" not in text
-    assert f": read .agents/skills/{skill}/" not in text
-    if skill in MANUAL_SKILLS:
-        assert f"`{skill}`" not in text.split("Read only when the person names it", 1)[1]
-    for kept, rule in adopt.RULES.items():
-        if kept != skill:
-            for line in facts.rule_lines(rule):
-                assert f"{line}\n" in text
-    for condition, path in adopt.REFERENCE_POINTERS:
-        if not path.startswith(f"{skill}/"):
-            assert f"- {condition}: read .agents/skills/{path}\n" in text
-    assert adopt.RULES[skill] not in arm.rules
+    path = f".agents/skills/{skill}/SKILL.md"
+    assert f"`{path}`" not in text
+    assert adopt.block_text(text, adopt.KERNEL) == adopt.kernel_block(ROOT).encode("utf-8")
     assert RUN.element_problems(workspace, arm) == []
-    leak = "".join(f"{line}\n" for line in facts.rule_lines(adopt.RULES[skill]))
-    references = [
-        f"- {condition}: read .agents/skills/{path}"
-        for condition, path in adopt.REFERENCE_POINTERS
-        if path.startswith(f"{skill}/")
-    ]
-    for line in references:
-        assert line not in text
-    note.write_text(text.replace(facts.ONCE, leak + facts.ONCE), "utf-8")
-    assert f"skill:{skill}'s rule present" in RUN.element_problems(workspace, arm)
-    for line in references:
-        note.write_text(text.replace(facts.ONCE, line + "\n" + facts.ONCE), "utf-8")
-        path = line.split(": read ", 1)[1]
-        assert f"{path}'s pointer line present" in RUN.element_problems(workspace, arm)
+    note.write_text(text.replace("one: `", f"one: `{path}`, `"), "utf-8")
+    assert RUN.element_problems(workspace, arm) == [f"skill:{skill}'s optional path present"]
 
 
 @pytest.mark.parametrize("has_render_chosen", [False, True])
@@ -1133,6 +1133,9 @@ def test_an_earlier_engine_without_rules_or_references_renders_as_before(
         "conditions": {"diagnose": "old condition"},
         "rules": {},
         "references": [],
+        "files": {},
+        "fragment_files": {},
+        "optional": False,
     }
     rendered = RUN.earlier_engine(
         {

@@ -2,7 +2,6 @@
 id: explore
 family: setup
 applies: work whose expected life starts with learning
-condition: when starting or scoping exploration, deciding what to keep or discard, recording learning, or when the appetite ends or sought signal appears
 detect: []
 version: 2
 ---

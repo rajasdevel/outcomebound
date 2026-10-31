@@ -1,6 +1,6 @@
 ---
 name: gather-requirements
-description: Use for unsettled source requirements or competing request readings. For clear requests, accepted tickets, handoffs stating the work or symptom notes, proceed directly, except when resumed work relies on a recorded direction choice.
+description: Use before taking requirements from any source not yet settled into the work (a transcript, an export, a requirements note, a design file or a picture), or when two readings of a request give different results and nothing readable settles which. For clear requests, accepted tickets, handoffs stating the work or symptom notes, proceed directly, except when resumed work relies on a recorded direction choice.
 disable-model-invocation: true
 ---
 

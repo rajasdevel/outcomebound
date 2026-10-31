@@ -2,7 +2,6 @@
 id: ci-release
 family: stack
 applies: repositories that version, tag, and publish releases
-condition: before a release, a tag push or a publish
 edges: ["pushing a tag", "publishing a package", "moving a shared registry tag", "editing a published release"]
 detect: ["VERSION", ".github/workflows/release*.yml", ".github/workflows/release*.yaml", ".github/workflows/publish*.yml", ".github/workflows/publish*.yaml"]
 version: 9

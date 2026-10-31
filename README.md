@@ -210,7 +210,10 @@ For a Python project with a `make test` target and both harnesses' folders, it p
 outcomebound adopt . --harness claude-code,codex --fragments python,commands --done 'make test'
 ```
 
-Run that command, read the diff, and commit the files. The install writes no hook and runs no
+Run that command, read the diff, and commit the files. The kernel carries all default rules
+inline. One optional line lists every installed working skill and copied fragment at its real
+path. Read one only when you name it or explicitly ask for its workflow. All installed skills
+are manual, with their source descriptions unchanged. The install writes no hook and runs no
 command of yours. Start a new agent session, and add `outcomebound adopt . --check` to CI to catch
 stale or edited managed files.
 
@@ -272,8 +275,8 @@ only. See [dependencies and portability](docs/dependencies.md).
 
 | Feature | What it does |
 | --- | --- |
-| **The contract** | A short block in `AGENTS.md`: frame each task by outcome, context, bounds and completion bar; size the plan to the risk; never claim a check that did not run. |
-| **Skills on demand** | Requirements, decision briefs, tests, diagnosis, review (and a council of other reviewers), specs, tickets, hand-offs, landing, acceptance and more. Each loads only when its trigger matches. |
+| **The contract** | The inline kernel in `AGENTS.md`: frame each task by outcome, context, bounds and completion bar; size the plan to the risk; never claim a check that did not run. |
+| **Skills on demand** | Requirements, decision briefs, tests, diagnosis, review (and a council of other reviewers), specs, tickets, hand-offs, landing, acceptance and more. Read one only when you name it or explicitly ask for its workflow. |
 | **Decision briefs** | An act outside the agent's authority comes back as a question, what waits on it, the context, options with the recommendation marked on its option, evidence and an undo line. Other work continues. A hard choice can get an interactive page, and `brief open` and `brief lookup` find what is still unanswered and what was decided. |
 | **Find your place** | `outcomebound where` reads Git, pull requests, tickets, validation results, reviews, briefs and the newest handoff, and prints what is in flight after a pause or a compaction. |
 | **Second opinions** | `outcomebound review council` plans a read-only review by other harnesses and models, shows you the plan and its cost, and runs only after you say yes. |

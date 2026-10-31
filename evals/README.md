@@ -553,15 +553,13 @@ What stays `UNVERIFIED` until that probe runs:
     adopt wrote the skill and fragment files the arm's record names, byte for byte, and the meta
     records `arm_adopted`. `unsized` and `earlier` keep the install described above on these
     fixtures too, and every fixture without an `install.json` keeps it under `current`.
-  - The `AGENTS.md` of the fixture carries the project facts, inline rules, conditional reads
-    and manual names that adopt writes. Only `decision-brief` and `diagnose` get conditional
-    skill reads. The other twelve skills and selected manual fragments share the manual line.
-    These replace the note's pointer to the core skill. Element arms keep or remove each manual
-    name with its skill or fragment, even though the names share one line.
-- `unsized`: `current` without the single kernel line that opens
-  `- Size every step to the changed risk:`. Every other line stays, including the separate
-  reuse and underengineering rules. Against `current`, it measures whether the sizing rule
-  changes what a model does.
+  - The current arm renders with this checkout's engine. Its kernel carries every default
+    rule inline. The pointers block has the project's `local` text, then one optional line
+    listing every installed working skill and copied fragment at its real path. All skills
+    are manual. Element arms keep or remove each optional path with its skill or fragment.
+    Historical arms use the engine from their selected ref, including that engine's renderer.
+- `unsized`: `current` without the whole `Size` section, its heading and five rule lines.
+  Every other section stays. Against `current`, it measures the effect of that section.
 - `none`: the task alone. It has no kernel, no skill and no launcher. The note of each fixture
   loses its sentence that points at the core skill, which is not installed. Against `current`, it
   measures what the text of OutcomeBound adds at all.
@@ -640,14 +638,14 @@ What stays `UNVERIFIED` until that probe runs:
     `--drop ELEMENT` (repeatable, with `--arm current`) is the current install less that element;
     `--add ELEMENT` (repeatable, with `--arm none`) is the `none` arm plus exactly that element.
     The elements are `kernel` (the operating-contract block), `facts` (the project-facts block),
-    `pointers` (the guidance-pointers block whole: its read-once line and every pointer line),
-    `fragment:<id>` (its file under `.outcomebound/fragments/` and its pointer line),
-    `skill:<name>` (its folder at each skill root and its pointer line) and `launcher` (this
+    `pointers` (the guidance-pointers block whole: local text and the optional line),
+    `fragment:<id>` (its file under `.outcomebound/fragments/` and its optional path),
+    `skill:<name>` (its folder at each skill root and its optional path) and `launcher` (this
     checkout's launcher first on the call's PATH). Both kinds are built from adopt's own install,
     before it joins the seed commit, so the model starts on a clean `git status`, and the prompt
     is the task alone. The fixture's setup runs with `OB_EVAL_ARM` set to the arm the build starts
-    from (`current` or `none`). A pointer line kept without its block keeps the block's markers
-    and read-once line. Adopt also writes `.agents/.gitignore`, `.outcomebound/.gitignore` and
+    from (`current` or `none`). An optional path kept without its block keeps the block's markers
+    and optional line. Adopt also writes `.agents/.gitignore`, `.outcomebound/.gitignore` and
     `.outcomebound/manifest.json`, which no element owns: the current arm less any element keeps
     them, and the `none` arm plus any element has none of them. `--edits FILE` applies a JSON list
     of `{"path", "old", "new"}` to the installed `AGENTS.md`, skill or fragment files after the
@@ -2197,3 +2195,6 @@ posts it, and keeps the client's request to move the card to Done as a decision 
 The `none` arm has no launcher, so it cannot import; that is the difference the arm measures.
 `tests/test_eval_scenarios.py` plants a right run and the wrong runs for each claim, and shows
 that each fixture reads FAIL on an untouched repository.
+
+Claude Code loading checks keep separate expectations for installed skill files and skills in
+the model catalog. Manual skills can be installed without being listed to the model.

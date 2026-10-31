@@ -166,8 +166,9 @@ Tiers: frontier, mid, small\
 Confidence: high; direction: rising\
 Checks: none
 
-**S12** Keep always-loaded text a short map: pointers carry a condition and go one level deep;
-knowledge most tasks need stays inline as an index\
+**S12** Put default rules in always-loaded text. Skills and notes stay optional and are read
+only when the person names them or explicitly asks for their workflow; an incidental step
+does not call for a read. Judge the kernel by measured session cost, not a byte budget\
 Evidence: `agent-files-5` (M), `other-labs-29` (M), `forward-29` (M)\
 Tiers: frontier\
 Confidence: medium; direction: contested\
@@ -247,7 +248,7 @@ An obligation goes to the first layer that can carry it.
 | Adapter notes and harness settings | effort, thinking, narration, autonomy and date advice for one model | anything portable |
 | On-demand skills and references | a workflow's judgment, gotchas first (`harness-loading-coverage-8`); exact commands where a step is fragile; a trigger-condition description | knowledge most tasks need; narrated rationale; exhaustive edge cases; logic a command can run |
 | A delegate's brief | the four inputs and the bounds; concrete steps where the implementer is weaker than the author | any assumption that the delegate shares the author's context |
-| Always-loaded text | outcome, done-when, bounds, stops; unseen conventions and gotchas; unguessable commands; pointers with conditions; what must survive compaction (`harness-loading-coverage-7`) | procedure; overviews; style a linter holds; one model's habits; anything text loaded with it states |
+| Always-loaded text | outcome, done-when, bounds, stops; unseen conventions and gotchas; unguessable commands; default rules inline; optional paths; what must survive compaction (`harness-loading-coverage-7`) | procedure; overviews; style a linter holds; one model's habits; anything text loaded with it states |
 | Files that persist across sessions | a long run's goal, completion check, bounds and progress (S22) | rules a project depends on that belong above |
 | User-level and memory files | personal preferences | anything a project depends on (`harness-loading-coverage-28`) |
 

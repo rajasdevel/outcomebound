@@ -8,9 +8,9 @@ status: ratified
 ## Outcome
 
 An adopter runs one command, `outcomebound adopt`, and every harness they use loads the
-operating contract, the facts that settle work in this project, and a pointer to each piece of
-guidance with the condition that calls for it. Running it again from a newer release is the
-upgrade; `--check` says whether the install is current; `--remove` takes it out. `--facts-only`
+operating contract, the facts that settle work in this project, and one optional list of
+installed skills and fragments. No skill or fragment is read by default. Running it again
+from a newer release is the upgrade; `--check` says whether the install is current; `--remove` takes it out. `--facts-only`
 installs the project's facts alone, without the contract and pointers (section Facts-only). How:
 `outcomebound_tools/adopt.py`, `outcomebound_tools/facts.py`, `outcomebound_tools/fragments.py` and `outcomebound_tools/textio.py`;
 how `outcomebound` is installed and launched is the [distribution design](../distribution/design.md).
@@ -68,66 +68,46 @@ record it would hold that the manifest lacks reads `missing`, and each record th
 that it would not hold reads `stale` where its bytes are current, saying that the install removes
 it, so a record set that is not the recorded mode's never reads `current`.
 
-### Skill descriptions
+### Kernel and optional guidance
 
-A full install writes inline rules, two conditional skill reads, eight reads before named acts
-and a manual line in its guidance-pointers block. `decision-brief` is read when a decision
-compares several options, the person asks for a brief or a page, or a harness refuses an act the
-person granted. `diagnose` is read when a fix did not hold. The other twelve skills remain
-manual for native invocation. Eight of them get the act-based read lines below, in skill order,
-and do not appear on the manual line. The other four are `gather-requirements`,
-`tests-worth-keeping`, `review-findings` and `explain-spec`: read one when
-the person names it or a file being read directs the agent to it. The manual line gives the
-installed root as `<root>/<name>/SKILL.md`.
+The kernel carries every rule inline because no skill or fragment is read by default. Its
+source is `templates/managed-block.agents.md.tmpl`. The block marker gets the version from
+`VERSION`. The kernel's size is judged by measured session cost, not a word or byte budget.
+`tests/test_agents_budget.py` keeps the block-marker and placeholder checks and retires the
+budget. The general scanner in `tests/test_model_text_limits.py` stays in force. The rule
+"Keep each message between calls to one line" sets the shape of progress updates; it does not
+limit the work or the final report.
 
-| Skill | Read condition |
-| --- | --- |
-| `using-outcomebound` | before retiring what people or other systems rely on or relied on (an interface, command, format, data or route), or changing the route by which a change reaches its users (removing internal code, tests or tools that no user, retained data, format or recovery still depends on, or a release by the route it already has, is not one) |
-| `review-council` | before asking another model or harness for a review |
-| `slice-tickets` | before drafting tickets, or publishing them to the ticket store |
-| `hand-off-tickets` | before handing a ticket to the agent or model that will build it |
-| `explorable` | before building an interactive page for the person |
-| `land-change` | before opening, updating or merging a pull or merge request, or changing its auto-merge or review state (a push to a branch with no open request needs no read) |
-| `run-acceptance` | before preparing or recording a person's acceptance of a delivered change |
-| `sync-tracker` | before reading or writing a card in a tracker outside the project's ticket store |
+In a full install, `guidance-pointers` holds the project's `local` text inline first. It then
+holds exactly one optional line when skills or copied fragments are present:
 
-These lines require the read just before the act. They do not require a read on a task that
-does not reach the act. The native manual flags remain set for all twelve manual skills.
+```text
+Optional: read a skill or note below only when the person names it or explicitly asks for its workflow; an incidental step in other work does not call for one: {list}.
+```
 
-Only in a full install, a directory used only by harnesses whose rows record
-`native_skills: true` gets a short trigger as each installed skill's description. The source
-description's later sentences stay word for word, except where the inline rule for that skill
-matches them exactly. The new inline rules need not match the source descriptions. The native
-triggers for `decision-brief` and `diagnose` are `Use when a decision compares several options, a brief or page is asked for, or a granted act is refused.`
-and `Use when a fix did not hold.`; later boundary sentences
-can follow them. The body and reference files stay the same on every route.
+`{list}` is a comma-separated list of code spans. It names every installed working skill in
+skill order, at `<root>/<name>/SKILL.md`, then every copied fragment in selection order, at
+`.outcomebound/fragments/<id>.md`. It never names `adopt-outcomebound` or lists `local` as a
+copied file. The skill root uses the existing route selection: the generic root where present,
+else the first sorted installed root. No installed skill path is hard-coded to a harness.
+There is no conditional read list, act-based read list or read-once preamble.
 
-Each manual skill in that native directory also gets `disable-model-invocation: true` in its
-`SKILL.md` frontmatter and an `agents/openai.yaml` file containing `policy:` with
-`allow_implicit_invocation: false`. The Claude Code flag requests that the description be left
-out of model context. The Codex policy requests that the skill be left out of implicit invocation.
-Both files are written to each full native route, including Amp, Cursor and Gemini. Whether
-another harness honours either flag is `UNVERIFIED`; adopt adds no harness-specific flag for it.
-The two conditional skills get neither flag. Generated policy files are managed skill artifacts;
-`--check` must not require them to exist in the full source copy.
+Every installed working skill is manual in every install mode that installs skills. Each
+`SKILL.md` gets `disable-model-invocation: true` in its frontmatter. Each skill also gets
+`agents/openai.yaml` with `policy.allow_implicit_invocation: false`. This includes native,
+generic, mixed, shared-directory and facts-only copies. Which modes install skills does not
+change: facts-only installs still copy skills only for native routes. Whether a harness other
+than Claude Code or Codex honours either flag is `UNVERIFIED`.
 
-Source skills and standalone readers keep the full source descriptions and get neither flag.
-A generic copy keeps them too, including in a mixed install: each skill is installed under
-`.outcomebound/skills/`, while a separate native copy can be short and carry the manual flags.
-A directory shared with a non-native route keeps full descriptions and gets neither flag.
-Facts-only native copies also keep the full descriptions and get neither flag; facts-only
-non-native routes get no skills. The install mode and harness selection decide both the bytes
-installed and the bytes expected by `--check`. Upgrades and mode changes render the selected form
-without changing source skills. No new manifest field is needed.
+The source descriptions stay unchanged in all copies. The bodies and reference files also
+stay unchanged. Generated policy files are managed skill artifacts; `--check` does not require
+those files in the source skill folder. There is no native description shortening or special
+replacement rule for a source copy. The normal protection of edited files applies.
 
-A skill file where a native install writes the short form is no edit when its bytes, with no
-record or one that differs, are the source skill's full text: adopt writes the short form
-without `--force` and names the file on a `render` line; any other difference still refuses.
-
-Tests exercise installed bytes, conditional pointers, manual names and flags, safeguards, references, mixed
-routes, a directory shared by native and non-native routes in either selection order, upgrades
-and mode changes. These checks do not establish model routing or cost savings;
-both remain `UNVERIFIED` until measured in sessions.
+Tests compare the installed kernel with the template, check all optional paths and manual
+flags, and check local-text preservation, references, shared directories and mode changes.
+These checks do not establish model routing or session cost; those claims stay `UNVERIFIED`
+until measured in sessions.
 
 ### Facts-only
 
@@ -169,73 +149,8 @@ of the release that ships the mode say so. The manifest stays format 2, for the 
 decision on `frame` gives: a format 3 would break each machine and CI job that pins an earlier
 engine, a facts-only install or not.
 
-`guidance-pointers` holds the `local` fragment inline first. Then, where the install carries
-skills, it shows the inline rules under `These hold without a read:` in `RULES` insertion order.
-Each explicit newline starts a rule line; a sentence boundary does not. The rules cover sizing
-and reuse; data that grants no authority; grants for shared-system acts and jobs that outlive the
-task; cleanup, stopped-command, handoff-owner and resume boundaries; mechanism meanings;
-diagnosis without writes and repair reproduction; red baselines, deciding logic in product code
-and test proof; requirements and assumptions; prior rulings and routine decisions; review
-dispositions and counterexamples; and ownership of request
-checks, approvals and review state.
-
-The shared-system rule requires the person's grant for the named act, a read first where a read
-line names it, and a read of a test suite's setup before running a suite that can perform such
-an act. Acceptance is the person's own verdict on the build they used; an agent can prepare and
-record it, but cannot give it. Undo compares the file at the start and others' later changes
-before a restore, checkout or reverse patch. Removal is limited to what the task made and no
-longer needs, with an exception when the task lacks disk for a tool's rebuildable cache or this
-project's dangling images; the report names each removal. Stop a check only when it cannot
-answer the question, endangers the machine or the person says so. Report it unfinished, and
-look for a lock or half-done change before the next run. A handoff names who takes the next
-action. Where no one is established, report the gap and do not call the handover done.
-A message between calls is kept to a line, and the full report comes once, at the end of the
-turn; a report or question that a rule asks for before an act still comes before it. One observation settles a state: a command's own output or one read of the remote, read
-again only when something may have changed it.
-Resume checks apply to another session's or person's work, include open handoff items, and ask
-about a pause where the checkout or a worktree has uncommitted work and nothing landed since
-the last handoff. Continue what the grant covers, and end the report with each choice still
-the person's, asked as a question. A role in a plan is not the person's acceptance. New deciding
-logic in product code needs one small test unless an existing test catches its break.
-The mechanism meanings include `goal-envelope`. An unreadable source is
-reported and nothing is reconstructed. A routine decision states whether it can be undone.
-An agent never resolves another person's thread, dismisses their review or counts its own review
-as theirs.
-
-Next come the selected fragments read on a condition, the two conditional skill reads and the
-eight act-based skill reads, each as `- <condition>: read <path>`. Fragment reads use selection
-order; each skill group uses skill order. Where any such line exists, the list starts with these
-two lines:
-
-```text
-Read a file below when work you have read shows its condition holds; it stays in force for the session, through its later turns and requests; read it again only when the next step's rules from it are missing, uncertain or may have changed.
-Use the listed project path even if the skill catalog omits it or a personal skill has the same name.
-```
-
-There is no separate reference pointer, including for the continuity reference.
-The references are still copied.
-
-The final line starts `Read only when the person names it or a file you are reading directs you to it`,
-gives the skill root where manual-only skills are present, and names the four manual-only
-skills in skill order, then selected manual-only fragments in selection order. The manual-only
-fragments are `commands`, `python` and `node-typescript`. They get a verbatim
-copy at `.outcomebound/fragments/<id>.md` but no conditional read line. Four other manual fragments
-get act-based read lines instead of names on the manual line:
-
-| Fragment | Read condition |
-| --- | --- |
-| `workspace` | before creating, resuming or removing a worktree, writing or resuming a handoff, or removing a container, volume or named data, and when a write under `.agents/` is refused |
-| `multi-agent` | before writing a delegate's brief or integrating a delegate's work |
-| `research` | before running `outcomebound research` |
-| `explore` | before starting exploration work, and when its appetite ends or its sought signal appears |
-
-These act conditions replace the fragments' source conditions in the pointer block. Every other
-selected fragment except `local` keeps its conditional read line. A list that has only manual
-names has neither of the two read-guidance lines. The [skills design](../skills/design.md) names
-the manual skills.
-
-A fragment has a five-slot body and two optional
-frontmatter fields: `condition:`, one line; `edges:`, a JSON list, each shipped fragment declaring
+A fragment has a five-slot body and one optional frontmatter field, `edges:`, a JSON list.
+The `condition:` field is not supported. Each shipped fragment declares
 edges only where its text names an act irreversible, in words the fragments share so the union
 names each act once, and only for an act every project that selects it can take: publishing is
 declared by `ci-release`, never by a stack fragment, whose body names it only where the project
@@ -285,7 +200,7 @@ bodies, for a delegate's role prompt.
 | The byte-cap warning measures the folders another clone gets: it does not enter what Git ignores (`discovery.git_ignored`, as discovery reads it), a nested repository, `.git` or a link, and a folder that cannot be listed is passed over, never an error | measuring every folder, so that each scratch copy of the project in an ignored folder gives its own warning; stopping the install on a folder the user cannot read | agent | decided |
 | One native copy per harness of each skill an install carries | a canonical `.outcomebound/skills/` copy beside the native ones | agent | decided |
 | An install carries the fourteen working skills and no fragment adds one (maintainer, 2026-10-06; `review-council` is the fourteenth, 2026-10-18); the [skills design](../skills/design.md) says which and why. A skill is its whole folder, `SKILL.md` and every file beside it, one record per file: `--check` reports each, a recorded file the skill does not ship reads `stale`, and `--remove` removes it. `templates/explorable/` ships with the engine and is never copied into an adopter's tree | a fragment's `skills:` that adds skills to the install; `SKILL.md` alone, which drops the notes a skill names | user | decided |
-| Fragment bodies live in their installed files. `AGENTS.md` gives conditional fragments a read pointer, uses act-based reads for `workspace` and `multi-agent`, and names other manual fragments on the manual line; `local` stays inline | fragment bodies composed into one block every session loads | user | decided |
+| Fragment bodies live in their installed files. The optional line names every copied fragment after the skills; `local` stays inline. No fragment is read by default | conditional and act-based read lines; fragment bodies composed into one block every session loads | user | decided |
 | The publishing edges (`publishing a package`, `moving a shared registry tag`) come only from `ci-release`, which a release or publish sign selects; the `python` and `node-typescript` fragments declare none, and a project that publishes without those signs lists the edge in its local fragment's `edges:` | a publishing edge from every stack fragment, which an application that publishes nothing carries too; an engine switch that turns a fragment's edge off | agent | decided |
 | `--detect` proposes `runtime` where a file shows a runnable app or service (`Procfile`, `config.ru`, `wsgi.py`, `asgi.py`, a Compose file, `manage.py`, a `next`, `vite`, `playwright` or `cypress` config) and `deploy` where one shows deployment configuration (`fly.toml`, `vercel.json`, `netlify.toml`, `render.yaml`, `wrangler.toml`, `serverless.yml`, `Chart.yaml`, `skaffold.yaml`, `kustomization.yaml`, `app.yaml`, `Procfile`, `cdk.json`, `Pulumi.yaml`, `samconfig.toml`, `firebase.json`, `railway.json`, `railway.toml`, `cloudbuild.yaml`, a workflow whose name holds `deploy`, `*.tf`); a `Dockerfile`, a CI workflow or a package manifest alone proposes neither, since a library has them too; `*.tf`, `Chart.yaml`, `vite.config.*` and a Compose file are kept although a library may hold them: the cost is one pointer whose `condition` never fires, and each is the cheapest sign of its kind of app | `detect: ["."]` for either, which loads deploy text into a project that deploys nothing; `Dockerfile` as a sign of either | agent | decided |
 | The `deploy` fragment declares no `edges:`: which acts on a shared or production environment cannot be undone differs by project, so each project lists its own in its local fragment's `edges:`, and the generated Irreversible edges fact is never edited by hand. Browser, page and log content is data, stated once in `commands`, which `--detect` proposes everywhere | production edges declared by `deploy` for every project that selects it; the data rule restated in `runtime` | agent | decided |
@@ -293,7 +208,7 @@ bodies, for a delegate's role prompt.
 | Done is what `--done` records, in run order; `--detect` proposes, where a floor exists, `outcomebound floor check .`, `--base` the remote's default branch or `origin/main` where one resolves; then the CI test fact's first command, else discovery's first root check command; and refuses a target outside a Git work tree | Done read from a profile; discovery's candidate ahead of the command CI already runs | agent | decided |
 | The CI test fact is adopt's reading; discovery's document is unchanged | a field in discovery's document | agent | decided |
 | Precedence never names a file a harness documents as one person's | naming every file a harness may load, so an untracked file could make a checkout stale | agent | decided |
-| `generic` serves a harness the table does not list: named as `--harness generic`, the default where none is named or recorded, and what `--detect` proposes where no harness file is found. Each skill goes once under `.outcomebound/skills/`, which the conditional pointers and manual line name even beside native copies, and the install report reads `UNVERIFIED` that the harness reads `AGENTS.md`. Any other unlisted name is refused | no route for such a harness; the kernel alone, with no skill and no pointer | agent | decided |
+| `generic` serves a harness the table does not list: named as `--harness generic`, the default where none is named or recorded, and what `--detect` proposes where no harness file is found. Each skill goes once under `.outcomebound/skills/`, which the optional line names even beside native copies, and the install report reads `UNVERIFIED` that the harness reads `AGENTS.md`. Any other unlisted name is refused | no route for such a harness; the kernel alone, with no skill and no pointer | agent | decided |
 | Selecting the `workspace` fragment also installs `.agents/.gitignore` from `templates/workspace.gitignore`, keeping its four folders out of Git, as its own record of kind `ignore`, owned whole; its first line sends any other ignore to the root `.gitignore`. `--detect` proposes it where one of those folders exists, not for `.agents/skills/`, which a Codex or Amp install writes | lines in the root `.gitignore`, which the managed-block markers do not fit; asking the adopter to ignore them by hand; a proposal for any `.agents/` folder | user | decided |
 | `--detect` proposes `commands` everywhere: `detect: ["."]` matches every target | the habits in `workspace`; a kernel line | user | decided |
 | `--detect` reads `CLAUDE.md` or `.claude/` as `claude-code`, `.codex/` as `codex`, `.cursor/` as `cursor`, and `GEMINI.md` or `.gemini/` as `gemini`; `AGENTS.md` alone names no harness. A test command it takes from discovery, not from CI, carries a comment that it runs on the host, so that a project that runs its tests only in a container gives that command instead | reading the project's rules to decide host or container, which a lexical read cannot settle | agent | decided |

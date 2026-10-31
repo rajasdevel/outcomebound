@@ -504,13 +504,12 @@ class Chosen(NamedTuple):
     """What the adopter chose for the facts and pointers: the Done commands, in run order, the style
     for text a person reads, a key of `STYLES`, or none, and the Setup commands, in run order,
     which adopt records as the person's fact and never runs; and the install mode, `FULL` or
-    `FACTS_ONLY`; and the manual skill root and names selected for the pointers."""
+    `FACTS_ONLY`."""
 
     done: Sequence[str]
     style: Sequence[str] = ()
     setup: Sequence[str] = ()
     mode: str = FULL
-    manual: tuple[str, Sequence[str]] = ("", ())
 
 
 def render(
@@ -518,7 +517,7 @@ def render(
     selected: Sequence[Fragment],
     done: Sequence[str],
     files: Sequence[str],
-    skills: Sequence[tuple[str, str]],
+    skills: Sequence[str],
     style: Sequence[str] = (),
 ) -> Rendered:
     """The facts and pointers blocks for `target`, for a project that records no Setup:
@@ -532,21 +531,19 @@ def render_chosen(
     selected: Sequence[Fragment],
     chosen: Chosen,
     files: Sequence[str],
-    skills: Sequence[tuple[str, str]],
-    rules: Sequence[str] = (),
+    skills: Sequence[str],
 ) -> Rendered:
     """The facts and pointers blocks for `target`.
 
     `selected` holds the selected fragments in order, `local` among them when chosen; `chosen`
     the recorded Done and Setup commands in run order and the style for text a person reads;
-    `files` the co-loaded instruction files, AGENTS.md first; `skills` a (condition, path) pair
-    per installed skill and reference pointer; `rules` the rules shown above them that hold
-    without a read. A facts-only install keeps the whole selection's edges, and renders
+    `files` the co-loaded instruction files, AGENTS.md first; `skills` the installed paths
+    listed on the optional line. A facts-only install keeps the whole selection's edges, and renders
     Precedence without the clauses on OutcomeBound's guidance, which it does not install, and
     a pointers block with the `local` fragment alone.
     """
 
-    done, style, setup, mode, manual = chosen
+    done, style, setup, mode = chosen
     lines: list[str] = []
     unverified: list[str] = []
     inputs = {f"{FRAGMENT_DIR}/{item.id}.md": item.digest for item in selected}
@@ -593,8 +590,6 @@ def render_chosen(
         pointers(
             shown,
             skills if mode == FULL else [],
-            rules if mode == FULL else [],
-            manual if mode == FULL else ("", ()),
         ),
         tuple(unverified),
         dict(sorted(inputs.items())),
@@ -624,102 +619,24 @@ def inline(fragment: Fragment) -> str:
     return f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
 
 
-ONCE = (
-    "Read a file below when work you have read shows its condition holds; it stays in force for "
-    "the session, through its later turns and requests; read it again only when the next step's "
-    "rules from it are missing, uncertain or may have changed.\n"
-    "Use the listed project path even if the skill catalog omits it or a personal skill has "
-    "the same name."
-)
+def optional_line(paths: Sequence[str]) -> str:
+    """The one optional line, with each installed path in a code span."""
 
-# Shown above the read list: rules that hold on every task without a read.
-RULES_LEAD = "These hold without a read:"
-# Fragments with no pointer line: the person names one to have it read. Records showed agents
-# reading each on nearly every task, for rules the task did not use.
-MANUAL_FRAGMENTS = frozenset(
-    {"commands", "workspace", "python", "node-typescript", "research", "multi-agent", "explore"}
-)
-
-# Manual fragments read just before the act their condition names, never on other tasks.
-FRAGMENT_ACTS = {
-    "workspace": (
-        "before creating, resuming or removing a worktree, writing or resuming a handoff, or "
-        "removing a container, volume or named data, and when a write under `.agents/` is "
-        "refused"
-    ),
-    "multi-agent": "before writing a delegate's brief or integrating a delegate's work",
-    "research": "before running `outcomebound research`",
-    "explore": (
-        "before starting exploration work, and when its appetite ends or its sought signal appears"
-    ),
-}
-
-
-def once_lines() -> list[str]:
-    """The read-once text as the pointers block holds it: one block line each."""
-
-    return ONCE.split("\n")
-
-
-def rule_lines(rule: str) -> list[str]:
-    """A rule as the pointers block holds it: one line for each of its lines."""
-
-    return [f"- {line}" for line in rule.split("\n")]
-
-
-def manual_line(root: str, skills: Sequence[str], fragments: Sequence[str]) -> str:
-    """The one line naming what is read only when the person asks for it by name."""
-
-    named = [f"`{name}`" for name in skills]
-    named += [f"`{FRAGMENT_DIR}/{name}.md`" for name in fragments]
-    where = f" (skills under `{root}/<name>/SKILL.md`)" if skills and root else ""
     return (
-        "Read only when the person names it or a file you are reading directs you to it"
-        + where
-        + ": "
-        + ", ".join(named)
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
+        + ", ".join(f"`{path}`" for path in paths)
         + "."
     )
 
 
-def pointers(
-    selected: Sequence[Fragment],
-    skills: Sequence[tuple[str, str]],
-    rules: Sequence[str] = (),
-    manual: tuple[str, Sequence[str]] = ("", ()),
-) -> str | None:
-    """The `local` fragment inline, the rules that hold without a read, then one pointer line per
-    fragment and skill read on its condition, then one line naming those read only on request;
-    None if empty."""
+def pointers(selected: Sequence[Fragment], skills: Sequence[str]) -> str | None:
+    """The project's local text inline, then one optional list of installed paths."""
 
     parts = [inline(item) for item in selected if item.id == LOCAL]
-    parts += (
-        [
-            "\n".join(
-                [
-                    RULES_LEAD,
-                    *(line for rule in rules for line in rule_lines(rule)),
-                ]
-            )
-        ]
-        if rules
-        else []
-    )
-    lines = [
-        f"- {FRAGMENT_ACTS.get(item.id) or item.condition or 'for ' + item.applies}: "
-        f"read {FRAGMENT_DIR}/{item.id}.md"
-        for item in selected
-        if item.id != LOCAL and (item.id not in MANUAL_FRAGMENTS or item.id in FRAGMENT_ACTS)
-    ]
-    lines += [f"- {condition}: read {path}" for condition, path in skills]
-    lines = [*once_lines(), *lines] if lines else []
-    root, names = manual
-    held = [
-        item.id for item in selected if item.id in MANUAL_FRAGMENTS and item.id not in FRAGMENT_ACTS
-    ]
-    if names or held:
-        lines.append(manual_line(root, names, held))
-    parts += ["\n".join(lines)] if lines else []
+    paths = [*skills, *(f"{FRAGMENT_DIR}/{item.id}.md" for item in selected if item.id != LOCAL)]
+    if paths:
+        parts.append(optional_line(paths))
     if not parts:
         return None
     return identity.format_managed_block(POINTERS, VERSION, "\n\n".join(parts))

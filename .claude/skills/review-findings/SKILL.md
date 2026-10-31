@@ -1,6 +1,6 @@
 ---
 name: review-findings
-description: Use when acting on findings or writing a required review. Check each finding as a claim and give it a disposition.
+description: Use when acting on review findings, or writing a review the project requires. Check each finding as a claim and give it a disposition.
 disable-model-invocation: true
 ---
 

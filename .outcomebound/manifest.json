@@ -6,7 +6,7 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "fd2afd5291743fe3a56ecb9231b7853e5a8bfc0bf64c4f65a78fb52a7096f84e"
+      "sha256": "979b49e0d11d9f1a0e610fdc0caaebaef62b83f0820af0ae97872db39627ffc3"
     },
     {
       "kind": "block",
@@ -32,11 +32,11 @@
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",
-        ".outcomebound/fragments/commands.md": "18bc6a3c09eb89b84439c0eb65907d2324d393fa1b141a81cdb788b541ec2f8d",
+        ".outcomebound/fragments/commands.md": "356ff4db27a8a7127fd05d52126a9580ba12ef07b46be22fb849eeebca01b97a",
         ".outcomebound/fragments/local.md": "b67279e4745ada1f124391c4390b1cc5ebd55ef40b5c6ba14f3e8f60f511b37d",
-        ".outcomebound/fragments/multi-agent.md": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1",
-        ".outcomebound/fragments/research.md": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed",
-        ".outcomebound/fragments/workspace.md": "c920031cf176653be09c553607ddce02cf1f8e7bb448225ca6f9ab7964cef46c"
+        ".outcomebound/fragments/multi-agent.md": "efde7da7d9e51d59dbe09dab036a8f049bf64a82dc16acf8dc5b1188246d5963",
+        ".outcomebound/fragments/research.md": "ec3d6dedd1e37052538ea4abd81dfe085d095bc769c1121ddd4c54313badd33d",
+        ".outcomebound/fragments/workspace.md": "f9560adc5605a84e29ad7d02c04387b4c3b756838f08a8a19233427444c72f38"
       },
       "style": [
         "ste"
@@ -47,32 +47,32 @@
       "kind": "block",
       "path": "AGENTS.md",
       "id": "guidance-pointers",
-      "frame": "9eb1dae982c321543ea8c859786d72496a4af0f663f2c8cf9365a52f21c5d5cf",
-      "sha256": "4a1ae0f3744bb08404aa87cdb2fa9b5f5fba9efdd06ff994618cee47f437af0e"
+      "frame": "8d92cfcaeef636a63228b8e1ef30c9e968a0bbc8cd110fe740a444137e1cb8c1",
+      "sha256": "e54e37b14a745ca9daedf3cc46eefae200b1ce581bb361c3431843e4e8078544"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/multi-agent.md",
       "id": "multi-agent",
-      "sha256": "f954912cc258d16b2560db7459eb5cfaec81b0239f43df0e4e3996c8086e9ad1"
+      "sha256": "efde7da7d9e51d59dbe09dab036a8f049bf64a82dc16acf8dc5b1188246d5963"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/workspace.md",
       "id": "workspace",
-      "sha256": "c920031cf176653be09c553607ddce02cf1f8e7bb448225ca6f9ab7964cef46c"
+      "sha256": "f9560adc5605a84e29ad7d02c04387b4c3b756838f08a8a19233427444c72f38"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/research.md",
       "id": "research",
-      "sha256": "47638082f5246eb528f35ef636963ababf0460cf31fdd6c5a3391e73ba383bed"
+      "sha256": "ec3d6dedd1e37052538ea4abd81dfe085d095bc769c1121ddd4c54313badd33d"
     },
     {
       "kind": "fragment",
       "path": ".outcomebound/fragments/commands.md",
       "id": "commands",
-      "sha256": "18bc6a3c09eb89b84439c0eb65907d2324d393fa1b141a81cdb788b541ec2f8d"
+      "sha256": "356ff4db27a8a7127fd05d52126a9580ba12ef07b46be22fb849eeebca01b97a"
     },
     {
       "kind": "ignore",
@@ -93,7 +93,16 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "7d462bd904d78f17f1f78c9735a5057e14d49fd880c12782454f5be83481cd79"
+      "sha256": "58ce8da7978dbcda2c8dd3d2db658a14bb08e5625db46978afbb2acf442ca99a"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/decision-brief/agents/openai.yaml",
+      "id": "decision-brief",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -129,7 +138,16 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "57da97762fc64394bbd886237c5b357f7d8eafbb7cabb6b0792e336d642cf797"
+      "sha256": "043994a9a9ab6358cc2aa475ddc77459eb088bc1e486fa8c391f25ceb0fbc767"
+    },
+    {
+      "kind": "skill",
+      "path": ".agents/skills/diagnose/agents/openai.yaml",
+      "id": "diagnose",
+      "harnesses": [
+        "codex"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -147,7 +165,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "ead10baba147dd9c2bc3e86308d17dbe5dfe655feac1ab467f326e004f5740bd"
+      "sha256": "f16fe0a76a972aea93565ba96ff5391bcfc579f1b972fc82c6dfd2b5785cead1"
     },
     {
       "kind": "skill",
@@ -165,7 +183,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "1f49617bf7cc01b4b8211dab0d5d9a41d2853e689ceb048ca5c631eb09f4b7fa"
+      "sha256": "a66d7ccd7e1a6440b5d31ffd00d7caedbfe25404c8c4c870a48d04aab1049a56"
     },
     {
       "kind": "skill",
@@ -192,7 +210,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "715bd8077f1fd6d27057bbe5b01dc31c8531071ff6877bc0961529a30debae88"
+      "sha256": "ceb3f51c7700ed29b9984e6f6e972796c240d1408084a45086e24a4db9922a77"
     },
     {
       "kind": "skill",
@@ -246,7 +264,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "0f8d32dfcc80e368d5340294bb3a69c85a31a617d0b74f1dc7f8fa8e8ea17415"
+      "sha256": "3ebfa9d8dd37e204707de0b7b230fd48c9c5dd2502dc1127c962e36ce539f925"
     },
     {
       "kind": "skill",
@@ -264,7 +282,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "4b361e2598d6965a997010e9bffd97048bc1aa821d2e8c3a6b2ba760e8a59344"
+      "sha256": "3ee8d7d33919c4fbf6f9c062a9f3cac038781b77c963286e249e74a961e67ee4"
     },
     {
       "kind": "skill",
@@ -282,7 +300,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "e3175b8f04be01502675c8eeaa815d185c460309e7e50f6da00676719f4ea99b"
+      "sha256": "0df61ea06defbfaeeeb2956d16961385db3c5b0ea1902248daffa1e2278c448d"
     },
     {
       "kind": "skill",
@@ -300,7 +318,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "696f3805d1aca22dcc997309de052a0a6987b40e0a894579a2b0325889b52840"
+      "sha256": "18ab2ad4b8b5d71b13b546a6403ca71a24bf4ebd1650cd6921d632df6f2d0646"
     },
     {
       "kind": "skill",
@@ -318,7 +336,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "048a0cd5688a77c98f6a7962d31bc8fe01e5b8ab06788e38567aaa510d186077"
+      "sha256": "6eab9036c97c081afd0f5e5fc5141ac4b7b696c718b68cf23e1ddb6917d76f90"
     },
     {
       "kind": "skill",
@@ -363,7 +381,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "efd18a368fc3ae1401aa8be82434f579f1854f35c50d655ee13979e44a9b3067"
+      "sha256": "e35f47d7ce06ee3cf5026c861ec2409e08339879bc64d787247c46774697db6e"
     },
     {
       "kind": "skill",
@@ -381,7 +399,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "ae247d1da513349f0c80e0c8aa4b59eac46f36f37024a761e528efdb93567dd2"
+      "sha256": "c4d2beddcc0e17359e5a1c92502b0c23896d358958a8729420d25605db99388e"
     },
     {
       "kind": "skill",
@@ -408,7 +426,7 @@
       "harnesses": [
         "codex"
       ],
-      "sha256": "61746ff7b2b85eb52636bf5de299624e161e175de9f56ade6d90534c7d03135b"
+      "sha256": "06a9227afeccc8756e8481a4fda232e35fefd8c049a941cc3b04e56ff9fbe0fa"
     },
     {
       "kind": "skill",
@@ -453,7 +471,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "7d462bd904d78f17f1f78c9735a5057e14d49fd880c12782454f5be83481cd79"
+      "sha256": "58ce8da7978dbcda2c8dd3d2db658a14bb08e5625db46978afbb2acf442ca99a"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/decision-brief/agents/openai.yaml",
+      "id": "decision-brief",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -489,7 +516,16 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "57da97762fc64394bbd886237c5b357f7d8eafbb7cabb6b0792e336d642cf797"
+      "sha256": "043994a9a9ab6358cc2aa475ddc77459eb088bc1e486fa8c391f25ceb0fbc767"
+    },
+    {
+      "kind": "skill",
+      "path": ".claude/skills/diagnose/agents/openai.yaml",
+      "id": "diagnose",
+      "harnesses": [
+        "claude-code"
+      ],
+      "sha256": "a1499d95abd8447558c535fe5554adcc3c9b988a0a39264a6283d430effe1e94"
     },
     {
       "kind": "skill",
@@ -507,7 +543,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "ead10baba147dd9c2bc3e86308d17dbe5dfe655feac1ab467f326e004f5740bd"
+      "sha256": "f16fe0a76a972aea93565ba96ff5391bcfc579f1b972fc82c6dfd2b5785cead1"
     },
     {
       "kind": "skill",
@@ -525,7 +561,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "1f49617bf7cc01b4b8211dab0d5d9a41d2853e689ceb048ca5c631eb09f4b7fa"
+      "sha256": "a66d7ccd7e1a6440b5d31ffd00d7caedbfe25404c8c4c870a48d04aab1049a56"
     },
     {
       "kind": "skill",
@@ -552,7 +588,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "715bd8077f1fd6d27057bbe5b01dc31c8531071ff6877bc0961529a30debae88"
+      "sha256": "ceb3f51c7700ed29b9984e6f6e972796c240d1408084a45086e24a4db9922a77"
     },
     {
       "kind": "skill",
@@ -606,7 +642,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "0f8d32dfcc80e368d5340294bb3a69c85a31a617d0b74f1dc7f8fa8e8ea17415"
+      "sha256": "3ebfa9d8dd37e204707de0b7b230fd48c9c5dd2502dc1127c962e36ce539f925"
     },
     {
       "kind": "skill",
@@ -624,7 +660,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "4b361e2598d6965a997010e9bffd97048bc1aa821d2e8c3a6b2ba760e8a59344"
+      "sha256": "3ee8d7d33919c4fbf6f9c062a9f3cac038781b77c963286e249e74a961e67ee4"
     },
     {
       "kind": "skill",
@@ -642,7 +678,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "e3175b8f04be01502675c8eeaa815d185c460309e7e50f6da00676719f4ea99b"
+      "sha256": "0df61ea06defbfaeeeb2956d16961385db3c5b0ea1902248daffa1e2278c448d"
     },
     {
       "kind": "skill",
@@ -660,7 +696,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "696f3805d1aca22dcc997309de052a0a6987b40e0a894579a2b0325889b52840"
+      "sha256": "18ab2ad4b8b5d71b13b546a6403ca71a24bf4ebd1650cd6921d632df6f2d0646"
     },
     {
       "kind": "skill",
@@ -678,7 +714,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "048a0cd5688a77c98f6a7962d31bc8fe01e5b8ab06788e38567aaa510d186077"
+      "sha256": "6eab9036c97c081afd0f5e5fc5141ac4b7b696c718b68cf23e1ddb6917d76f90"
     },
     {
       "kind": "skill",
@@ -723,7 +759,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "efd18a368fc3ae1401aa8be82434f579f1854f35c50d655ee13979e44a9b3067"
+      "sha256": "e35f47d7ce06ee3cf5026c861ec2409e08339879bc64d787247c46774697db6e"
     },
     {
       "kind": "skill",
@@ -741,7 +777,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "ae247d1da513349f0c80e0c8aa4b59eac46f36f37024a761e528efdb93567dd2"
+      "sha256": "c4d2beddcc0e17359e5a1c92502b0c23896d358958a8729420d25605db99388e"
     },
     {
       "kind": "skill",
@@ -768,7 +804,7 @@
       "harnesses": [
         "claude-code"
       ],
-      "sha256": "61746ff7b2b85eb52636bf5de299624e161e175de9f56ade6d90534c7d03135b"
+      "sha256": "06a9227afeccc8756e8481a4fda232e35fefd8c049a941cc3b04e56ff9fbe0fa"
     },
     {
       "kind": "skill",

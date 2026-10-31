@@ -8,90 +8,38 @@ them is run. Assertions are about the commands read, the lines rendered and what
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 import pytest
 
 from outcomebound_tools import facts, textio
 from outcomebound_tools.fragments import Fragment, load_all
-from tests.adopt_helpers import READ_GUIDANCE
 from tests.portable import needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_common_rules_render_on_separate_lines_with_their_exceptions() -> None:
-    """Catches joining separate rules or detaching an exception from the rule it limits."""
+@pytest.mark.parametrize("name", list(load_all(ROOT)))
+def test_every_fragment_is_optional_and_local_stays_inline(name: str) -> None:
+    """Catch an automatic fragment read or the loss of the project's local text."""
 
-    rendered = facts.pointers(
-        [],
-        [],
-        [
-            "When a check fails, report it; never hide it. Rerun only after its inputs change.\n"
-            "When a refusal is tested, reach that refusal."
-        ],
+    item = load_all(ROOT)[name]
+    rendered = facts.pointers([item], ["custom/skills/diagnose/SKILL.md"])
+    assert rendered is not None
+    optional = [line for line in rendered.splitlines() if line.startswith("Optional: ")]
+    assert len(optional) == 1
+    expected = ["custom/skills/diagnose/SKILL.md"]
+    if name == "local":
+        assert facts.inline(item) in rendered
+    else:
+        expected.append(f".outcomebound/fragments/{name}.md")
+        assert item.body not in rendered
+    assert re.findall(r"`([^`]+)`", optional[0]) == expected
+    assert optional[0].startswith(
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
     )
-
-    assert rendered is not None
-    assert (
-        "- When a check fails, report it; never hide it. Rerun only after its inputs change.\n"
-        "- When a refusal is tested, reach that refusal.\n"
-    ) in rendered
-
-
-def test_rule_lines_split_only_at_explicit_newlines() -> None:
-    """Catches sentence splitting, including a second sentence that starts with a code span."""
-
-    assert facts.rule_lines("Keep this rule. Its exception stays here.\nNext rule. `x` stays.") == [
-        "- Keep this rule. Its exception stays here.",
-        "- Next rule. `x` stays.",
-    ]
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["commands", "python", "node-typescript"],
-)
-def test_manual_fragment_renders_its_name_without_a_read_condition(name: str) -> None:
-    """Catches a missing person-or-file trigger, an automatic read or a lost fragment path."""
-
-    rendered = facts.pointers([load_all(ROOT)[name]], [])
-    assert rendered is not None
-    assert rendered.splitlines()[1:-1] == [
-        "Read only when the person names it or a file you are reading directs you to it: "
-        f"`.outcomebound/fragments/{name}.md`."
-    ]
-
-
-@pytest.mark.parametrize(
-    "name,condition",
-    [
-        (
-            "workspace",
-            "before creating, resuming or removing a worktree, writing or resuming a handoff, or "
-            "removing a container, volume or named data, and when a write under `.agents/` is "
-            "refused",
-        ),
-        ("multi-agent", "before writing a delegate's brief or integrating a delegate's work"),
-        ("research", "before running `outcomebound research`"),
-        (
-            "explore",
-            "before starting exploration work, and when its appetite ends or its sought "
-            "signal appears",
-        ),
-    ],
-)
-def test_guarded_fragment_renders_its_act_read_instead_of_a_manual_name(
-    name: str, condition: str
-) -> None:
-    """Catches a missing or broadened act trigger, a duplicate manual name or lost read guidance."""
-
-    rendered = facts.pointers([load_all(ROOT)[name]], [])
-    assert rendered is not None
-    assert rendered.splitlines()[1:-1] == [
-        *READ_GUIDANCE,
-        f"- {condition}: read .outcomebound/fragments/{name}.md",
-    ]
 
 
 PYTHON = """\

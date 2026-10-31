@@ -22,7 +22,6 @@ import pytest
 
 from evals.harnesses import CallResult
 from evals.harnesses import codex as codex_harness
-from tests.adopt_helpers import INSTALLED_RULES, READ_GUIDANCE
 from tests.eval_helpers import RUN
 from tests.portable import needs_posix_bash
 
@@ -57,7 +56,9 @@ INSTALL = {"done": ["make check", "make test"], "fragments": ["commands"], "sand
 # arm plus any element has none of them.
 UNOWNED = {".agents/.gitignore", ".outcomebound/.gitignore", ".outcomebound/manifest.json"}
 DATE = re.compile(rb"\d{4}-\d{2}-\d{2}(?:[T ][\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?")
-KERNEL_CLAUSE = "smallest complete, not least work."
+KERNEL_CLAUSE = (
+    "do the core work the outcome needs, completely, and nothing the outcome does not need."
+)
 
 
 def _fixture(root: Path, install: dict[str, Any] | None = INSTALL) -> Path:
@@ -209,7 +210,7 @@ def test_the_current_arm_less_every_element_is_the_none_tree_but_what_no_element
     probe = _arm(fixture, "current")
     every = RUN.install_elements(probe)
     arm = _arm(fixture, "current", RUN.Elements(dropped=every))
-    assert arm.kernel == "" and arm.launcher is None and arm.files == {}
+    assert arm.kernel == "" and arm.launcher is None and arm.files == {} and arm.skills == ()
     less, _protected, _prompt = _build(fixture, arm, tmp_path / "l")
     none, _protected, _prompt = _build(fixture, _arm(fixture, "none"), tmp_path / "n")
     found = _files(less)
@@ -530,7 +531,8 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
     block = note.split("\n\n", 1)[0].splitlines()
     assert block[0].startswith("<!-- outcomebound:begin id=guidance-pointers ")
     assert block[1:] == [
-        "Read only when the person names it or a file you are reading directs you to it: "
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
         "`.outcomebound/fragments/commands.md`.",
         "<!-- outcomebound:end id=guidance-pointers -->",
     ]
@@ -543,62 +545,20 @@ def test_a_manual_fragment_added_without_its_block_keeps_its_manual_line(
 
 
 @pytest.mark.parametrize(
-    "element,pointer,manual",
+    "element,path",
     [
-        (
-            "fragment:workspace",
-            "- before creating, resuming or removing a worktree, writing or resuming a handoff, or "
-            "removing a container, volume or named data, and when a write under `.agents/` is "
-            "refused: read "
-            ".outcomebound/fragments/workspace.md",
-            "Read only when the person names it or a file you are reading directs you to it: "
-            "`.outcomebound/fragments/workspace.md`.",
-        ),
-        (
-            "fragment:multi-agent",
-            "- before writing a delegate's brief or integrating a delegate's work: "
-            "read .outcomebound/fragments/multi-agent.md",
-            "Read only when the person names it or a file you are reading directs you to it: "
-            "`.outcomebound/fragments/multi-agent.md`.",
-        ),
-        (
-            "fragment:research",
-            "- before running `outcomebound research`: read .outcomebound/fragments/research.md",
-            "Read only when the person names it or a file you are reading directs you to it: "
-            "`.outcomebound/fragments/research.md`.",
-        ),
-        (
-            "fragment:explore",
-            "- before starting exploration work, and when its appetite ends or its sought signal "
-            "appears: read .outcomebound/fragments/explore.md",
-            "Read only when the person names it or a file you are reading directs you to it: "
-            "`.outcomebound/fragments/explore.md`.",
-        ),
-        (
-            "skill:using-outcomebound",
-            "- before retiring what people or other systems rely on or relied on (an interface, "
-            "command, format, data or route), or changing the route by which a change reaches its "
-            "users (removing internal code, tests or tools that no user, retained data, format "
-            "or recovery still depends on, or a release by the route it already has, is not "
-            "one): read "
-            ".agents/skills/using-outcomebound/SKILL.md",
-            "Read only when the person names it or a file you are reading directs you to it "
-            "(skills under `.agents/skills/<name>/SKILL.md`): `using-outcomebound`.",
-        ),
-        (
-            "skill:run-acceptance",
-            "- before preparing or recording a person's acceptance of a delivered change: "
-            "read .agents/skills/run-acceptance/SKILL.md",
-            "Read only when the person names it or a file you are reading directs you to it "
-            "(skills under `.agents/skills/<name>/SKILL.md`): `run-acceptance`.",
-        ),
+        ("fragment:workspace", ".outcomebound/fragments/workspace.md"),
+        ("fragment:multi-agent", ".outcomebound/fragments/multi-agent.md"),
+        ("fragment:research", ".outcomebound/fragments/research.md"),
+        ("fragment:explore", ".outcomebound/fragments/explore.md"),
+        ("skill:using-outcomebound", ".agents/skills/using-outcomebound/SKILL.md"),
+        ("skill:run-acceptance", ".agents/skills/run-acceptance/SKILL.md"),
     ],
-    ids=["workspace", "multi-agent", "research", "explore", "using-outcomebound", "run-acceptance"],
 )
-def test_an_act_based_element_keeps_its_read_and_refuses_missing_or_extra_guidance(
-    tmp_path: Path, fake: dict[str, Path], element: str, pointer: str, manual: str
+def test_an_optional_element_keeps_only_its_path_and_detects_a_missing_path(
+    tmp_path: Path, fake: dict[str, Path], element: str, path: str
 ) -> None:
-    """Catches absent act reads, extra manual names or an isolation check accepting either."""
+    """Catch automatic reads or absent optional paths in isolated element arms."""
 
     (RUN.FIXTURES / "replica-fake" / "install.json").write_text(
         json.dumps(
@@ -613,27 +573,15 @@ def test_an_act_based_element_keeps_its_read_and_refuses_missing_or_extra_guidan
     workdir, _protected, _prompt = _build("replica-fake", arm, tmp_path / "w")
     note = workdir / "AGENTS.md"
     text = note.read_text("utf-8")
-    block = text.split("\n\n", 1)[0].splitlines()
-    rules = (
-        [
-            "These hold without a read:",
-            *("- " + line for line in INSTALLED_RULES["using-outcomebound"]),
-        ]
-        if element == "skill:using-outcomebound"
-        else []
+    (optional,) = [line for line in text.splitlines() if line.startswith("Optional: ")]
+    assert optional == (
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: " + f"`{path}`."
     )
-    assert block[1:] == [
-        *rules,
-        *READ_GUIDANCE,
-        pointer,
-        "<!-- outcomebound:end id=guidance-pointers -->",
-    ]
     assert RUN.element_problems(workdir, arm) == []
     _clean(workdir)
-    note.write_text(text.replace(pointer, ""), encoding="utf-8")
-    assert RUN.element_problems(workdir, arm) == [f"{element}'s pointer line missing"]
-    note.write_text(text.replace(pointer, pointer + "\n" + manual), encoding="utf-8")
-    assert RUN.element_problems(workdir, arm) == [f"{element}'s manual name present"]
+    note.write_text(text.replace(optional, ""), encoding="utf-8")
+    assert RUN.element_problems(workdir, arm) == [f"{element}'s optional path missing"]
 
 
 def test_a_manual_skill_added_without_its_block_keeps_only_its_name_and_files(
@@ -647,9 +595,9 @@ def test_a_manual_skill_added_without_its_block_keeps_only_its_name_and_files(
     note = workdir / "AGENTS.md"
     block = note.read_text("utf-8").split("\n\n", 1)[0].splitlines()
     manual = (
-        "Read only when the person names it or a file you are reading directs you to it "
-        "(skills under `.agents/skills/<name>/SKILL.md`): "
-        "`explain-spec`."
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
+        "`.agents/skills/explain-spec/SKILL.md`."
     )
     assert block[1:] == [manual, "<!-- outcomebound:end id=guidance-pointers -->"]
     assert sorted(arm.files) == [
@@ -668,12 +616,12 @@ def test_a_manual_skill_added_without_its_block_keeps_only_its_name_and_files(
     assert rules["elements"] == "PASS" and rules["no-outcomebound-text"] == "PASS"
     _clean(workdir)
     note.write_text(note.read_text("utf-8").replace(manual, ""), encoding="utf-8")
-    assert RUN.element_problems(workdir, arm) == ["skill:explain-spec's manual name missing"]
+    assert RUN.element_problems(workdir, arm) == ["skill:explain-spec's optional path missing"]
 
     # A looser trigger is not the installed manual route, even with the correct skill name.
-    wrong = manual.replace("or a file you are reading directs you to it", "whenever useful")
+    wrong = manual.replace("only when the person names it", "whenever useful")
     note.write_text("\n".join([block[0], wrong, block[-1], ""]), encoding="utf-8")
-    assert RUN.element_problems(workdir, arm) == ["skill:explain-spec's manual name missing"]
+    assert RUN.element_problems(workdir, arm) == ["skill:explain-spec's optional path missing"]
 
 
 # --- the catalog and the summary ----------------------------------------------------------------

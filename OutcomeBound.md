@@ -49,7 +49,8 @@ what waits and whether it can be undone. A choice between several credible optio
 brief, in the order a person decides: an id and the question in one line; what waits on the answer;
 the context the person needs to judge; a picture where it carries meaning; each credible way
 forward, with what it leads to, when to choose it and its downside, your recommendation marked on
-the option it names, with why; the evidence; and whether it can be undone. The `decision-brief` skill gives the steps, and
+the option it names, with why; the evidence; and whether it can be undone. The manual `decision-brief` skill gives the steps when the person names it or explicitly asks
+for its workflow, and
 `outcomebound brief` draws such a brief in the marks and diagram form the surface shows. Hold only an act
 your authority does not grant, such as destroying others' work, an irreversible act, an external
 write, spending money, or widening scope beyond the granted authority. Where a ticket, a package or a delegation names the
@@ -137,8 +138,11 @@ coordination than the task is worth. Each delegate receives the same four inputs
 
 ## Adoption and compatibility
 
-Default adoption installs a compact managed instruction block, the project facts and guidance
-pointers the engine generates beside it, and the fourteen working skills.
+Default adoption installs a managed kernel with every default rule inline, the project facts,
+and the fourteen working skills. The guidance-pointers block keeps the project's `local` text
+inline and names every installed working skill and copied fragment on one optional line. Read
+a skill or fragment only when the person names it or explicitly asks for its workflow; an
+incidental step in other work does not call for one. Every installed skill is manual.
 Guidance fragments, specs, goals, harness adapters, and project-authoritative policy
 integration are optional components, each selected and wired explicitly: the fragments from
 `fragments/`, the harness adapters from `adapters/harnesses.json`, and the rest from `templates/`,

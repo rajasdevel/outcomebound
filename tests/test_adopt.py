@@ -24,12 +24,8 @@ import pytest
 from outcomebound_tools import adopt, facts, fileplan, fragments, identity, paths
 from outcomebound_tools.declared_tests import PYTEST
 from tests.adopt_helpers import (
-    ACT_READS,
-    CONDITIONAL_READS,
     GIT,
-    INSTALLED_RULES,
     MANUAL_SKILLS,
-    READ_GUIDANCE,
     ROOT,
     Capture,
     assert_native_skill,
@@ -115,13 +111,10 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
     agents = blocks(target, "AGENTS.md")
     assert list(agents) == [adopt.KERNEL, adopt.FACTS, adopt.POINTERS]
     assert agents[adopt.KERNEL].version == VERSION
-    for line in (
-        "- Satisfy all four completely for the lifespan.",
-        "- Hold only an act that expands authority or crosses an ungranted irreversible edge, "
-        "with its decision brief; continue all other work.",
-        "- Explain in plain words, or leave out, an id or label the person did not use.",
-    ):
-        assert line in agents[adopt.KERNEL].body.splitlines()
+    template = identity.parse_managed_block(
+        (ROOT / adopt.KERNEL_TEMPLATE).read_text(encoding="utf-8"), adopt.KERNEL
+    )
+    assert agents[adopt.KERNEL].body == template.body
     shipped = (ROOT / "fragments/stack/python.md").read_bytes()
     assert (target / PYTHON_FRAGMENT).read_bytes() == shipped
     assert list(blocks(target, "CLAUDE.md")) == ["pointer-claude-md"]
@@ -223,7 +216,7 @@ def test_an_upgrade_rewrites_what_the_changed_source_renders_and_nothing_else(
     assert code == 0, err
     agents = blocks(target, "AGENTS.md")
     assert agents[adopt.KERNEL].version == "9.9.9"
-    assert "not least work, now." in agents[adopt.KERNEL].body
+    assert "nothing the outcome does not need, now." in agents[adopt.KERNEL].body
     assert adopt.block_text((target / "AGENTS.md").read_text(encoding="utf-8"), adopt.POINTERS) == (
         pointers
     )
@@ -234,54 +227,13 @@ def test_an_upgrade_rewrites_what_the_changed_source_renders_and_nothing_else(
 
 
 def skill_pointer_lines(root: str, names: tuple[str, ...] = adopt.SKILLS) -> list[str]:
-    """The ordered inline rules, conditional reads and manual names of a full install."""
+    """The one optional line names the real path of every installed skill."""
 
-    rules = [
-        "- " + line for name in INSTALLED_RULES if name in names for line in INSTALLED_RULES[name]
-    ]
-    automatic = [name for name in names if name not in MANUAL_SKILLS]
-    acts = [name for name in names if name in ACT_READS]
-    manual = [f"`{name}`" for name in names if name in MANUAL_SKILLS and name not in ACT_READS]
     return [
-        *(["These hold without a read:", *rules, ""] if rules else []),
-        *(READ_GUIDANCE if automatic or acts else []),
-        *(f"- {CONDITIONAL_READS[name]}: read {root}/{name}/SKILL.md" for name in automatic),
-        *(f"- {ACT_READS[name]}: read {root}/{name}/SKILL.md" for name in acts),
-        *(
-            [
-                "Read only when the person names it or a file you are reading directs you to it "
-                f"(skills under `{root}/<name>/SKILL.md`): " + ", ".join(manual) + "."
-            ]
-            if manual
-            else []
-        ),
-    ]
-
-
-def test_inline_rules_follow_rule_order_and_keep_each_explicit_line(
-    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Catches sorting rules by skill order or splitting one rule at sentence boundaries."""
-
-    monkeypatch.setattr(
-        adopt,
-        "RULES",
-        {
-            "diagnose": (
-                "A defect: reproduce it. Keep its exception here.\nA second rule: check it."
-            ),
-            "using-outcomebound": "A suggested step: size it to the risk.",
-        },
-    )
-    target = repo(tmp_path / "project")
-    code, _, err = run(capsys, str(target), "--harness", "codex")
-    assert code == 0, err
-    assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines()[:5] == [
-        "These hold without a read:",
-        "- A defect: reproduce it. Keep its exception here.",
-        "- A second rule: check it.",
-        "- A suggested step: size it to the risk.",
-        "",
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
+        + ", ".join(f"`{root}/{name}/SKILL.md`" for name in names)
+        + "."
     ]
 
 
@@ -346,7 +298,7 @@ def test_an_edited_owned_block_is_refused_and_force_replaces_it(
     target = repo(tmp_path / "t")
     assert run(capsys, str(target), "--harness", "codex")[0] == 0
     agents = target / "AGENTS.md"
-    edited = agents.read_text(encoding="utf-8").replace("smallest complete", "largest complete")
+    edited = agents.read_text(encoding="utf-8").replace("do the core work", "skip the core work")
     write(agents, edited)
 
     code, _, err = run(capsys, str(target))
@@ -454,18 +406,12 @@ def test_the_refusal_names_both_sides_when_the_block_differs_inside_and_outside_
     )
     agents = target / "AGENTS.md"
     text = agents.read_text(encoding="utf-8")
-    write(agents, text.replace(f"- {RUNTIME_CONDITION}", "- when running"))
+    write(agents, text.replace("Optional: read", "Optional: always read"))
 
     code, _, err = run(capsys, str(target))
 
     assert code == 1
     assert f"the difference is both inside and outside the text of {adopt.LOCAL_FRAGMENT}" in err
-
-
-RUNTIME_CONDITION = (
-    "before claiming a change works in a running app or service, or when its risk is rendering, "
-    "integration or what users see"
-)
 
 
 def without_frame(target: Path) -> None:
@@ -479,13 +425,12 @@ def without_frame(target: Path) -> None:
 
 
 def render_anew(source: Path) -> None:
-    """Change the engine copy as a release that renders the pointers block anew would: the
-    runtime fragment's condition, which its pointer line carries, in other words."""
+    """Change the installed skill root so the optional line must render again."""
 
-    path = source / "fragments/stack/runtime.md"
-    text = path.read_text(encoding="utf-8")
-    assert text.count(RUNTIME_CONDITION) == 1
-    write(path, text.replace(RUNTIME_CONDITION, f"{RUNTIME_CONDITION} later"))
+    path = source / "adapters/harnesses.json"
+    table = json.loads(path.read_text(encoding="utf-8"))
+    table["codex"]["skill_install_path"] = ".project/skills/"
+    write(path, json.dumps(table))
 
 
 def rendered_lines(out: str) -> list[str]:
@@ -496,87 +441,6 @@ def rendered_lines(out: str) -> list[str]:
         for line in out.splitlines()
         if line.startswith("render ")
     ]
-
-
-def test_an_unrecorded_copy_of_the_full_source_skill_is_no_edit_where_the_install_writes_it_short(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    """A skill file that is the source's full text, with no record, is replaced by the short
-    native form without --force and the report says so; a copy with any other edit still
-    refuses. Breaks if a short native install treats a plain copy of the source as a person's
-    edit, or if it accepts a copy that differs from the source."""
-
-    shipped = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
-    assert adopt.description(shipped) != adopt.NATIVE_DESCRIPTIONS["decision-brief"]
-    target = repo(tmp_path / "t")
-    (target / CLAUDE_BRIEF).parent.mkdir(parents=True)
-    write(target / CLAUDE_BRIEF, shipped.decode("utf-8"))
-
-    code, out, err = run(capsys, str(target), "--harness", "claude-code")
-
-    assert code == 0, err
-    assert f"render   {CLAUDE_BRIEF}: {adopt.SOURCE_COPY}" in out.splitlines()
-    assert_native_skill((target / CLAUDE_BRIEF).read_bytes(), "decision-brief")
-
-    other = repo(tmp_path / "o")
-    (other / CLAUDE_BRIEF).parent.mkdir(parents=True)
-    write(other / CLAUDE_BRIEF, shipped.decode("utf-8") + "\nOne more line.\n")
-
-    code, _, err = run(capsys, str(other), "--harness", "claude-code")
-
-    assert code == 1
-    assert f"{CLAUDE_BRIEF} differs from what adopt wrote; restore it, or pass --force" in err
-
-
-def test_a_recorded_short_skill_replaced_by_the_full_source_is_stale_to_check_and_to_install(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    """An existing native install whose short skill file is replaced by the source's exact full
-    text: `--check` calls it stale and names plain adopt, not --force, and the install without
-    --force writes the short form back. Breaks if `--check` and the install classify the file
-    differently."""
-
-    shipped = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
-    target = repo(tmp_path / "t")
-    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
-    write(target / CLAUDE_BRIEF, shipped.decode("utf-8"))
-
-    code, out, _ = run(capsys, str(target), "--check")
-
-    assert code == 1 and states(out)[f"{CLAUDE_BRIEF}"] == "stale"
-    assert f"stale    {CLAUDE_BRIEF}: {adopt.SOURCE_COPY}" in out.splitlines()
-    assert "edited" not in set(states(out).values())
-    assert names_plain_adopt(out, target)
-
-    code, out, err = run(capsys, str(target))
-
-    assert code == 0, err
-    assert f"render   {CLAUDE_BRIEF}: {adopt.SOURCE_COPY}" in out.splitlines()
-    assert_native_skill((target / CLAUDE_BRIEF).read_bytes(), "decision-brief")
-    code, out, _ = run(capsys, str(target), "--check")
-    assert code == 0 and set(states(out).values()) == {"current"}
-
-
-def test_a_recorded_short_skill_replaced_by_the_full_source_with_a_line_added_is_edited(
-    tmp_path: Path, capsys: Capture
-) -> None:
-    """The negative control: the same file with one local line more. Breaks if `--check` takes
-    it as the source's copy, or the install takes it without --force."""
-
-    shipped = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
-    target = repo(tmp_path / "t")
-    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
-    write(target / CLAUDE_BRIEF, shipped.decode("utf-8") + "\nOne more line.\n")
-
-    code, out, _ = run(capsys, str(target), "--check")
-
-    assert code == 1 and states(out)[f"{CLAUDE_BRIEF}"] == "edited"
-    assert not names_plain_adopt(out, target)
-
-    code, _, err = run(capsys, str(target))
-
-    assert code == 1
-    assert f"{CLAUDE_BRIEF} differs from what adopt wrote; restore it, or pass --force" in err
 
 
 def test_an_install_records_the_pointers_frame(tmp_path: Path, capsys: Capture) -> None:
@@ -638,7 +502,12 @@ def test_a_block_with_only_the_local_fragments_edit_needs_no_force_when_the_rele
 
     source = engine_copy(tmp_path)
     target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
-    assert run(capsys, str(target), "--fragments", "local,runtime", source=source)[0] == 0
+    assert (
+        run(
+            capsys, str(target), "--harness", "codex", "--fragments", "local,runtime", source=source
+        )[0]
+        == 0
+    )
     if recorded == "no-frame":
         without_frame(target)
         commit_all(target)
@@ -658,7 +527,7 @@ def test_a_block_with_only_the_local_fragments_edit_needs_no_force_when_the_rele
     assert code == 0, err
     assert rendered_lines(out) == [pointers]
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert line in text and f"{RUNTIME_CONDITION} later" in text
+    assert line in text and ".project/skills/diagnose/SKILL.md" in text
     code, out, _ = run(capsys, str(target), "--check", source=source)
     assert code == 0 and set(states(out).values()) == {"current"}, out
 
@@ -673,12 +542,17 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
 
     source = engine_copy(tmp_path)
     target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
-    assert run(capsys, str(target), "--fragments", "local,runtime", source=source)[0] == 0
+    assert (
+        run(
+            capsys, str(target), "--harness", "codex", "--fragments", "local,runtime", source=source
+        )[0]
+        == 0
+    )
     line = "**Distinguish** — committed ≠ pushed in this project."
     edited = edit_local(target, line, line)
     if shape == "frame-edited":
         agents = target / "AGENTS.md"
-        edited = edited.replace(f"- {RUNTIME_CONDITION}", "- when running")
+        edited = edited.replace("Optional: read", "Optional: always read")
         write(agents, edited)
     else:
         without_frame(target)
@@ -741,7 +615,7 @@ def test_a_file_edited_to_what_this_install_writes_needs_no_force(
     assert code == 1
     assert f"{skill} differs from what adopt wrote; restore it, or pass --force" in err
 
-    (target / skill).write_bytes(shipped.read_bytes())
+    (target / skill).write_bytes(adopt.skill_files(source, "decision-brief")["SKILL.md"])
     code, out, _ = run(capsys, str(target), "--check", source=source)
     assert states(out)[skill] == "stale"
 
@@ -749,7 +623,7 @@ def test_a_file_edited_to_what_this_install_writes_needs_no_force(
 
     assert code == 0, err
     assert kept(out) == [skill]
-    assert (target / skill).read_bytes() == shipped.read_bytes()
+    assert (target / skill).read_bytes() == adopt.skill_files(source, "decision-brief")["SKILL.md"]
 
 
 def test_a_manifest_of_another_format_is_refused_even_when_forced(
@@ -2011,7 +1885,7 @@ def test_the_commands_fragment_installs_a_manual_name_and_copy_and_removes_both(
     )
     guidance = (target / "AGENTS.md").read_text(encoding="utf-8")
     assert pointer not in guidance
-    assert "`explain-spec`, `.outcomebound/fragments/commands.md`." in guidance
+    assert "`.outcomebound/fragments/commands.md`." in guidance
     assert run(capsys, str(target), "--remove")[0] == 0
     assert snapshot(target) == before
 
@@ -2181,17 +2055,12 @@ def test_manual_fragment_has_no_read_line_and_local_stays_inline(
     shipped = fragments.load_all(ROOT)["python"]
     local = fragments.parse_fragment(local_fragment())
     body = blocks(target, "AGENTS.md")[adopt.POINTERS].body
-    inline, rules, pointers = body.rsplit("\n\n", 2)
+    inline, pointers = body.rsplit("\n\n", 1)
     assert inline == f"**local** (setup) — {local.applies}\n\n{local.body}"
-    expected = skill_pointer_lines(".agents/skills")
-    once_lines = READ_GUIDANCE
-    once = expected.index(once_lines[0])
-    assert rules.splitlines() == expected[: once - 1]
-    assert pointers.splitlines() == [
-        *once_lines,
-        *expected[once + len(once_lines) : -1],
-        expected[-1][:-1] + ", `.outcomebound/fragments/python.md`.",
-    ]
+    expected = (
+        skill_pointer_lines(".agents/skills")[0][:-1] + ", `.outcomebound/fragments/python.md`."
+    )
+    assert pointers == expected
     assert ": read .outcomebound/fragments/python.md" not in body
     assert shipped.body not in (target / "AGENTS.md").read_text(encoding="utf-8")
     assert (target / PYTHON_FRAGMENT).read_bytes() == (
@@ -2269,8 +2138,7 @@ def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragmen
             else:
                 assert data == file.read_bytes()
         path = f".claude/skills/{name}/SKILL.md"
-        assert f"- {ACT_READS[name]}: read {path}" in agents.splitlines()
-        assert f"`{name}`" not in agents.split("Read only when the person names it", 1)[1]
+        assert f"`{path}`" in agents.split("Optional: ", 1)[1]
     assert len(list((ROOT / "skills/slice-tickets").rglob("*.md"))) > 1
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0
@@ -2376,8 +2244,7 @@ def test_the_research_fragment_installs_the_same_bytes_in_any_directory(
     assert (first / shipped).read_bytes() == (ROOT / "fragments/setup/research.md").read_bytes()
     assert snapshot(first) == snapshot(second)
     guidance = (first / "AGENTS.md").read_text(encoding="utf-8")
-    assert f"- before running `outcomebound research`: read {shipped}" in guidance.splitlines()
-    assert f"`{shipped}`" not in guidance.split("Read only when the person names it", 1)[1]
+    assert f"`{shipped}`" in guidance.split("Optional: ", 1)[1]
     assert "pushing to the research repository" in guidance
 
 
@@ -2493,11 +2360,11 @@ def test_no_harness_installs_the_skills_where_the_pointers_name_them(
     }
     lines = skill_pointer_lines(".outcomebound/skills")
     for name, path in generic.items():
-        assert (target / path).read_bytes() == (ROOT / f"skills/{name}/SKILL.md").read_bytes()
+        assert_native_skill((target / path).read_bytes(), name)
     assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == lines
     skills = [r for r in manifest(target)["artifacts"] if r["kind"] == "skill"]
     assert sorted(r["path"] for r in skills) == sorted(
-        f".outcomebound/skills/{file}" for file in SKILL_FILES
+        f".outcomebound/skills/{file}" for file in NATIVE_SKILL_FILES
     )
     assert all(r["harnesses"] == ["generic"] for r in skills)
     assert any(line.startswith("UNVERIFIED generic") for line in out.splitlines())

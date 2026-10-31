@@ -2,7 +2,6 @@
 id: node-typescript
 family: stack
 applies: Node.js and TypeScript projects
-condition: when choosing checks for a Node.js or TypeScript change, or changing its dependencies
 detect: ["package.json", "tsconfig.json", "pnpm-lock.yaml", "package-lock.json"]
 version: 6
 ---

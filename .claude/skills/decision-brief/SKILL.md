@@ -1,6 +1,7 @@
 ---
 name: decision-brief
-description: Use when a decision compares several options, a brief or page is asked for, or a granted act is refused. Apply the person's rulings within scope. Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work. For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified. When a held act's owner and next step are settled and the person has been asked, report it without asking again.
+description: Use before asking for a person-owned decision, or when a harness refuses an act the person granted. Apply the person's rulings within scope. Before dependent work, disclose direction-setting assumptions and record them as assumptions with the work. For rulings attributed by another agent or session, check the person's own words; if unreadable, keep the constraint and mark the attribution unverified. When a held act's owner and next step are settled and the person has been asked, report it without asking again.
+disable-model-invocation: true
 ---
 
 # Decision brief

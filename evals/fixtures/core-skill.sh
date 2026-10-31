@@ -22,8 +22,19 @@ PY
 fi
 for root in .outcomebound/skills .agents/skills; do
   mkdir -p "$root"
-  # The arm's own install is already there, as that arm writes it (a full native install lists
-  # the skill by its short description): it stays.
+  # Keep the arm's own install where it is already present.
   [ -f "$root/using-outcomebound/SKILL.md" ] && continue
-  cp -R "${OB_EVAL_SOURCE:-$repo}/skills/using-outcomebound" "$root/"
+  python3 -B - "${OB_EVAL_SOURCE:-$repo}" "$root" <<'PYTHON'
+from pathlib import Path
+import sys
+
+source, root = map(Path, sys.argv[1:])
+sys.path.insert(0, str(source))
+from outcomebound_tools import adopt
+
+for relative, data in adopt.skill_files(source, "using-outcomebound").items():
+    path = root / "using-outcomebound" / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+PYTHON
 done

@@ -1,6 +1,6 @@
 ---
 name: review-council
-description: Use for a second opinion from another model or harness. Plan first; run only after the person's yes.
+description: Use when a second opinion from other models or harnesses is worthwhile (a design, release candidate or change whose miss would reach users). Plan first; run only after the person's yes.
 disable-model-invocation: true
 ---
 

@@ -2,7 +2,6 @@
 id: research
 family: setup
 applies: projects whose work depends on how models, harnesses, providers or agent practices behave
-condition: when a task depends on how a model, harness, provider or agent practice behaves
 detect: []
 edges: ["pushing to the research repository"]
 version: 3

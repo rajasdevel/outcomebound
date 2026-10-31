@@ -28,7 +28,6 @@ from outcomebound_tools.fragments import (
 )
 from outcomebound_tools.identity import parse_managed_blocks
 from outcomebound_tools.mechanisms import MECHANISMS
-from tests.adopt_helpers import ACT_READS, READ_GUIDANCE
 from tests.portable import engine, needs_symlinks, write
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -224,8 +223,6 @@ def test_every_shipped_fragment_parses_and_names_only_registry_mechanisms():
         assert fragment.family in ("stack", "setup")
         for name in fragment.mechanisms:
             assert name in MECHANISMS
-        # Each is reached through a pointer, so each says when its guidance is needed.
-        assert fragment.condition, f"{fragment.id} declares no condition"
 
 
 def test_a_catalog_loads_from_a_source_root(source):
@@ -250,14 +247,19 @@ def test_a_local_fragment_overrides_a_shipped_id(source, tmp_path):
     assert catalog["python"].detect == ("local.toml",)
 
 
-def test_condition_and_edges_are_optional_and_parsed():
-    """A fragment may leave both out; `edges` is a JSON list of acts, `condition` one line."""
+def test_edges_are_optional_and_condition_is_refused():
+    """Catch a retired condition field still being admitted by the parser."""
 
-    bare = parse_fragment(GOOD, "x.md")
-    assert (bare.condition, bare.edges) == ("", ())
-    extra = 'condition: before a release\nedges: ["pushing a tag", "publishing"]\nversion: 1'
-    full = parse_fragment(GOOD.replace("version: 1", extra), "x.md")
-    assert (full.condition, full.edges) == ("before a release", ("pushing a tag", "publishing"))
+    assert parse_fragment(GOOD, "x.md").edges == ()
+    extra = 'edges: ["pushing a tag", "publishing"]\nversion: 1'
+    assert parse_fragment(GOOD.replace("version: 1", extra), "x.md").edges == (
+        "pushing a tag",
+        "publishing",
+    )
+    with pytest.raises(FragmentError, match="condition"):
+        parse_fragment(
+            GOOD.replace("version: 1", "condition: before a release\nversion: 1"), "x.md"
+        )
 
 
 @pytest.mark.parametrize("edges", ["pushing a tag", "[1]", '[""]', "{}"])
@@ -403,7 +405,6 @@ def test_the_containers_fragment_parses_declares_no_edges_and_names_registry_mec
     assert fragment.family == "stack"
     assert fragment.edges == ()
     assert fragment.mechanisms == ("runtime-check",)
-    assert fragment.condition
     assert "." not in fragment.detect
 
 
@@ -564,16 +565,11 @@ def test_compose_cli_renders_the_facts_and_pointers_blocks_adopt_writes(source, 
     blocks = parse_managed_blocks(result.stdout)
     assert list(blocks) == ["project-facts", "guidance-pointers"]
     lines = blocks["guidance-pointers"].body.splitlines()
-    assert lines[-1] == (
-        "Read only when the person names it or a file you are reading directs you to it "
-        "(skills under `.outcomebound/skills/<name>/SKILL.md`): "
-        "`gather-requirements`, `tests-worth-keeping`, `review-findings`, "
-        "`explain-spec`, `.outcomebound/fragments/python.md`."
-    )
-    assert "\n".join(READ_GUIDANCE) in blocks["guidance-pointers"].body
-    for name, condition in ACT_READS.items():
-        assert f"- {condition}: read .outcomebound/skills/{name}/SKILL.md" in lines
-    assert ": read .outcomebound/fragments/python.md" not in result.stdout
+    assert len(lines) == 1 and lines[0].startswith("Optional: ")
+    assert re.findall(r"`([^`]+)`", lines[0]) == [
+        *(f".outcomebound/skills/{name}/SKILL.md" for name in SKILLS),
+        ".outcomebound/fragments/python.md",
+    ]
     assert "the runtime is the evidence" not in result.stdout
     assert "fragments=1 words=" in result.stderr and "bytes=" in result.stderr
 

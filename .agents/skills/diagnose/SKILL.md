@@ -1,6 +1,7 @@
 ---
 name: diagnose
-description: Use when a fix did not hold. A declared stub failing as declared is no defect; handle the requested work directly.
+description: Use when a failure's cause is unknown, a fix did not hold, or a defect is reported for repair. A declared stub failing as declared is no defect; handle the requested work directly.
+disable-model-invocation: true
 ---
 
 # Diagnose a failure

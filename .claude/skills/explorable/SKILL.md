@@ -1,6 +1,6 @@
 ---
 name: explorable
-description: Use for interactive pages, learning by trying or options tried with own numbers. A decision page accompanies the decision brief, never replaces it.
+description: Use when the person wants to understand something or have it explained to others, where trying teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. A decision page accompanies the decision brief, never replaces it.
 disable-model-invocation: true
 ---
 

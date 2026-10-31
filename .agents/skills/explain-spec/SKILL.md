@@ -1,6 +1,6 @@
 ---
 name: explain-spec
-description: Use when a person must act on an unfamiliar spec or does not follow it. A design walk-through qualifies; ask questions on it only when the person asks to test their understanding.
+description: Use when a person must act on a spec they did not write or says they do not follow it. A design walk-through qualifies; ask questions on it only when the person asks to test their understanding.
 disable-model-invocation: true
 ---
 

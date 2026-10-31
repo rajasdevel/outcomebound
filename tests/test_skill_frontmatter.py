@@ -7,22 +7,7 @@ from pathlib import Path
 import pytest
 
 from outcomebound_tools import adopt
-from tests.adopt_helpers import (
-    ACT_READS,
-    BOUNDARIES,
-    CONDITIONAL_READS,
-    INSTALLED_RULES,
-    MANUAL_SKILLS,
-    READ_GUIDANCE,
-    ROOT,
-    SHORT_DESCRIPTIONS,
-    Capture,
-    assert_native_skill,
-    engine_copy,
-    repo,
-    run,
-    states,
-)
+from tests.adopt_helpers import ROOT, Capture, assert_native_skill, engine_copy, repo, run, states
 from tests.portable import write
 
 
@@ -104,136 +89,62 @@ def test_NEGATIVE_CONTROL_an_unquoted_colon_or_hash_in_a_value_is_reported():
 
 
 @pytest.mark.parametrize(
-    "harness,root",
+    "harness",
     [
-        ("codex", ".agents/skills"),
-        ("claude-code", ".claude/skills"),
-        ("amp", ".agents/skills"),
-        ("cursor", ".cursor/skills"),
-        ("gemini", ".gemini/skills"),
-        ("codex,claude-code", ".agents/skills"),
+        "codex",
+        "claude-code",
+        "amp",
+        "cursor",
+        "gemini",
+        "generic",
+        "codex,claude-code",
+        "codex,generic",
+        "codex,claude-code,generic",
     ],
 )
-def test_full_native_install_has_short_catalog_conditional_reads_and_manual_names(
-    tmp_path: Path, capsys: Capture, harness: str, root: str
-) -> None:
-    """Catches lost reread/path safeguards, decision triggers, inline rules or manual names,
-    and changes to skill bodies or references when the native catalog is shortened."""
-
-    target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
-    code, _, err = run(capsys, str(target), "--harness", harness)
-    assert code == 0, err
-    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert set(SHORT_DESCRIPTIONS) == set(adopt.SKILLS)
-    assert "\n".join(READ_GUIDANCE) in agents
-    assert (
-        "Read only when the person names it or a file you are reading directs you to it "
-        f"(skills under `{root}/<name>/SKILL.md`): "
-        "`gather-requirements`, `tests-worth-keeping`, `review-findings`, `explain-spec`."
-    ) in agents.splitlines()
-    for name in adopt.SKILLS:
-        if name in ACT_READS:
-            assert f"- {ACT_READS[name]}: read {root}/{name}/SKILL.md" in agents.splitlines()
-            assert f"`{name}`" not in agents.split("Read only when the person names it", 1)[1]
-        elif name in MANUAL_SKILLS:
-            assert f": read {root}/{name}/SKILL.md" not in agents
-            assert f"`{name}`" in agents.split("Read only when the person names it", 1)[1]
-        else:
-            assert f"- {CONDITIONAL_READS[name]}: read {root}/{name}/SKILL.md" in agents
-        for native in adopt.routes(ROOT, harness.split(",")):
-            data = (target / native.skills / name / "SKILL.md").read_bytes()
-            assert_native_skill(data, name)
-            fm, _ = _frontmatter(target / native.skills / name / "SKILL.md")
-            assert all(not _plain_scalar_problem(line) for line in fm.splitlines())
-            for note in (ROOT / "skills" / name / "references").glob("*.md"):
-                assert (
-                    target / native.skills / name / "references" / note.name
-                ).read_bytes() == note.read_bytes()
-    assert ": read " + root + "/using-outcomebound/references/continuity.md" not in agents
-    for rule in INSTALLED_RULES.values():
-        for line in rule:
-            assert "- " + line in agents.splitlines()
-    code, out, _ = run(capsys, str(target), "--check")
-    assert code == 0 and set(states(out).values()) == {"current"}
-
-
-@pytest.mark.parametrize("harness", ["codex", "claude-code"])
-def test_full_native_install_keeps_every_later_sentence_of_each_source_description(
-    tmp_path: Path, capsys: Capture, harness: str
-) -> None:
-    """Catches a short catalog line that drops a boundary (a declared stub is no defect; not for
-    an accepted ticket): each sentence after a source description's first is in the installed
-    description or among the pointer block's rules."""
-
-    target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
-    code, _, err = run(capsys, str(target), "--harness", harness)
-    assert code == 0, err
-    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
-    for name in adopt.SKILLS:
-        source = adopt.description((ROOT / "skills" / name / "SKILL.md").read_bytes())
-        later = source.split(". ", 1)[1] if ". " in source else ""
-        for native in adopt.routes(ROOT, [harness]):
-            installed = adopt.description((target / native.skills / name / "SKILL.md").read_bytes())
-            assert not later or later in installed or later in agents.replace("\n- ", " "), name
-
-
-@pytest.mark.parametrize(
-    "harness,facts_only",
-    [
-        ("generic", False),
-        ("codex,generic", False),
-        ("codex", True),
-        ("claude-code", True),
-        ("amp", True),
-        ("cursor", True),
-        ("gemini", True),
-        ("codex,claude-code,generic", True),
-        ("generic", True),
-    ],
-)
-def test_other_install_routes_and_standalone_sources_keep_full_descriptions(
+@pytest.mark.parametrize("facts_only", [False, True])
+def test_every_installed_skill_is_manual_and_keeps_its_description(
     tmp_path: Path, capsys: Capture, harness: str, facts_only: bool
 ) -> None:
-    """Catches applying short descriptions to the source, generic copies or facts-only
-    copies, including facts-only native discovery of the common rules and continuity route."""
+    """Catch missing manual flags, changed source descriptions or wrong pointer roots."""
 
     target = repo(tmp_path / "project", {"CLAUDE.md": "# Project\n"})
     flags = ["--facts-only"] if facts_only else []
     code, _, err = run(capsys, str(target), "--harness", harness, *flags)
     assert code == 0, err
-    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
-    if facts_only:
-        assert ": read " not in agents
-    for name in adopt.SKILLS:
-        source = (ROOT / "skills" / name / "SKILL.md").read_bytes()
-        full = adopt.description(source)
-        assert len(full) > len(SHORT_DESCRIPTIONS[name])
-        if name in BOUNDARIES:
-            assert BOUNDARIES[name] in full
-        # The unqualified source/standalone reader must never receive installed shortening.
-        assert adopt.skill_file(ROOT, name) == source
-        assert adopt.skill_files(ROOT, name)["SKILL.md"] == source
-        for route in adopt.routes(ROOT, harness.split(",")):
+    routes = adopt.routes(ROOT, harness.split(","))
+    for route in routes:
+        for name in adopt.SKILLS:
             file = target / route.skills / name / "SKILL.md"
             if facts_only and not route.native:
                 assert not file.exists()
-            elif route.native and not facts_only:
-                assert_native_skill(file.read_bytes(), name)
-            else:
-                assert file.read_bytes() == source
-    if not facts_only:
-        assert ": read .outcomebound/skills/diagnose/SKILL.md" in agents
+                continue
+            assert_native_skill(file.read_bytes(), name)
+            assert (file.parent / "agents/openai.yaml").read_text("utf-8") == (
+                "policy:\n  allow_implicit_invocation: false\n"
+            )
+            for note in (ROOT / "skills" / name / "references").glob("*.md"):
+                assert (file.parent / "references" / note.name).read_bytes() == note.read_bytes()
+    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+    if facts_only:
+        assert "Optional:" not in agents
+    else:
+        roots = sorted({route.skills for route in routes})
+        root = ".outcomebound/skills" if ".outcomebound/skills" in roots else roots[0]
+        (optional,) = [line for line in agents.splitlines() if line.startswith("Optional: ")]
+        assert re.findall(r"`([^`]+)`", optional) == [
+            f"{root}/{name}/SKILL.md" for name in adopt.SKILLS
+        ]
+        assert "adopt-outcomebound" not in optional
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0 and set(states(out).values()) == {"current"}
 
 
 @pytest.mark.parametrize("harness", ["codex,probe", "probe,codex"])
-def test_native_and_non_native_routes_sharing_a_directory_keep_full_descriptions(
+def test_shared_skill_directory_is_manual_for_native_and_generic_readers(
     tmp_path: Path, capsys: Capture, harness: str
 ) -> None:
-    """Catches shortening a shared copy because one of its routes discovers skills natively.
-    The non-native reader needs every full trigger and safeguard, in either selection order.
-    """
+    """Catch either route's selection order disabling manual flags in a shared directory."""
 
     source = engine_copy(tmp_path)
     table_path = source / "adapters/harnesses.json"
@@ -241,84 +152,26 @@ def test_native_and_non_native_routes_sharing_a_directory_keep_full_descriptions
     table["probe"] = {**table["codex"], "native_skills": False}
     write(table_path, json.dumps(table))
     target = repo(tmp_path / "project")
-
-    code, _, err = run(capsys, str(target), "--harness", harness, source=source)
-
-    assert code == 0, err
-    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert run(capsys, str(target), "--harness", harness, source=source)[0] == 0
     for name in adopt.SKILLS:
-        shipped = source / "skills" / name
-        installed = target / ".agents/skills" / name
-        assert (installed / "SKILL.md").read_bytes() == (shipped / "SKILL.md").read_bytes()
-        pointer = f": read .agents/skills/{name}/SKILL.md"
-        if name in ACT_READS:
-            assert f"- {ACT_READS[name]}{pointer}" in agents.splitlines()
-        else:
-            assert (pointer in agents) is (name not in MANUAL_SKILLS)
-        assert not (installed / "agents/openai.yaml").exists()
-        for reference in (shipped / "references").glob("*.md"):
-            assert (
-                installed / "references" / reference.name
-            ).read_bytes() == reference.read_bytes()
-    code, out, _ = run(capsys, str(target), "--check", source=source)
-    assert code == 0 and set(states(out).values()) == {"current"}
-
-
-def test_native_upgrade_and_mode_switches_render_and_check_the_selected_description(
-    tmp_path: Path, capsys: Capture, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Catches an upgrade mistaking a previously full description for a local edit, and
-    --check comparing installed short bytes with source bytes or the wrong recorded mode."""
-
-    target = repo(tmp_path / "project")
-    with monkeypatch.context() as patch:
-        patch.setattr(adopt, "NATIVE_DESCRIPTIONS", {})
-        assert run(capsys, str(target), "--harness", "codex")[0] == 0
-    code, out, _ = run(capsys, str(target), "--check")
-    assert code > 0 and states(out)[".agents/skills/diagnose/SKILL.md"] == "stale"
-    assert run(capsys, str(target))[0] == 0
-    for flags in [("--facts-only",), ("--full",), ("--facts-only",), ("--full",)]:
-        code, _, err = run(capsys, str(target), *flags)
-        assert code == 0, err
-        data = (target / ".agents/skills/diagnose/SKILL.md").read_bytes()
-        if flags == ("--facts-only",):
-            assert data == (ROOT / "skills/diagnose/SKILL.md").read_bytes()
-        else:
-            assert_native_skill(data, "diagnose")
-        code, out, _ = run(capsys, str(target), "--check")
-        assert code == 0 and set(states(out).values()) == {"current"}
-
-
-@pytest.mark.parametrize(
-    "harness,root", [("codex", ".agents/skills"), ("claude-code", ".claude/skills")]
-)
-def test_manual_skills_have_both_native_flags_and_auto_skills_have_neither(
-    tmp_path: Path, capsys: Capture, harness: str, root: str
-) -> None:
-    """Catches missing manual flags, disabled auto skills, lost or broadened act reads,
-    or --check looking for a generated policy file in the source skill."""
-
-    target = repo(tmp_path / "project")
-    code, _, err = run(capsys, str(target), "--harness", harness)
-    assert code == 0, err
-    agents = (target / "AGENTS.md").read_text(encoding="utf-8")
-    for name in MANUAL_SKILLS:
-        fm, _ = _frontmatter(target / root / name / "SKILL.md")
-        assert "disable-model-invocation: true" in fm.splitlines()
-        assert (target / root / name / "agents/openai.yaml").read_text("utf-8") == (
+        file = target / ".agents/skills" / name / "SKILL.md"
+        assert_native_skill(file.read_bytes(), name, source)
+        assert (file.parent / "agents/openai.yaml").read_text("utf-8") == (
             "policy:\n  allow_implicit_invocation: false\n"
         )
-        if name in ACT_READS:
-            assert f"- {ACT_READS[name]}: read {root}/{name}/SKILL.md" in agents.splitlines()
-        else:
-            assert f": read {root}/{name}/SKILL.md" not in agents
-    for name in ("decision-brief", "diagnose"):
-        fm, _ = _frontmatter(target / root / name / "SKILL.md")
-        assert "disable-model-invocation" not in fm
-        assert not (target / root / name / "agents/openai.yaml").exists()
-    assert f"- when a fix did not hold: read {root}/diagnose/SKILL.md" in agents
-    assert (
-        "- when a decision compares several options, the person asks for a brief or a page, or "
-        f"a harness refuses an act the person granted: read {root}/decision-brief/SKILL.md"
-    ) in agents
-    assert run(capsys, str(target), "--check")[0] == 0
+    assert run(capsys, str(target), "--check", source=source)[0] == 0
+
+
+def test_mode_switches_keep_manual_flags_and_descriptions(tmp_path: Path, capsys: Capture) -> None:
+    """Catch a mode switch changing native skill content or losing generated policy files."""
+
+    target = repo(tmp_path / "project")
+    assert run(capsys, str(target), "--harness", "codex")[0] == 0
+    original = (target / ".agents/skills/diagnose/SKILL.md").read_bytes()
+    for flag in ("--facts-only", "--full", "--facts-only", "--full"):
+        assert run(capsys, str(target), flag)[0] == 0
+        assert (target / ".agents/skills/diagnose/SKILL.md").read_bytes() == original
+        assert (target / ".agents/skills/diagnose/agents/openai.yaml").read_text("utf-8") == (
+            "policy:\n  allow_implicit_invocation: false\n"
+        )
+        assert run(capsys, str(target), "--check")[0] == 0

@@ -2,7 +2,6 @@
 id: multi-agent
 family: stack
 applies: repositories where work is delegated to subagents or parallel workers
-condition: when delegating to a subagent or integrating a delegate's work
 detect: [".claude/agents/*.md", ".codex/agents/*.md", ".agents/*.md"]
 version: 11
 ---

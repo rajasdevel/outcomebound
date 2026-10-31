@@ -2,7 +2,6 @@
 id: containers
 family: stack
 applies: projects that build, run or clean up containers for local development
-condition: before container work that a local-development task already needs
 detect: ["Dockerfile", "Containerfile", "compose.yml", "compose.yaml", "docker-compose.yml", "docker-compose.yaml", ".devcontainer/devcontainer.json"]
 version: 1
 ---

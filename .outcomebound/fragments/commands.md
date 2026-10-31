@@ -2,7 +2,6 @@
 id: commands
 family: setup
 applies: any repository where an agent runs commands
-condition: when running a command whose output you read
 detect: ["."]
 version: 14
 ---

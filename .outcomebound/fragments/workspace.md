@@ -2,7 +2,6 @@
 id: workspace
 family: setup
 applies: repositories where several agents work in one machine's checkout
-condition: when a worktree, handoff or resume is involved, you keep evidence another run or person must use, or a write under `.agents/` is refused
 detect: [".agents/worktrees", ".agents/work", ".agents/handoffs", ".agents/shared-memory"]
 version: 18
 ---

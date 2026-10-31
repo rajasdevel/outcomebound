@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when handing an accepted ticket from the store to its implementer. For slicing, use `slice-tickets`; for a prompt or spec outside the ticket store, work directly.
+description: Use when handing an accepted ticket from the ticket store to its implementing agent or model. For slicing, use `slice-tickets`; for a prompt or spec outside the ticket store, work directly.
 disable-model-invocation: true
 ---
 
