@@ -1,0 +1,11 @@
+{
+  "done": [
+    "python3 -B tools/docs_check.py"
+  ],
+  "fragments": [
+    "commands",
+    "workspace",
+    "python"
+  ],
+  "sandbox": "eval"
+}

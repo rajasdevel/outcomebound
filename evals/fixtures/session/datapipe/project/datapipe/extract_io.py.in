@@ -1,0 +1,56 @@
+"""Read-only CSV inspection used by manifest preflight and archive audits."""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+from pathlib import Path
+
+from datapipe.catalog import Column, Table
+
+
+def validate(value: str, column: Column) -> None:
+    if value == "":
+        if not column.nullable:
+            raise ValueError(f"required column {column.name} is empty")
+        return
+    convert = {"integer": int, "real": float}.get(column.kind)
+    if convert is not None:
+        try:
+            convert(value)
+        except ValueError:
+            raise ValueError(f"invalid {column.kind} in {column.name}") from None
+
+
+def inspect(path: Path, table: Table) -> dict:
+    """Check the complete extract; never create a warehouse or a checkpoint."""
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    count = 0
+    keys = set()
+    with path.open(encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        expected = [column.name for column in table.columns]
+        if reader.fieldnames != expected:
+            raise ValueError("extract header differs from catalog")
+        for row in reader:
+            if None in row or any(value is None for value in row.values()):
+                raise ValueError("extract row has the wrong width")
+            for column in table.columns:
+                validate(row[column.name], column)
+            key = tuple(row[name] for name in table.key)
+            if key in keys:
+                raise ValueError("duplicate extract primary key")
+            keys.add(key)
+            count += 1
+    return {"rows": count, "checksum": digest}
+
+
+def within(root: Path, name: str) -> Path:
+    """Resolve links before opening; a lexical relative path is not enough."""
+    base = root.resolve()
+    path = (base / name).resolve()
+    if not path.is_relative_to(base) or path == base:
+        raise ValueError("extract resolves outside its root")
+    if not path.is_file():
+        raise ValueError("extract file is missing")
+    return path

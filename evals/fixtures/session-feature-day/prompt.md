@@ -1,0 +1,1 @@
+Finish the fast route through HTTP and offline jobs; follow docs/specs/feature-day.md. Test, document and commit the item. You may push tested commits to local origin main after focused tests pass. Stage, prod and tags wait for me.

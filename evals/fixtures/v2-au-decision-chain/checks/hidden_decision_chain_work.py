@@ -74,7 +74,9 @@ class ExportHidden(unittest.TestCase):
             )
             self.assertEqual(done.returncode, 0, done.stderr)
             want = export_csv(load_book(data), common.START, common.END)
-            self.assertEqual(out.read_text(encoding="utf-8"), want)
+            # The file as written: the ticket names no line ending, so the command must write
+            # exactly what the function returns, whichever ending that is.
+            self.assertEqual(out.read_bytes().decode("utf-8"), want)
             self.assertEqual({path.name: path.read_bytes() for path in data.iterdir()}, before)
 
 

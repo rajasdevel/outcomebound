@@ -1,0 +1,26 @@
+"""Regression examples for exact delivery-attempt selection."""
+
+import unittest
+
+from datapipe.audit import report
+
+
+class AuditRegression(unittest.TestCase):
+    def test_committed_attempt_and_its_rejections(self):
+        rows = {row["feed"]: row for row in report("data/nightly.sqlite", "2026-10-21")}
+        self.assertEqual(
+            rows["alpha"],
+            {
+                "feed": "alpha",
+                "expected_rows": 4,
+                "loaded_rows": 2,
+                "rejected_rows": 0,
+                "missing": [1],
+                "orphan": [],
+                "mismatched": [],
+            },
+        )
+        self.assertEqual(rows["beta"]["rejected_rows"], 1)
+        self.assertEqual(rows["gamma"]["orphan"], [9])
+        self.assertEqual(rows["delta"]["mismatched"], [0])
+        self.assertEqual(report("data/nightly.sqlite", "empty"), [])

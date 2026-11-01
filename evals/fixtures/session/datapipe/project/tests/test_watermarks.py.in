@@ -1,0 +1,47 @@
+import unittest
+from datetime import datetime, timedelta, timezone
+
+from datapipe.watermarks import assign, replay_start, utc, windows
+
+
+class WatermarkTests(unittest.TestCase):
+    def setUp(self):
+        self.start = datetime(2026, 10, 1, tzinfo=timezone.utc)
+
+    def test_partial_last_window(self):
+        end = self.start + timedelta(minutes=150)
+        result = windows(self.start, end)
+        self.assertEqual(len(result), 3)
+        self.assertEqual(result[-1].end, end)
+        self.assertEqual(result[-1].start, self.start + timedelta(hours=2))
+
+    def test_inside_window(self):
+        spans = windows(self.start, self.start + timedelta(hours=2))
+        result = assign([self.start + timedelta(minutes=12)], spans)
+        self.assertEqual(result, [[0], []])
+
+    def test_empty_window(self):
+        self.assertEqual(windows(self.start, self.start), [])
+
+    def test_backwards_refused(self):
+        with self.assertRaisesRegex(ValueError, "before"):
+            windows(self.start, self.start - timedelta(hours=1))
+
+    def test_zero_minutes_refused(self):
+        with self.assertRaisesRegex(ValueError, "positive"):
+            windows(self.start, self.start, 0)
+
+    def test_naive_refused(self):
+        with self.assertRaisesRegex(ValueError, "timezone"):
+            utc(datetime(2026, 10, 1))
+
+    def test_offset_normalized(self):
+        value = datetime(2026, 10, 1, 2, tzinfo=timezone(timedelta(hours=2)))
+        self.assertEqual(utc(value), self.start)
+
+    def test_replay_overlap(self):
+        self.assertEqual(replay_start(self.start, 30), self.start - timedelta(minutes=30))
+
+    def test_negative_lateness_refused(self):
+        with self.assertRaisesRegex(ValueError, "negative"):
+            replay_start(self.start, -1)

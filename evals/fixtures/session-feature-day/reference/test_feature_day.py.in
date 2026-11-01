@@ -1,0 +1,93 @@
+"""Regression tests for the fast handler and the public catalog."""
+
+import json
+import unittest
+
+from chatsvc.app import build_service
+from chatsvc.provider import Response
+from fakeprovider import FakeProvider
+
+
+class Sequence:
+    def __init__(self, statuses):
+        self.statuses = list(statuses)
+        self.paths = []
+
+    def send(self, method, path, headers, body):
+        self.paths.append(path)
+        status = self.statuses.pop(0)
+        return Response(status, {"retry-after-ms": "250"}, b'{"output":"ok"}')
+
+
+class FeatureDayTest(unittest.TestCase):
+    def post(self, svc, payload):
+        return svc.handle("POST", "/v2/chat", {"x-api-key": "unit"}, json.dumps(payload).encode())
+
+    def test_alias_is_resolved_before_the_call(self):
+        upstream = Sequence([200])
+        svc = build_service("config", upstream, log=lambda line: None)
+        status, _, body = self.post(
+            svc, {"model": "fast", "messages": [{"role": "user", "content": "x"}]}
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["model"], "chat-fast-2")
+        self.assertEqual(upstream.paths, ["/v1/models/chat-fast-2:generate"])
+
+    def test_429_waits_for_the_provider(self):
+        waits = []
+        upstream = Sequence([429, 200])
+        svc = build_service("config", upstream, sleep=waits.append, log=lambda line: None)
+        status, _, _ = self.post(svc, {"messages": [{"role": "user", "content": "x"}]})
+        self.assertEqual(status, 200)
+        self.assertEqual(waits, [0.25])
+        self.assertEqual(len(upstream.paths), 2)
+
+    def test_404_is_not_retried(self):
+        upstream = Sequence([404])
+        svc = build_service("config", upstream, log=lambda line: None)
+        status, _, _ = self.post(svc, {"messages": [{"role": "user", "content": "x"}]})
+        self.assertEqual(status, 502)
+        self.assertEqual(len(upstream.paths), 1)
+
+    def test_exhausted_quota_returns_busy_with_a_hint(self):
+        upstream = Sequence([429, 429, 429, 429])
+        waits = []
+        svc = build_service("config", upstream, sleep=waits.append, log=lambda line: None)
+        status, headers, body = self.post(svc, {"messages": [{"role": "user", "content": "x"}]})
+        self.assertEqual(status, 503)
+        self.assertEqual(headers["retry-after"], "1")
+        self.assertEqual(json.loads(body)["attempts"], 4)
+        self.assertEqual(waits, [0.25, 0.25, 0.25])
+
+    def test_invalid_input_does_not_call_the_provider(self):
+        upstream = Sequence([])
+        svc = build_service("config", upstream, log=lambda line: None)
+        status, _, _ = self.post(svc, {"messages": []})
+        self.assertEqual(status, 400)
+        self.assertEqual(upstream.paths, [])
+
+    def test_old_route_keeps_its_alias(self):
+        svc = build_service("config", FakeProvider(quota=1000), log=lambda line: None)
+        status, _, body = svc.handle(
+            "POST",
+            "/v1/chat",
+            {"x-api-key": "unit"},
+            b'{"model":"small","messages":[{"role":"user","content":"x"}]}',
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)["model"], "chat-small-3")
+
+
+class CatalogTest(unittest.TestCase):
+    def test_catalog_has_only_public_fields(self):
+        svc = build_service("config", Sequence([]), log=lambda line: None)
+        status, _, body = svc.handle("GET", "/v2/routes", {}, b"")
+        self.assertEqual(status, 200)
+        rows = json.loads(body)["routes"]
+        self.assertEqual([row["path"] for row in rows], ["/v1/chat", "/v2/chat"])
+        self.assertEqual(set(rows[1]), {"path", "aliases", "default_model", "max_tokens"})
+        self.assertEqual(rows[1]["aliases"]["fast"], "chat-fast-2")
+
+    def test_catalog_post_is_405_without_auth(self):
+        svc = build_service("config", Sequence([]), log=lambda line: None)
+        self.assertEqual(svc.handle("POST", "/v2/routes", {}, b"")[0], 405)

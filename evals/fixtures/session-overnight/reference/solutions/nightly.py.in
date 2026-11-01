@@ -1,0 +1,54 @@
+"""Assemble complete validated feed jobs without loading data."""
+
+import hashlib
+import sqlite3
+from pathlib import Path
+
+from datapipe.audit import report
+from datapipe.dispatch import pending
+from datapipe.manifests import preflight
+from datapipe.restore_copies import plan
+
+
+def build(database, day, root, copies, catalog, receipts):
+    audit = report(database, day)
+    selected = plan(database, day, root, copies)
+    with sqlite3.connect(Path(database).resolve().as_uri() + "?mode=ro", uri=True) as db:
+        expected = {
+            (f, p): (n, g)
+            for f, p, n, g in db.execute(
+                "SELECT feed, part, rows, generation FROM extracts WHERE day=?", (day,)
+            )
+        }
+    jobs, held = [], []
+    for row in audit:
+        feed = row["feed"]
+        reason = None
+        if row["orphan"]:
+            reason = "orphan"
+        elif row["mismatched"]:
+            reason = "row-count"
+        elif any(item["feed"] == feed for item in selected["blocked"]):
+            reason = "no-valid-copy"
+        if reason:
+            held.append({"feed": feed, "reason": reason})
+            continue
+        group = [item for item in selected["restore"] if item["feed"] == feed]
+        if not group:
+            continue
+        entries = [
+            {
+                "table": feed,
+                "file": item["file"],
+                "rows": expected[feed, item["part"]][0],
+                "checksum": hashlib.sha256((Path(root) / item["file"]).read_bytes()).hexdigest(),
+            }
+            for item in group
+        ]
+        try:
+            preflight({"version": 1, "extracts": entries}, Path(root), catalog)
+        except ValueError:
+            held.append({"feed": feed, "reason": "extract-invalid"})
+            continue
+        jobs.extend({**item, "generation": expected[feed, item["part"]][1]} for item in group)
+    return {"jobs": pending(jobs, receipts), "held": held}

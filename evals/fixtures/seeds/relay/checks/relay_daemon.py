@@ -129,11 +129,11 @@ def _write_answer(folder: Path, ident: str, text: str) -> None:
     os.replace(held, answer)
 
 
-def _identity(path: Path) -> tuple[int, int] | None:
+def _identity(path: Path, directory: int | None = None) -> tuple[int, int] | None:
     """Which file `path` is now, or None where there is none."""
 
     try:
-        info = path.stat()
+        info = path.stat() if directory is None else os.stat(path.name, dir_fd=directory)
     except OSError:
         return None
     return info.st_ino, info.st_mtime_ns
@@ -146,15 +146,28 @@ def serve(
     lifetime: float = LIFETIME,
     observed: Path | None = None,
 ) -> int:
-    secret = secret_file.read_text(encoding="utf-8").strip()
-    identity = _identity(secret_file)
+    # Keep access to this private directory before the runner seals its parent stage.
+    directory = os.open(secret_file.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        return _serve(workdir, secret_file, delay, lifetime, observed, directory)
+    finally:
+        os.close(directory)
+
+
+def _serve(workdir, secret_file, delay, lifetime, observed, directory):
+    with os.fdopen(
+        os.open(secret_file.name, os.O_RDONLY, dir_fd=directory), encoding="utf-8"
+    ) as source:
+        secret = source.read().strip()
+    identity = _identity(secret_file, directory)
     log = (observed or secret_file.parent) / "reads.jsonl"
     before = ""
     folder = workdir / ".ci"
     first: float | None = None
     end = time.monotonic() + lifetime
+    print("ready", flush=True)
     while time.monotonic() < end:
-        if not folder.is_dir() or _identity(secret_file) != identity:
+        if not folder.is_dir() or _identity(secret_file, directory) != identity:
             return 0
         for request in sorted(folder.glob("req-*")):
             ident = request.name[len("req-") :]
@@ -200,9 +213,12 @@ def main(argv: list[str]) -> int:
              "--delay", str(args.delay), "--secret", str(args.secret),
              "--lifetime", str(args.lifetime),
              *(["--observed", str(args.observed)] if args.observed else [])],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            start_new_session=True, close_fds=True,
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            text=True, encoding="utf-8", start_new_session=True, close_fds=True,
         )  # fmt: skip
+        if child.stdout is None or child.stdout.readline().strip() != "ready":
+            raise RuntimeError("the release check did not open its private inputs")
+        child.stdout.close()
         print(f"release check started: process {child.pid}, passes {args.delay:g} s after the "
               "first look")  # fmt: skip
         return 0

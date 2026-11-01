@@ -1,0 +1,33 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from datapipe.incidents import Alert, alerts, recurring, summary
+
+
+class IncidentTests(unittest.TestCase):
+    def test_alert_parser(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "alerts.log"
+            path.write_text(
+                "ignored line\n2026-10-01T03:10:00Z FIRING disk_read high\n", encoding="utf-8"
+            )
+            self.assertEqual(
+                alerts(path), [Alert("2026-10-01T03:10:00Z", "FIRING", "disk_read", "high")]
+            )
+
+    def test_recurring_excludes_resolved(self):
+        rows = [
+            Alert("2026-10-01T03:10:00Z", "FIRING", "disk", "high"),
+            Alert("2026-10-02T03:10:00Z", "RESOLVED", "disk", "low"),
+        ]
+        self.assertEqual(recurring(rows, "disk"), ["2026-10-01"])
+
+    def test_empty_reader_summary(self):
+        self.assertEqual(summary([], []), "no query samples in this window")
+
+    def test_summary(self):
+        self.assertEqual(
+            summary([{"query": "sessions", "bytes": 40}], ["2026-10-01"]),
+            "sessions: 40 bytes; alert on 1 days",
+        )

@@ -1,0 +1,40 @@
+"""Regression examples for typed keys across distinct CSV shards."""
+
+import hashlib
+import tempfile
+import unittest
+from datetime import datetime, timezone
+from pathlib import Path
+
+from datapipe.catalog import Column, Table
+from datapipe.checkpoints import Checkpoint
+from datapipe.manifests import preflight
+from datapipe.replay_plan import preview
+
+
+class ShardRegression(unittest.TestCase):
+    def test_integer_aliases_across_files_refuse_preview(self):
+        table = Table("orders", (Column("id", "integer"),), ("id",))
+        catalog = {"orders": table}
+        point = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            entries = []
+            for name, body in (("a.csv", b"id\n01\n"), ("b.csv", b"id\n1\n")):
+                (root / name).write_bytes(body)
+                entries.append(
+                    {
+                        "table": "orders",
+                        "file": name,
+                        "rows": 1,
+                        "checksum": hashlib.sha256(body).hexdigest(),
+                    }
+                )
+            document = {"version": 1, "extracts": entries}
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                preflight(document, root, catalog)
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                preview(
+                    Checkpoint("orders", 0, 0), [], point, point, document, root, catalog, catalog
+                )
+            self.assertEqual(sorted(p.name for p in root.iterdir()), ["a.csv", "b.csv"])

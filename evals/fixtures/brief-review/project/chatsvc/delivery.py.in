@@ -1,0 +1,13 @@
+"""A serial delivery worker. One worker owns the ledger and receipts."""
+
+from chatsvc.delivery_schema import parse
+
+
+def deliver(ledger, receipts, payload):
+    event = parse(payload)
+    if receipts.contains(event.event_id):
+        return "duplicate"
+    ledger.charge(event.tenant, event.tokens, event.event_id)
+    ledger.flush()
+    receipts.record(event.event_id)
+    return "charged"

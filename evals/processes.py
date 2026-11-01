@@ -31,6 +31,8 @@ def _process_table() -> dict[int, tuple[int, str]] | None:
             timeout=1,
             encoding="utf-8",
         )
+        if listed.returncode:
+            return None
         return {
             int(row.split()[0]): (int(row.split()[1]), row.split()[2][:1])
             for row in listed.stdout.splitlines()
@@ -40,7 +42,7 @@ def _process_table() -> dict[int, tuple[int, str]] | None:
         return None
 
 
-def stop_descendants(pid: int) -> None:
+def stop_descendants(pid: int) -> set[int]:
     """Stop the task's current POSIX descendants before their parent is reaped.
 
     A subprocess can start a separate session. The existing process-group stop
@@ -63,7 +65,7 @@ def stop_descendants(pid: int) -> None:
     import signal
 
     if os.name == "nt":
-        return
+        return set()
 
     def suspend(target: int) -> None:
         with contextlib.suppress(ProcessLookupError, PermissionError):
@@ -94,6 +96,52 @@ def stop_descendants(pid: int) -> None:
         for child in owned - {pid}:
             with contextlib.suppress(ProcessLookupError, PermissionError):
                 os.kill(child, signal.SIGKILL)
+    return owned - {pid}
+
+
+def _running_members(group: int) -> list[int]:
+    """The members of a process group that have not exited, as the host's table shows them."""
+    import contextlib
+
+    table = _process_table()
+    if table is None:
+        raise ValueError("cannot verify sealed call cleanup")
+    live = []
+    for pid, (_, state) in table.items():
+        if state == "Z":
+            continue
+        with contextlib.suppress(ProcessLookupError):
+            if os.getpgid(pid) == group:
+                live.append(pid)
+    return live
+
+
+def stop_call_group(group: int) -> None:
+    """Stop and verify a registered call group before any sealed input is reopened."""
+    import contextlib
+    import signal
+    import time
+
+    deadline = time.monotonic() + 5
+    while True:
+        try:
+            os.killpg(group, 0)
+        except ProcessLookupError:
+            return
+        except PermissionError:
+            # macOS refuses a group whose members have all exited and wait to be reaped; the
+            # table tells that apart from a member that still runs.
+            pass
+        live = _running_members(group)
+        if not live:
+            return
+        for pid in live:
+            stop_descendants(pid)
+        with contextlib.suppress(ProcessLookupError, PermissionError):
+            os.killpg(group, signal.SIGKILL)
+        if time.monotonic() >= deadline:
+            raise ValueError("sealed call still has live processes")
+        time.sleep(0.05)
 
 
 def bounded_command(

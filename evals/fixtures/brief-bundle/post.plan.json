@@ -1,0 +1,157 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 90,
+  "claims": [
+    {
+      "name": "owned-bounds",
+      "risk": "an unowned file, Git ref or forbidden command changed the task scope",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" owned-bounds"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "checks-ran",
+      "risk": "a requested focused check has no successful command evidence in this workspace",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" checks-ran"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "bundle-publication",
+      "risk": "deduplication, window, summary, publication or refusal is wrong",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" bundle-publication"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "bundle-integrity",
+      "risk": "verification accepts corruption, a forged summary or a symlink",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" bundle-integrity"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "bundle-diff",
+      "risk": "comparison loses added or removed groups, or accepts mixed grouping",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" bundle-diff"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "bundle-groupings",
+      "risk": "non-default grouping, empty input or invalid data is wrong",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" bundle-groupings"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "bundle-documented",
+      "risk": "WORDING only: the proposed bundle is still undocumented",
+      "kind": "runtime",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" bundle-documented"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "regression-proves-change",
+      "risk": "new tests pass without the implemented behavior, or fail before they reach an assertion",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" regression-proves-change"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "docs-written",
+      "risk": "The contract note is missing or unchanged.",
+      "kind": "runtime",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" docs-written"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    },
+    {
+      "name": "owned-bounds-command-text",
+      "risk": "COMMAND TEXT only: an unowned file, Git ref or forbidden command changed the task scope",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?}/checks/brief.py\" owned-bounds-text"
+      ],
+      "executes_tests": {
+        "no_tests_exit": 3,
+        "when_none": "UNVERIFIED"
+      }
+    }
+  ]
+}

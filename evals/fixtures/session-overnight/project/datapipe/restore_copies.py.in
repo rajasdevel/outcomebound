@@ -1,0 +1,17 @@
+"""Choose archive files for source parts with no committed delivery."""
+
+from datapipe.audit import report
+
+
+def plan(database, day, root, copies):
+    """Return restore candidates and blocked parts without loading them."""
+    selected, blocked = [], []
+    for row in report(database, day):
+        for part in row["missing"]:
+            choices = [copy for copy in copies if copy["feed"] == row["feed"]]
+            if choices:
+                latest = max(choices, key=lambda copy: copy["created"])
+                selected.append({"feed": row["feed"], "part": part, "file": latest["file"]})
+            else:
+                blocked.append({"feed": row["feed"], "part": part, "reason": "no-valid-copy"})
+    return {"restore": selected, "blocked": blocked}

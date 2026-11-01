@@ -18,6 +18,7 @@ import contextlib
 import hashlib
 import json
 import os
+import signal
 import subprocess
 import threading
 import time
@@ -52,6 +53,40 @@ def _end(process: subprocess.Popen[bytes]) -> None:
     stop_tree(process)
     with contextlib.suppress(subprocess.TimeoutExpired):
         process.wait(timeout=5)
+
+
+def _interrupt(process: subprocess.Popen[bytes]) -> None:
+    """Kill abruptly, then verify that no observed descendant or group member runs."""
+    from evals.processes import _process_table, stop_descendants
+    from outcomebound_tools.programs import stop_tree
+
+    if os.name == "nt":
+        _end(process)
+        raise ValueError("split process-group verification requires POSIX")
+    owned = stop_descendants(process.pid) | {process.pid}
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(process.pid, signal.SIGKILL)
+    stop_tree(process)
+    process.wait(timeout=5)
+    deadline = time.monotonic() + 5
+    while True:
+        table = _process_table()
+        if table is None:
+            raise ValueError("cannot verify split process cleanup")
+        live = set()
+        for pid, (_, state) in table.items():
+            if state == "Z":
+                continue
+            try:
+                if pid in owned or os.getpgid(pid) == process.pid:
+                    live.add(pid)
+            except ProcessLookupError:
+                continue
+        if not live:
+            return
+        if time.monotonic() >= deadline:
+            raise ValueError("split session still has live processes")
+        time.sleep(0.05)
 
 
 def _drain(stream: Any, into: bytearray, lock: threading.Lock) -> None:
@@ -149,23 +184,28 @@ def watched_command(
     pipes open is waited for until the time runs out, then ended as a `timeout`, as
     `bounded_command` does. Raises what starting the command raises."""
 
+    from evals.session_permissions import call_gate
     from outcomebound_tools.programs import start_tree
 
     started = time.monotonic()
-    process = start_tree(
-        command,
-        stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        **kwargs,
-    )
+    with call_gate(command, kwargs) as (command, options, launch):
+        process = start_tree(
+            command,
+            stdin=subprocess.PIPE if input is not None else subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            **options,
+        )
+        launch(process.pid)
     pipes = _Pipes(process, input)
     try:
         stopped = _watch(process, pipes, started + timeout, poll, interval)
     except BaseException:
         _end(process)
         raise
-    if stopped:
+    if stopped == "split":
+        _interrupt(process)
+    elif stopped:
         _end(process)
     pipes.join(DRAIN_SECONDS)
     for stream in (process.stdout, process.stderr):
@@ -186,6 +226,25 @@ def path_digest(path: Path) -> str | None:
         return hashlib.sha256(path.read_bytes()).hexdigest()
     except OSError:
         return None
+
+
+def tree_manifest(root: Path) -> dict[str, Any]:
+    """Names, kinds, permissions and content hashes, without following symbolic links."""
+    result = {}
+    for path in (root, *sorted(root.rglob("*"))):
+        key = path.relative_to(root).as_posix()
+        mode = path.lstat().st_mode
+        value: dict[str, str | bool]
+        if path.is_symlink():
+            value = {"link": os.readlink(path)}
+        elif path.is_file():
+            value = {"sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        elif path.is_dir():
+            value = {"directory": True}
+        else:
+            raise ValueError(f"unsupported manifest entry: {key}")
+        result[key] = {"mode": mode, **value}
+    return result
 
 
 class Watcher:

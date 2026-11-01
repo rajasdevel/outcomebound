@@ -1,0 +1,35 @@
+"""Regression examples for whole-feed planning and validation."""
+
+import json
+import unittest
+from pathlib import Path
+
+from datapipe.catalog import parse
+from datapipe.nightly import build
+
+
+class NightlyRegression(unittest.TestCase):
+    def test_no_partial_feed_or_invalid_shard_job(self):
+        def read(name):
+            return json.loads(Path(f"data/{name}.json").read_text(encoding="utf-8"))
+
+        result = build(
+            "data/nightly.sqlite",
+            "2026-10-21",
+            Path("data/restore"),
+            read("copies"),
+            parse(read("restore-catalog")),
+            read("delivery-receipts"),
+        )
+        self.assertEqual(
+            result,
+            {
+                "jobs": [{"feed": "alpha", "part": 1, "generation": 3, "file": "alpha-good.csv"}],
+                "held": [
+                    {"feed": "delta", "reason": "row-count"},
+                    {"feed": "epsilon", "reason": "no-valid-copy"},
+                    {"feed": "gamma", "reason": "orphan"},
+                    {"feed": "zeta", "reason": "extract-invalid"},
+                ],
+            },
+        )

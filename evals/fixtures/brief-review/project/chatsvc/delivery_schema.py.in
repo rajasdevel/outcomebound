@@ -1,0 +1,17 @@
+"""Validate one delivery before the ledger sees it."""
+
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Delivery:
+    tenant: str
+    event_id: str
+    tokens: int
+
+
+def parse(payload):
+    tenant, event_id, tokens = (payload.get(key) for key in ("tenant", "event_id", "tokens"))
+    if not tenant or not event_id or type(tokens) is not int or tokens < 0:
+        raise ValueError("tenant, event_id and non-negative integer tokens are required")
+    return Delivery(tenant, event_id, tokens)

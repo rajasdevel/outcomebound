@@ -1,0 +1,79 @@
+"""Correlate concurrent provider attempts before an operator draws a retry conclusion."""
+
+from collections import Counter
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class Attempt:
+    request: str
+    sequence: int
+    model: str
+    status: int
+    elapsed_ms: int
+
+
+def parse(records):
+    result, seen = [], set()
+    for record in records:
+        request = record.get("request")
+        if not isinstance(request, str) or not request.strip():
+            raise ValueError("request identity is missing")
+        sequence = record.get("sequence")
+        status = record.get("status")
+        elapsed = record.get("elapsed_ms")
+        if type(sequence) is not int or sequence < 1:
+            raise ValueError("attempt sequence is not positive")
+        if type(status) is not int or not 100 <= status <= 599:
+            raise ValueError("invalid provider status")
+        if type(elapsed) is not int or elapsed < 0:
+            raise ValueError("invalid elapsed milliseconds")
+        model = record.get("model")
+        if not isinstance(model, str) or not model:
+            raise ValueError("model identity is missing")
+        key = (request, sequence)
+        if key in seen:
+            raise ValueError("duplicate attempt identity")
+        seen.add(key)
+        result.append(Attempt(request, sequence, model, status, elapsed))
+    return result
+
+
+def grouped(attempts):
+    result = {}
+    for attempt in attempts:
+        result.setdefault(attempt.request, []).append(attempt)
+    for request, values in result.items():
+        values.sort(key=lambda attempt: attempt.sequence)
+        if [item.sequence for item in values] != list(range(1, len(values) + 1)):
+            raise ValueError(f"{request}: incomplete attempt history")
+        if len({item.model for item in values}) != 1:
+            raise ValueError(f"{request}: retry changed the resolved model")
+        for item in values[:-1]:
+            if item.status not in {429, 500, 502, 503, 504}:
+                raise ValueError(f"{request}: retry followed a final response")
+    return dict(sorted(result.items()))
+
+
+def summarize(records):
+    groups = grouped(parse(records))
+    terminal = Counter()
+    result = []
+    for request, attempts in groups.items():
+        last = attempts[-1]
+        terminal[str(last.status)] += 1
+        result.append(
+            {
+                "request": request,
+                "model": last.model,
+                "attempts": len(attempts),
+                "status": last.status,
+                "elapsed_ms": sum(item.elapsed_ms for item in attempts),
+            }
+        )
+    return {
+        "requests": result,
+        "calls": sum(row["attempts"] for row in result),
+        "retries": sum(row["attempts"] - 1 for row in result),
+        "terminal_statuses": dict(sorted(terminal.items())),
+    }

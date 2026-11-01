@@ -1,0 +1,65 @@
+"""Build a release snapshot from ordered receipts without treating examples as evidence."""
+
+from copy import deepcopy
+
+from chatsvc.readiness import assess
+from chatsvc.revision_files import code_files
+
+
+def latest(records, action, revision):
+    candidates = [row for row in records if row.get("action") == action]
+    for row in candidates:
+        if type(row.get("sequence")) is not int or type(row.get("ok")) is not bool:
+            raise ValueError("invalid receipt")
+    sequences = [row["sequence"] for row in candidates]
+    if len(sequences) != len(set(sequences)):
+        raise ValueError("duplicate receipt sequence")
+    selected = [row for row in candidates if row.get("revision") == revision]
+    return max(selected, key=lambda row: row["sequence"]) if selected else None
+
+
+def snapshot(records, revision, catalog, deployed_files, current_files):
+    records = list(records)
+    deployed = latest(records, "deploy", revision)
+    smoke = latest(records, "smoke", revision)
+    checks = [row for row in records if row.get("action") == "check"]
+    by_name, seen = {}, set()
+    for row in checks:
+        if not isinstance(row.get("name"), str) or not row["name"]:
+            raise ValueError("unnamed check receipt")
+        if type(row.get("sequence")) is not int:
+            raise ValueError("check receipt has no sequence")
+        identity = (row["name"], row["sequence"])
+        if identity in seen:
+            raise ValueError("duplicate check receipt")
+        seen.add(identity)
+        previous = by_name.get(row["name"])
+        if previous is None or row["sequence"] > previous["sequence"]:
+            by_name[row["name"]] = row
+        elif row["sequence"] == previous["sequence"]:
+            raise ValueError("duplicate check receipt")
+    matched_smoke = bool(
+        deployed and smoke and deployed["ok"] and smoke["sequence"] > deployed["sequence"]
+    )
+    result = {
+        "env": deployed.get("env") if deployed else None,
+        "dirty": deployed.get("dirty") if deployed else None,
+        "revision": revision if deployed else "",
+        "checks": [
+            {"name": row["name"], "ok": row.get("ok"), "revision": row.get("revision")}
+            for _, row in sorted(by_name.items())
+        ],
+        "smoke": {
+            "ok": bool(matched_smoke and smoke["ok"]),
+            "revision": revision if matched_smoke else "",
+        },
+        "catalog": catalog,
+        "deployed_files": code_files(deployed_files),
+        "current_files": code_files(current_files),
+    }
+    return deepcopy(result)
+
+
+def review(records, revision, catalog, deployed_files, current_files):
+    value = snapshot(records, revision, catalog, deployed_files, current_files)
+    return assess(value, revision, catalog)

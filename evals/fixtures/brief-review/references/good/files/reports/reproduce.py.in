@@ -1,0 +1,26 @@
+"""Reproduce receipt isolation through the checkout's serial worker."""
+
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from chatsvc.delivery import deliver
+from chatsvc.delivery_store import Receipts
+from chatsvc.usage import UsageLedger
+
+with tempfile.TemporaryDirectory() as folder:
+    root = Path(folder)
+    ledger = UsageLedger(root / "usage.jsonl")
+    receipts = Receipts(root / "receipts.sqlite")
+    north = {"tenant": "north", "event_id": "event-1", "tokens": 7}
+    deliver(ledger, receipts, north)
+    deliver(ledger, receipts, {"tenant": "south", "event_id": "event-1", "tokens": 11})
+    actual = [ledger.total("north"), ledger.total("south")]
+    deliver(ledger, receipts, north)
+    repeated = ledger.total("north")
+    deliver(ledger, receipts, {"tenant": "north", "event_id": "event-2", "tokens": 3})
+    print(json.dumps({"actual_totals": actual, "expected_totals": [7, 11],
+                      "same_tenant_replay_total": repeated, "new_event_total": ledger.total("north")}))
+    receipts.close()

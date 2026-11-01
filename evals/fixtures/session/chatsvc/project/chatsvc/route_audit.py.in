@@ -1,0 +1,28 @@
+"""Configuration checks used before a route is deployed.
+
+These checks supplement config.load. They report mistakes; they do not change configuration
+or infer that a provider model exists from the spelling of its name.
+"""
+
+
+def audit(settings):
+    found = []
+    names = set()
+    for path, route in sorted(settings.routes.items()):
+        if route.name in names:
+            found.append(f"{path}: duplicate route name")
+        names.add(route.name)
+        if not path.startswith("/") or "?" in path or "#" in path:
+            found.append(f"{path}: route path must be absolute without a query or fragment")
+        if not 1 <= route.max_attempts <= 8:
+            found.append(f"{path}: max_attempts must be from 1 to 8")
+        if not 0 < route.timeout <= 60:
+            found.append(f"{path}: timeout must be above 0 and at most 60")
+        if not route.default_model:
+            found.append(f"{path}: default_model is required")
+        if not route.key:
+            found.append(f"{path}: provider key is required")
+        for alias, model in sorted(route.aliases.items()):
+            if not alias or not model or any(char.isspace() for char in alias):
+                found.append(f"{path}: invalid alias")
+    return found

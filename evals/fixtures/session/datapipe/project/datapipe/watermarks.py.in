@@ -1,0 +1,46 @@
+"""Partition windows for bounded replay of late arrivals."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+
+
+@dataclass(frozen=True)
+class Window:
+    start: datetime
+    end: datetime
+
+    def contains(self, value: datetime) -> bool:
+        return self.start <= utc(value) <= self.end
+
+
+def utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        raise ValueError("timestamp must include a timezone")
+    return value.astimezone(timezone.utc)
+
+
+def windows(start: datetime, end: datetime, minutes: int = 60) -> list[Window]:
+    start, end = utc(start), utc(end)
+    if minutes < 1:
+        raise ValueError("window length must be positive")
+    if end < start:
+        raise ValueError("window end is before start")
+    result = []
+    while start < end:
+        stop = min(start + timedelta(minutes=minutes), end)
+        result.append(Window(start, stop))
+        start = stop
+    return result
+
+
+def assign(values: list[datetime], spans: list[Window]) -> list[list[int]]:
+    """Return input indexes in each window; no timestamp is rounded."""
+    return [[index for index, value in enumerate(values) if span.contains(value)] for span in spans]
+
+
+def replay_start(committed: datetime, lateness_minutes: int) -> datetime:
+    if lateness_minutes < 0:
+        raise ValueError("lateness cannot be negative")
+    return utc(committed) - timedelta(minutes=lateness_minutes)

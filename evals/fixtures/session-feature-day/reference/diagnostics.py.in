@@ -1,0 +1,78 @@
+"""Count transport attempts, including interleaved and redelivered spool records."""
+
+import re
+from collections import Counter
+from urllib.parse import unquote
+from chatsvc.attempt_ledger import Attempt, grouped
+
+UPSTREAM = re.compile(
+    r"(?:^|\s)upstream path=(?P<path>\S+) attempt=(?P<attempt>\d+) status=(?P<status>\d{3})(?:\s|$)"
+)
+
+
+def parse_attempt(line):
+    match = UPSTREAM.search(line)
+    if match is None:
+        return None
+    row = {"path": match["path"], "attempt": int(match["attempt"]), "status": int(match["status"])}
+    fields = dict(re.findall(r"\b(worker|request|event)=(\S+)", line))
+    if fields and set(fields) != {"worker", "request", "event"}:
+        raise ValueError("incomplete spool metadata")
+    return row | fields
+
+
+def attempts(lines):
+    return [row for line in lines if (row := parse_attempt(line)) is not None]
+
+
+def summarize(lines):
+    seen, groups, events, duplicates = {}, {}, [], 0
+    for row in attempts(lines):
+        if "event" in row:
+            identity = (row["worker"], row["event"])
+            if identity in seen:
+                if seen[identity] != row:
+                    raise ValueError("conflicting event identity")
+                duplicates += 1
+                continue
+            seen[identity] = row
+            groups.setdefault((row["worker"], row["request"]), []).append(row)
+        events.append(row)
+    requests = []
+    for (worker, request), rows in sorted(groups.items()):
+        chain = grouped(
+            [
+                Attempt(
+                    "capture",
+                    row["attempt"],
+                    unquote(row["path"].split("/models/")[-1].split(":")[0]),
+                    row["status"],
+                    0,
+                )
+                for row in rows
+            ]
+        )["capture"]
+        requests.append(
+            {
+                "worker": worker,
+                "request": request,
+                "attempts": len(chain),
+                "status": chain[-1].status,
+            }
+        )
+
+    return {
+        "calls": len(events),
+        "retries": sum(row["attempt"] > 1 for row in events),
+        "statuses": dict(sorted(Counter(str(row["status"]) for row in events).items())),
+        "paths": dict(sorted(Counter(row["path"] for row in events).items())),
+        "models": dict(
+            sorted(
+                Counter(
+                    unquote(row["path"].split("/models/")[-1].split(":")[0]) for row in events
+                ).items()
+            )
+        ),
+        "duplicates": duplicates,
+        "requests": requests,
+    }

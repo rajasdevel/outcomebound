@@ -1,0 +1,76 @@
+import json
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+
+class ReconcileTest(unittest.TestCase):
+    def test_plan_apply_and_restart(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp); source=root/'events.jsonl'; db=root/'state.sqlite'
+            source.write_text('{"key":"a","version":1,"value":7}\n')
+            def invoke(command):
+                done=subprocess.run([sys.executable,'-B','-m','datapipe.reconcile',command,str(source),'--db',str(db)],capture_output=True,text=True)
+                self.assertEqual(done.returncode,0,done.stderr)
+                return json.loads(done.stdout)
+            self.assertEqual(invoke('plan'),{'actions':[{'key':'a','version':1,'action':'insert'}],'active_count':1,'total_value':7})
+            self.assertFalse(db.exists())
+            self.assertEqual(invoke('apply')['total_value'],7)
+            self.assertEqual(invoke('apply')['actions'],[{'key':'a','version':1,'action':'duplicate'}])
+
+
+class ReconcileContractTest(unittest.TestCase):
+    def setUp(self):
+        self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
+        self.root=Path(self.temp.name);self.source=self.root/"events.jsonl";self.db=self.root/"state.sqlite"
+
+    def call(self, command, rows=None, raw=None):
+        argv=[sys.executable,"-B","-m","datapipe.reconcile",command]
+        if command!="inspect":
+            self.source.write_text(raw if raw is not None else "".join(json.dumps(row)+"\n" for row in rows))
+            argv.append(str(self.source))
+        return subprocess.run([*argv,"--db",str(self.db)],capture_output=True,text=True)
+
+    def ok(self, command, rows=None):
+        done=self.call(command,rows);self.assertEqual(done.returncode,0,done.stderr)
+        return json.loads(done.stdout)
+
+    def test_restart_history_and_tombstones(self):
+        self.ok("apply",[{"key":"a","version":2,"value":7},{"key":"b","version":1,"value":11}])
+        self.ok("apply",[{"key":"b","version":2,"value":0,"deleted":True}])
+        result=self.ok("apply",[{"key":"b","version":1,"value":11},{"key":"a","version":1,"value":3}])
+        self.assertEqual(result,{"actions":[{"key":"b","version":1,"action":"duplicate"},{"key":"a","version":1,"action":"stale"}],"active_count":1,"total_value":7})
+        self.assertEqual(self.ok("inspect")["items"],[{"key":"a","version":2,"value":7,"deleted":False},{"key":"b","version":2,"value":0,"deleted":True}])
+
+    def test_plan_and_absent_inspect_are_read_only(self):
+        self.assertEqual(self.ok("inspect"),{"items":[],"active_count":0,"total_value":0})
+        self.assertFalse(self.db.exists())
+        rows=[{"key":"a","version":1,"value":7}]
+        self.assertEqual(self.ok("plan",rows)["total_value"],7)
+        self.assertFalse(self.db.exists())
+        self.ok("apply",rows);before=self.db.read_bytes()
+        self.assertEqual(self.ok("plan",[{"key":"a","version":2,"value":8}])["total_value"],8)
+        self.assertEqual(self.db.read_bytes(),before)
+
+    def test_conflicting_later_record_rolls_back_rows_and_history(self):
+        self.ok("apply",[{"key":"a","version":1,"value":7}]);before=self.db.read_bytes()
+        done=self.call("apply",[{"key":"c","version":1,"value":100},{"key":"a","version":1,"value":9}])
+        self.assertEqual((done.returncode,done.stdout),(2,""))
+        self.assertEqual(json.loads(done.stderr),{"code":"E102","line":2})
+        self.assertEqual(self.db.read_bytes(),before)
+        self.assertEqual(self.ok("apply",[{"key":"c","version":1,"value":100}])["actions"],[{"key":"c","version":1,"action":"insert"}])
+
+    def test_bad_record_line_and_boolean_refusals_do_not_create_db(self):
+        bad=[True,[],{"key":"a","version":True,"value":7},{"key":"a","version":1,"value":False},
+             {"key":"a","version":-1,"value":7},{"key":"a","version":1,"value":7,"extra":1},
+             {"key":"a","version":1,"value":7,"deleted":1}, {"key":"a","version":1}]
+        for record in bad:
+            done=self.call("apply",[{"key":"c","version":1,"value":100},record])
+            self.assertEqual((done.returncode,done.stdout),(2,""))
+            self.assertEqual(json.loads(done.stderr),{"code":"E102","line":2})
+            self.assertFalse(self.db.exists())
+        done=self.call("apply",raw="\n{bad}\n")
+        self.assertEqual(json.loads(done.stderr),{"code":"E102","line":2})
+        self.assertFalse(self.db.exists())

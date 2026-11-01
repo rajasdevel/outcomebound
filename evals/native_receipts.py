@@ -74,16 +74,20 @@ def parse_records(raw: bytes) -> list[dict[str, Any]]:
     return [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
 
 
-def find_session(sessions: Path, key: str) -> tuple[Path, bytes, list[dict[str, Any]]]:
+def find_session(
+    sessions: Path, key: str, source: Path | None = None
+) -> tuple[Path, bytes, list[dict[str, Any]]]:
     """The one session file for thread `key` under `sessions`, its exact bytes and its records.
 
-    Exactly one file must match; it must not be a symlink or lie outside `sessions`; its first
+    Exactly one file must match unless `source` selects a file changed by a resumed call.
+    It must not be a symlink or lie outside `sessions`; its first
     record must be a `session_meta` whose id is `key`. Otherwise ValueError says which."""
 
-    matches = list(sessions.rglob(f"*-{key}.jsonl"))
-    if len(matches) != 1:
-        raise ValueError(f"matching native session count is {len(matches)}, expected 1")
-    source = matches[0]
+    if source is None:
+        matches = list(sessions.rglob(f"*-{key}.jsonl"))
+        if len(matches) != 1:
+            raise ValueError(f"matching native session count is {len(matches)}, expected 1")
+        source = matches[0]
     if source.is_symlink() or not source.resolve().is_relative_to(sessions.resolve()):
         raise ValueError("native session is a symlink or outside the selected sessions folder")
     raw = source.read_bytes()

@@ -1,0 +1,16 @@
+"""The original empty replay request."""
+
+import unittest
+from datetime import datetime, timezone
+
+from datapipe.checkpoints import Checkpoint
+from datapipe.replay_plan import plan
+
+
+class ReplayPlan(unittest.TestCase):
+    def test_empty_request_keeps_cursor(self):
+        point = datetime(2026, 10, 1, tzinfo=timezone.utc)
+        self.assertEqual(
+            plan(Checkpoint("orders", 8, 2), [], point, point),
+            {"source": "orders", "generation": 2, "windows": [], "deferred": [], "next_offset": 8},
+        )

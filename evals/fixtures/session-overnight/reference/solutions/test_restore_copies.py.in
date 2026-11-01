@@ -1,0 +1,19 @@
+"""Regression examples for verified archive selection."""
+
+import json
+import unittest
+from pathlib import Path
+
+from datapipe.restore_copies import plan
+
+
+class CopiesRegression(unittest.TestCase):
+    def test_newer_corrupt_and_stale_copies_are_skipped(self):
+        copies = json.loads(Path("data/copies.json").read_text(encoding="utf-8"))
+        result = plan("data/nightly.sqlite", "2026-10-21", Path("data/restore"), copies)
+        self.assertEqual(
+            result["restore"][0], {"feed": "alpha", "part": 1, "file": "alpha-good.csv"}
+        )
+        self.assertEqual(
+            result["blocked"], [{"feed": "epsilon", "part": 1, "reason": "no-valid-copy"}]
+        )

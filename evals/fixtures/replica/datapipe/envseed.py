@@ -58,7 +58,7 @@ def _starts(query: dict[str, Any], first: datetime, clock: datetime) -> list[dat
     """Every time the query started between `first` and `clock`."""
 
     if "once" in query:
-        moment = datetime.fromisoformat(query["once"])
+        moment = datetime.fromisoformat(query["once"].replace("Z", "+00:00"))
         return [moment] if first <= moment < clock else []
     if "at" in query:
         hours, minutes = (int(part) for part in query["at"].split(":"))
@@ -80,8 +80,8 @@ def _starts(query: dict[str, Any], first: datetime, clock: datetime) -> list[dat
 
 def _rows(scenario: dict[str, Any], scale: float) -> list[tuple[datetime, dict[str, Any]]]:
     draws = Draws(int(scenario.get("seed", 7)))
-    first = datetime.fromisoformat(scenario["first_day"])
-    clock = datetime.fromisoformat(scenario["clock"])
+    first = datetime.fromisoformat(scenario["first_day"].replace("Z", "+00:00"))
+    clock = datetime.fromisoformat(scenario["clock"].replace("Z", "+00:00"))
     rows = []
     for query in scenario["queries"]:
         for start in _starts(query, first, clock):

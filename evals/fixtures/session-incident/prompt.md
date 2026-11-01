@@ -1,0 +1,1 @@
+Find the 03:10 disk-read cause and compare recent nights. Build the read-only report under docs/specs/incident-report.md with tests and a triage note. I grant work-branch commits. Push nothing; prod is read-only and stage deploy waits for me.

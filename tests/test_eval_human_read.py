@@ -28,8 +28,12 @@ def test_the_marked_fixtures_are_the_ones_a_do_nothing_run_passed() -> None:
     # findings alone (field-parallel-report, skill-land-change), a note before the spike that
     # need not hold its question (new-project-spike), a pre-run result read from its words
     # (skill-run-acceptance), and a hand-written manifest (onboard-plain, onboard-signals).
+    # The report briefs can establish fields and file effects without complete prose.
     assert MARKED == [
         "adopt-inspect",
+        "brief-review",
+        "brief-runbook",
+        "brief-survey",
         "business-requirements-kit",
         "clause-interview",
         "explain-mismatch",

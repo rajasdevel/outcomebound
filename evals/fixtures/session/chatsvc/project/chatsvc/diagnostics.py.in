@@ -1,0 +1,41 @@
+"""Read provider call logs without exposing request bodies or credentials.
+
+The gateway logs inbound requests too. A status of 429 alone is not enough to blame the
+provider: only an `upstream` event records a provider attempt. This module reads those events.
+"""
+
+import re
+from collections import Counter
+
+UPSTREAM = re.compile(
+    r"(?:^|\s)upstream path=(?P<path>\S+) attempt=(?P<attempt>\d+) status=(?P<status>\d{3})(?:\s|$)"
+)
+
+
+def parse_attempt(line):
+    match = UPSTREAM.search(line)
+    if match is None:
+        return None
+    return {
+        "path": match["path"],
+        "attempt": int(match["attempt"]),
+        "status": int(match["status"]),
+    }
+
+
+def attempts(lines):
+    return [entry for line in lines if (entry := parse_attempt(line)) is not None]
+
+
+def summarize(lines):
+    """Count statuses and paths. A repeated attempt counts as a call, not a new request."""
+    events = attempts(lines)
+    statuses = Counter(str(event["status"]) for event in events)
+    paths = Counter(event["path"] for event in events)
+    return {
+        "calls": len(events),
+        "retries": sum(event["attempt"] > 1 for event in events),
+        "statuses": dict(sorted(statuses.items())),
+        "paths": dict(sorted(paths.items())),
+        "models": {},
+    }

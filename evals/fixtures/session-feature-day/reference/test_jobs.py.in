@@ -1,0 +1,151 @@
+from chatsvc.job_manifest import ManifestError, parse
+from chatsvc.job_runner import run_jobs
+from chatsvc.diagnostics import summarize
+
+
+class BatchTest(unittest.TestCase):
+    def test_explicit_fast_path_survives_manifest_normalization(self):
+        rows = [
+            json.dumps(
+                {
+                    "id": "one",
+                    "path": "/v2/chat",
+                    "key": "worker",
+                    "body": {"model": "fast", "messages": [{"role": "user", "content": "x"}]},
+                }
+            )
+        ]
+        provider = Sequence([200])
+        svc = build_service("config", provider, log=lambda line: None)
+        result = run_jobs(parse(rows), svc)
+        self.assertEqual(result["jobs"], [{"id": "one", "status": 200, "model": "chat-fast-2"}])
+        self.assertEqual(result["upstream"]["models"], {"chat-fast-2": 1})
+        self.assertEqual(provider.paths, ["/v1/models/chat-fast-2:generate"])
+
+    def test_legacy_report_decodes_models_and_counts_each_line(self):
+        line = "upstream path=/v1/models/custom%2Fmodel:generate attempt=1 status=404"
+        result = summarize([line, line, "inbound path=/v2/chat status=429"])
+        self.assertEqual(result["calls"], 2)
+        self.assertEqual(result["models"], {"custom/model": 2})
+
+    def test_invalid_job_body_does_not_stop_the_following_job(self):
+        rows = [
+            json.dumps({"id": name, "path": "/v2/chat", "key": "batch", "body": body})
+            for name, body in (
+                ("bad", {"messages": []}),
+                ("ok", {"messages": [{"role": "user", "content": "x"}]}),
+            )
+        ]
+        provider = Sequence([200])
+        svc = build_service("config", provider, log=lambda line: None)
+        result = run_jobs(parse(rows), svc)
+        self.assertEqual(
+            result["jobs"],
+            [
+                {"id": "bad", "status": 400, "model": ""},
+                {"id": "ok", "status": 200, "model": "chat-fast-2"},
+            ],
+        )
+        self.assertEqual(len(provider.paths), 1)
+
+
+from copy import deepcopy
+from pathlib import Path
+import tempfile
+from chatsvc.job_runner import run_manifest
+
+
+def batch_rows():
+    rows = []
+    for identity, dependencies in (("child", ["parent"]), ("parent", []), ("independent", [])):
+        rows.append(
+            {
+                "id": identity,
+                "path": "/v2/chat",
+                "key": "batch-private-key",
+                "body": {"messages": [{"role": "user", "content": identity}]},
+                "depends_on": dependencies,
+            }
+        )
+    return rows
+
+
+class BatchResumeTest(unittest.TestCase):
+    def test_budget_and_resume_preserve_dependencies_and_manifest_result_order(self):
+        rows = batch_rows()
+        provider = Sequence([200])
+        svc = build_service("config", provider, log=lambda line: None)
+        first = run_jobs(parse(map(json.dumps, rows)), svc, max_jobs=1)
+        self.assertEqual(
+            [(row["id"], row["status"]) for row in first["jobs"]],
+            [("child", 0), ("parent", 200), ("independent", 0)],
+        )
+        self.assertEqual([row["id"] for row in first["resume"]], ["parent"])
+        previous = deepcopy(first["resume"])
+        provider = Sequence([200, 200])
+        svc = build_service("config", provider, log=lambda line: None)
+        second = run_jobs(parse(map(json.dumps, rows)), svc, prior=previous, max_jobs=2)
+        self.assertEqual([row["status"] for row in second["jobs"]], [200, 200, 200])
+        self.assertEqual(len(provider.paths), 2)
+        self.assertEqual(first["resume"], previous)
+        self.assertNotIn("batch-private-key", json.dumps(second))
+
+    def test_changed_content_cannot_reuse_a_success(self):
+        rows = batch_rows()[1:2]
+        provider = Sequence([200])
+        original = run_jobs(
+            parse(map(json.dumps, rows)), build_service("config", provider, log=lambda line: None)
+        )
+        for field, value in (
+            ("key", "another-key"),
+            ("path", "/v1/chat"),
+            ("body", {"messages": [{"role": "user", "content": "changed"}]}),
+        ):
+            changed = deepcopy(rows)
+            changed[0][field] = value
+            provider = Sequence([])
+            result = run_jobs(
+                parse(map(json.dumps, changed)),
+                build_service("config", provider, log=lambda line: None),
+                prior=original["resume"],
+                max_jobs=0,
+            )
+            self.assertEqual(result["jobs"], [{"id": "parent", "status": 0, "model": ""}])
+            self.assertEqual(provider.paths, [])
+
+    def test_failed_dependency_does_not_stop_independent_work(self):
+        provider = Sequence([404, 200])
+        result = run_jobs(
+            parse(map(json.dumps, batch_rows())),
+            build_service("config", provider, log=lambda line: None),
+        )
+        self.assertEqual([row["status"] for row in result["jobs"]], [424, 502, 200])
+        self.assertEqual([row["id"] for row in result["resume"]], ["independent"])
+        self.assertEqual(len(provider.paths), 2)
+
+    def test_bad_graph_is_rejected_before_manifest_sends_any_traffic(self):
+        for dependencies in (["missing"], ["parent", "parent"], ["child"], False):
+            rows = batch_rows()
+            rows[0]["depends_on"] = dependencies
+            provider = Sequence([])
+            with tempfile.TemporaryDirectory() as folder:
+                path = Path(folder) / "jobs.jsonl"
+                path.write_text("\n".join(map(json.dumps, rows)), encoding="utf-8")
+                with self.assertRaises(ManifestError):
+                    run_manifest(path, build_service("config", provider, log=lambda line: None))
+                self.assertEqual(provider.paths, [])
+        rows = batch_rows()
+        rows[1]["depends_on"] = ["child"]
+        with self.assertRaisesRegex(ManifestError, "cyclic"):
+            parse(map(json.dumps, rows))
+
+    def test_invalid_budget_and_duplicate_resume_fail_before_traffic(self):
+        jobs = parse(map(json.dumps, batch_rows()))
+        for limit in (True, -1, 1.2):
+            with self.assertRaises(ValueError):
+                run_jobs(jobs, build_service("config", Sequence([])), max_jobs=limit)
+        first = run_jobs(
+            jobs, build_service("config", Sequence([200]), log=lambda line: None), max_jobs=1
+        )
+        with self.assertRaises(ValueError):
+            run_jobs(jobs, build_service("config", Sequence([])), prior=first["resume"] * 2)

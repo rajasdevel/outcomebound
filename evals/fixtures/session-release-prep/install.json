@@ -1,0 +1,13 @@
+{
+  "done": [
+    "make check"
+  ],
+  "fragments": [
+    "commands",
+    "workspace",
+    "multi-agent",
+    "research",
+    "python"
+  ],
+  "sandbox": "eval"
+}

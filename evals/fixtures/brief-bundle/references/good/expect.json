@@ -1,0 +1,14 @@
+{
+  "claims": {
+    "owned-bounds": "PASS",
+    "checks-ran": "PASS",
+    "bundle-publication": "PASS",
+    "bundle-integrity": "PASS",
+    "bundle-diff": "PASS",
+    "bundle-groupings": "PASS",
+    "bundle-documented": "PASS",
+    "regression-proves-change": "PASS",
+    "docs-written": "PASS",
+    "owned-bounds-command-text": "PASS"
+  }
+}

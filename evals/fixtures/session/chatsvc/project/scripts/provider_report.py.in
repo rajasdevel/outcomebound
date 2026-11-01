@@ -1,0 +1,23 @@
+"""Print a provider call summary as JSON. Read stdin, or one UTF-8 log file."""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from chatsvc.diagnostics import summarize
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("file", nargs="?")
+    args = parser.parse_args()
+    lines = Path(args.file).read_text(encoding="utf-8").splitlines() if args.file else sys.stdin
+    print(json.dumps(summarize(lines), sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

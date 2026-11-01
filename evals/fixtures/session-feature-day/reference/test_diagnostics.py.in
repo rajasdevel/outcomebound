@@ -1,0 +1,18 @@
+class SpoolTest(unittest.TestCase):
+    def test_replayed_event_is_not_a_second_provider_call(self):
+        line = "upstream path=/v1/models/chat-fast-2:generate attempt=1 status=200 worker=w request=r event=e"
+        result = summarize([line, line])
+        self.assertEqual(result["calls"], 1)
+        self.assertEqual(result["duplicates"], 1)
+        self.assertEqual(
+            result["requests"], [{"worker": "w", "request": "r", "attempts": 1, "status": 200}]
+        )
+
+    def test_workers_reuse_both_request_and_event_names(self):
+        line = "upstream path=/v1/models/chat-fast-2:generate attempt=1 status=200 worker=one request=r event=e"
+        self.assertEqual(summarize([line, line.replace("worker=one", "worker=two")])["calls"], 2)
+
+    def test_conflicting_replay_is_refused(self):
+        line = "upstream path=/v1/models/chat-fast-2:generate attempt=1 status=200 worker=w request=r event=e"
+        with self.assertRaisesRegex(ValueError, "conflict"):
+            summarize([line, line.replace("status=200", "status=404")])

@@ -1,0 +1,51 @@
+"""Extract manifests, validated before any warehouse write."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class Extract:
+    table: str
+    file: str
+    rows: int
+    checksum: str
+
+
+def parse(document: dict) -> list[Extract]:
+    """Read a version 1 manifest. File names are relative to its directory."""
+    if document.get("version") != 1:
+        raise ValueError("manifest version must be 1")
+    found = []
+    for item in document.get("extracts", []):
+        path = Path(item["file"])
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("extract must stay below the manifest directory")
+        if item["table"] not in ("orders", "events"):
+            raise ValueError("unknown extract table")
+        if not isinstance(item["rows"], int) or item["rows"] < 0:
+            raise ValueError("rows must be a nonnegative integer")
+        checksum = item["checksum"]
+        if len(checksum) != 64 or any(c not in "0123456789abcdef" for c in checksum):
+            raise ValueError("checksum must be a lowercase sha256")
+        found.append(Extract(item["table"], str(path), item["rows"], checksum))
+    return found
+
+
+def read(path: Path) -> list[Extract]:
+    return parse(json.loads(path.read_text(encoding="utf-8")))
+
+
+def total_rows(extracts: list[Extract]) -> dict[str, int]:
+    totals: dict[str, int] = {}
+    for item in extracts:
+        totals[item.table] = totals.get(item.table, 0) + item.rows
+    return totals
+
+
+def preflight(document: dict, root: Path, catalog: dict) -> dict:
+    """Inspect all files under the preflight contract before a caller writes data."""
+    raise NotImplementedError("preflight has not been connected to the CSV inspector")

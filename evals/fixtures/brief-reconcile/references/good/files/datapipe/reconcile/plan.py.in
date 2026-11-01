@@ -1,0 +1,30 @@
+"""Pure version transitions, shared by the plan and apply commands."""
+
+from datapipe.reconcile.input import InputError
+
+
+def totals(items):
+    live = [item for item in items.values() if not item["deleted"]]
+    return {"active_count": len(live), "total_value": sum(item["value"] for item in live)}
+
+
+def transition(records, items, history):
+    items, history = dict(items), dict(history)
+    actions = []
+    for line, event in records:
+        key, version = event["key"], event["version"]
+        identity = (key, version)
+        if identity in history:
+            if history[identity] != event:
+                raise InputError(line)
+            action = "duplicate"
+        else:
+            current = items.get(key)
+            if current is not None and version < current["version"]:
+                action = "stale"
+            else:
+                action = "delete" if event["deleted"] else ("update" if current else "insert")
+                items[key] = event
+            history[identity] = event
+        actions.append({"key": key, "version": version, "action": action})
+    return {"actions": actions, **totals(items)}, items, history

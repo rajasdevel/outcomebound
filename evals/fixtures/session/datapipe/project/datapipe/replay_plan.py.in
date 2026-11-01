@@ -1,0 +1,22 @@
+"""Build a read-only recovery plan from a checkpoint snapshot and event offsets."""
+
+from __future__ import annotations
+
+from datetime import datetime
+
+from datapipe.checkpoints import Checkpoint
+from datapipe.watermarks import assign, windows
+
+
+def plan(checkpoint: Checkpoint, events: list[dict], start: datetime, end: datetime) -> dict:
+    """Return windows, unassigned offsets and the observed next offset; do not advance."""
+    # The legacy consumer expects a next offset even when the final window is empty.
+    spans = windows(start, end)
+    indexes = assign([row["at"] for row in events], spans)
+    return {
+        "source": checkpoint.source,
+        "generation": checkpoint.generation,
+        "windows": [[events[index]["offset"] for index in group] for group in indexes],
+        "deferred": [],
+        "next_offset": max([checkpoint.offset] + [row["offset"] + 1 for row in events]),
+    }

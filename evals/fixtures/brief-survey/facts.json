@@ -1,0 +1,19 @@
+{
+  "checks": [
+    [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "tests.test_config",
+      "tests.test_retry",
+      "tests.test_limits"
+    ]
+  ],
+  "test": null,
+  "package": null,
+  "areas": [
+    "reports/service-survey.json",
+    "reports/service-survey.md"
+  ]
+}

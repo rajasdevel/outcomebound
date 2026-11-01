@@ -1,0 +1,58 @@
+"""Read a batch before running it. A malformed manifest must send no traffic."""
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+
+class ManifestError(ValueError):
+    pass
+
+
+@dataclass(frozen=True)
+class Job:
+    identity: str
+    path: str
+    key: str
+    body: dict
+
+
+def endpoint(path):
+    """Map console route names to wire paths. Older exports called chat simply chat."""
+    if path in {"chat", "/v1/chat", "/v2/chat"}:
+        return "/v1/chat"
+    if path in {"embed", "/v1/embed"}:
+        return "/v1/embed"
+    raise ManifestError("unsupported job path")
+
+
+def parse(lines):
+    jobs, identities = [], set()
+    for number, line in enumerate(lines, 1):
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except ValueError:
+            raise ManifestError(f"line {number}: invalid JSON") from None
+        if not isinstance(row, dict):
+            raise ManifestError(f"line {number}: expected an object")
+        identity = row.get("id")
+        key = row.get("key")
+        body = row.get("body")
+        if not isinstance(identity, str) or not identity.strip() or identity in identities:
+            raise ManifestError(f"line {number}: missing or duplicate job id")
+        if not isinstance(key, str) or not key.strip():
+            raise ManifestError(f"line {number}: missing caller key")
+        if not isinstance(body, dict):
+            raise ManifestError(f"line {number}: body must be an object")
+        path = row.get("path")
+        if not isinstance(path, str):
+            raise ManifestError(f"line {number}: path must be a string")
+        jobs.append(Job(identity, endpoint(path), key, body))
+        identities.add(identity)
+    return jobs
+
+
+def load(path):
+    return parse(Path(path).read_text(encoding="utf-8").splitlines())

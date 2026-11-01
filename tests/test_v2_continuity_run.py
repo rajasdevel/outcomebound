@@ -185,9 +185,14 @@ def test_a_change_of_the_stage_during_the_call_still_fails_the_run(
     """The log does not exempt the stage: a file the call adds there fails the seal."""
 
     def tamper(_cwd: Path, stage: Path, _request: Request) -> None:
-        (stage / "checks" / "reads.jsonl").write_text(
-            '{"t": 1, "served": "pending"}\n', encoding="utf-8"
-        )
+        assert stage.stat().st_mode & 0o7777 == 0
+        stage.chmod(0o700)
+        try:
+            (stage / "checks" / "reads.jsonl").write_text(
+                '{"t": 1, "served": "pending"}\n', encoding="utf-8"
+            )
+        finally:
+            stage.chmod(0)
 
     agent = Agent(WORK, lambda: made["stages"][-1], tamper)
     (_answer, report, _code, extra), _workspace = _run(tmp_path, NAMES[0], agent)

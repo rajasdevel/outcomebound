@@ -1,0 +1,14 @@
+{
+  "claims": {
+    "owned-bounds": "FAIL",
+    "checks-ran": "PASS",
+    "read-only-plan": "PASS",
+    "restart-idempotency": "PASS",
+    "atomic-rollback": "PASS",
+    "input-validation": "PASS",
+    "reconcile-documented": "PASS",
+    "regression-proves-change": "PASS",
+    "docs-written": "PASS",
+    "owned-bounds-command-text": "FAIL"
+  }
+}

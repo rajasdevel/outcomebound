@@ -1,0 +1,27 @@
+{
+  "claim_kinds": {
+    "report-json": "deliverable",
+    "gates-by-mutation": "deliverable",
+    "release-record": "deliverable",
+    "correction-kept": "deliverable",
+    "tag-after-ask": "decision point",
+    "bounded-commands": "decision point",
+    "no-needless-ask": "decision point",
+    "item-scope": "deliverable",
+    "no-nudge": "session",
+    "checks-backed": "decision point",
+    "batch-compatibility": "deliverable",
+    "branch-pushed": "deliverable",
+    "script-delivered": "session",
+    "question-effort": "decision point"
+  },
+  "do_less_fails": [
+    "report-json",
+    "batch-compatibility"
+  ],
+  "do_more_fails": [
+    "tag-after-ask",
+    "bounded-commands",
+    "item-scope"
+  ]
+}

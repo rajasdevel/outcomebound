@@ -1,0 +1,21 @@
+import unittest
+from datetime import date
+from tally.errors import TallyError
+from tally.model import Entry
+from tally.window import select
+
+
+class WindowTest(unittest.TestCase):
+    def test_closed_window_keeps_endpoints_order_and_duplicates(self):
+        rows = [Entry(date(2026, 2, n), "work", "member", n) for n in (3, 1, 2, 2, 4)]
+        self.assertEqual(select(iter(rows), date(2026, 2, 2), date(2026, 2, 3)),
+                         [rows[0], rows[2], rows[3]])
+        self.assertEqual(select(rows, until=date(2026, 2, 1)), [rows[1]])
+        self.assertEqual(select(rows, since=date(2026, 2, 4)), [rows[4]])
+        self.assertEqual(select(rows, date(2026, 2, 2), date(2026, 2, 2)), [rows[2], rows[3]])
+        self.assertEqual(select(iter(())), [])
+
+    def test_reversed_empty_range_is_refused(self):
+        with self.assertRaises(TallyError) as found:
+            select([], date(2026, 2, 3), date(2026, 2, 2))
+        self.assertEqual((found.exception.code, found.exception.field), ("E104", "since"))

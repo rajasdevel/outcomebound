@@ -1,0 +1,26 @@
+"""Compare expected extracts with delivery attempts for one day."""
+
+import sqlite3
+
+
+def report(database, day):
+    """Return per-feed row totals and missing, orphan and mismatched parts."""
+    with sqlite3.connect(database) as db:
+        rows = db.execute(
+            "SELECT e.feed, SUM(e.rows), SUM(r.rows), SUM(q.rows) "
+            "FROM extracts e JOIN receipts r ON e.feed=r.feed "
+            "LEFT JOIN rejections q ON q.feed=r.feed WHERE e.day=? GROUP BY e.feed",
+            (day,),
+        )
+        return [
+            {
+                "feed": feed,
+                "expected_rows": expected,
+                "loaded_rows": loaded,
+                "rejected_rows": rejected or 0,
+                "missing": [],
+                "orphan": [],
+                "mismatched": [],
+            }
+            for feed, expected, loaded, rejected in rows
+        ]

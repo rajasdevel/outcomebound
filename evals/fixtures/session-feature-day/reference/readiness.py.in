@@ -1,0 +1,84 @@
+"""Assess release evidence without changing a service or copying private fields."""
+
+from chatsvc.revision_files import code_files
+
+
+def string_map(value):
+    return isinstance(value, dict) and all(
+        isinstance(key, str) and isinstance(item, str) for key, item in value.items()
+    )
+
+
+def valid_checks(checks, revision):
+    if not isinstance(checks, list) or not checks:
+        return False
+    names = set()
+    for check in checks:
+        if not isinstance(check, dict):
+            return False
+        name = check.get("name")
+        if not isinstance(name, str) or not name or name in names:
+            return False
+        if check.get("ok") is not True or check.get("revision") != revision:
+            return False
+        names.add(name)
+    return True
+
+
+def valid_route(route):
+    if not isinstance(route, dict) or set(route) != {
+        "path",
+        "default_model",
+        "aliases",
+        "max_tokens",
+    }:
+        return False
+    return (
+        isinstance(route["path"], str)
+        and route["path"].startswith("/")
+        and isinstance(route["default_model"], str)
+        and bool(route["default_model"])
+        and type(route["max_tokens"]) is int
+        and route["max_tokens"] == 4096
+        and string_map(route["aliases"])
+    )
+
+
+def valid_catalog(catalog):
+    if not isinstance(catalog, dict) or set(catalog) != {"routes"}:
+        return False
+    routes = catalog["routes"]
+    if not isinstance(routes, list) or not all(valid_route(route) for route in routes):
+        return False
+    paths = [route["path"] for route in routes]
+    return paths == sorted(set(paths))
+
+
+def valid_code(before, after):
+    if not string_map(before) or not string_map(after):
+        return False
+    before, after = code_files(before), code_files(after)
+    return before == after and all(
+        any(name.startswith(prefix) for name in before) for prefix in ("chatsvc/", "config/")
+    )
+
+
+def assess(snapshot, expected_revision, expected_catalog):
+    row = snapshot if isinstance(snapshot, dict) else {}
+    revision = row.get("revision")
+    revision = revision if isinstance(revision, str) else ""
+    smoke = row.get("smoke")
+    catalog = row.get("catalog")
+    checks = {
+        "environment": row.get("env") == "stage",
+        "revision": bool(revision) and revision == expected_revision,
+        "dirty": row.get("dirty") is False,
+        "checks": valid_checks(row.get("checks"), expected_revision),
+        "smoke": isinstance(smoke, dict)
+        and smoke.get("ok") is True
+        and smoke.get("revision") == expected_revision,
+        "catalog": valid_catalog(catalog) and catalog == expected_catalog,
+        "code": valid_code(row.get("deployed_files"), row.get("current_files")),
+    }
+    reasons = sorted(name for name, ok in checks.items() if not ok)
+    return {"ready": not reasons, "reasons": reasons, "revision": revision}

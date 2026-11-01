@@ -31,6 +31,34 @@ def load(name: str, relative: str) -> ModuleType:
 RUN = load("eval_run", "evals/run.py")
 
 
+def copy_fixture_sources(base: Path, *, history: bool = False) -> Path:
+    """Copy fixture sources and setup inputs, with no links to the checkout."""
+
+    base = base.resolve()
+    if history:
+        _run_checked(
+            ["git", "clone", "--quiet", "--no-hardlinks", "--no-checkout", str(ROOT), str(base)]
+        )
+    ignore = shutil.ignore_patterns("__pycache__")
+    for name in ("fixtures", "graders", "stubs"):
+        shutil.copytree(ROOT / "evals" / name, base / "evals" / name, ignore=ignore)
+    shutil.copy2(ROOT / "evals/session_protocol.py", base / "evals/session_protocol.py")
+    for name in (
+        "skills",
+        "templates",
+        "scripts",
+        "outcomebound_tools",
+        "schemas",
+        "adapters",
+        "fragments",
+        "kits",
+    ):
+        shutil.copytree(ROOT / name, base / name, ignore=ignore)
+    for name in ("VERSION", "OutcomeBound.md"):
+        shutil.copy2(ROOT / name, base / name)
+    return base / "evals/fixtures"
+
+
 TIMEOUT = 120
 
 

@@ -1,0 +1,50 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+from datapipe.checkpoints import Checkpoint, Store
+
+
+class CheckpointTests(unittest.TestCase):
+    def setUp(self):
+        self.folder = tempfile.TemporaryDirectory()
+        self.addCleanup(self.folder.cleanup)
+        self.store = Store(Path(self.folder.name))
+
+    def test_initial_state(self):
+        self.assertEqual(self.store.read("orders"), Checkpoint("orders", 0, 0))
+
+    def test_advance_persists(self):
+        saved = self.store.advance("orders", 24, 0)
+        self.assertEqual(saved, Checkpoint("orders", 24, 1))
+        self.assertEqual(self.store.read("orders"), saved)
+
+    def test_no_pending_file_after_success(self):
+        self.store.advance("events", 3, 0)
+        self.assertEqual(sorted(p.name for p in self.store.root.iterdir()), ["events.json"])
+
+    def test_stale_generation_refused(self):
+        self.store.advance("orders", 24, 0)
+        with self.assertRaisesRegex(ValueError, "stale"):
+            self.store.advance("orders", 30, 0)
+        self.assertEqual(self.store.read("orders").offset, 24)
+
+    def test_backwards_refused(self):
+        self.store.advance("orders", 24, 0)
+        with self.assertRaisesRegex(ValueError, "backwards"):
+            self.store.advance("orders", 23, 1)
+
+    def test_sources_independent(self):
+        self.store.advance("orders", 24, 0)
+        self.assertEqual(self.store.read("events"), Checkpoint("events", 0, 0))
+
+    def test_escape_refused(self):
+        for source in ("", "../orders", "a/b"):
+            with self.subTest(source=source), self.assertRaisesRegex(ValueError, "simple"):
+                self.store.read(source)
+
+    def test_corrupt_checkpoint_refused(self):
+        path = self.store.root / "orders.json"
+        path.write_text('{"source":"events","offset":1,"generation":0}', encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "invalid"):
+            self.store.read("orders")

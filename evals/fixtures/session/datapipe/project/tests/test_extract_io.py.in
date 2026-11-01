@@ -1,0 +1,26 @@
+"""CSV inspector checks; these do not exercise the manifest preflight caller."""
+
+import tempfile
+import unittest
+from pathlib import Path
+
+from datapipe.catalog import Column, Table
+from datapipe.extract_io import inspect, within
+
+
+class ExtractInspection(unittest.TestCase):
+    def test_catalog_order_and_empty_nullable_value(self):
+        table = Table("orders", (Column("id", "integer"), Column("note", "text", True)), ("id",))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "part.csv"
+            path.write_text("id,note\n4,\n9,ok\n", encoding="utf-8")
+            self.assertEqual(inspect(path, table)["rows"], 2)
+            self.assertEqual(within(Path(folder), "./part.csv"), path.resolve())
+
+    def test_duplicate_key_reaches_inspection(self):
+        table = Table("events", (Column("id", "integer"),), ("id",))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "part.csv"
+            path.write_text("id\n4\n4\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "duplicate"):
+                inspect(path, table)

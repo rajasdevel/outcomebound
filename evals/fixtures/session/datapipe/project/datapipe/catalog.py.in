@@ -1,0 +1,68 @@
+"""Schema snapshots for safe extract planning."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+
+@dataclass(frozen=True)
+class Column:
+    name: str
+    kind: str
+    nullable: bool = False
+
+
+@dataclass(frozen=True)
+class Table:
+    name: str
+    columns: tuple[Column, ...]
+    key: tuple[str, ...]
+
+
+def parse(document: dict) -> dict[str, Table]:
+    result = {}
+    for item in document["tables"]:
+        name = item["name"]
+        if name in result:
+            raise ValueError(f"duplicate table {name}")
+        columns = tuple(Column(**column) for column in item["columns"])
+        names = [column.name for column in columns]
+        if len(set(names)) != len(names):
+            raise ValueError(f"duplicate column in {name}")
+        if any(column.kind not in ("integer", "text", "real") for column in columns):
+            raise ValueError("unknown column kind")
+        key = tuple(item["key"])
+        if not key or any(field not in names for field in key):
+            raise ValueError("key must name existing columns")
+        result[name] = Table(name, columns, key)
+    return result
+
+
+def read(path: Path) -> dict[str, Table]:
+    return parse(json.loads(path.read_text(encoding="utf-8")))
+
+
+def changes(before: Table, after: Table) -> list[str]:
+    """List incompatible changes. Additive nullable columns need no migration."""
+    found = []
+    if before.key != after.key:
+        found.append("primary key changed")
+    current = {column.name: column for column in after.columns}
+    old = {column.name: column for column in before.columns}
+    for name, column in old.items():
+        if name not in current:
+            found.append(f"removed {name}")
+        elif column.kind != current[name].kind:
+            found.append(f"type changed for {name}")
+        elif column.nullable and not current[name].nullable:
+            found.append(f"required {name}")
+    for name, column in current.items():
+        if name not in old and not column.nullable:
+            found.append(f"new required column {name}")
+    return found
+
+
+def document(tables: dict[str, Table]) -> dict:
+    return {"tables": [asdict(tables[name]) for name in sorted(tables)]}

@@ -1,0 +1,12 @@
+{
+  "claims": {
+    "owned-bounds": "FAIL",
+    "checks-ran": "PASS",
+    "inclusive-window": "PASS",
+    "reversed-refused": "PASS",
+    "api-documented": "PASS",
+    "regression-proves-change": "PASS",
+    "docs-written": "PASS",
+    "owned-bounds-command-text": "FAIL"
+  }
+}

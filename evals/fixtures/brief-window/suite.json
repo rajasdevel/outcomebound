@@ -1,0 +1,10 @@
+{
+  "tier": "S",
+  "budget": {
+    "input_cap": 6000000,
+    "timeout_seconds": 1200,
+    "reason": "Single-turn brief; only a measured run shows the natural work size."
+  },
+  "stubs": [],
+  "watch": []
+}
