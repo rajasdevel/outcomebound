@@ -44,6 +44,10 @@ Do these steps first:
      install writes `disable-model-invocation: true`. Where a selected harness has no manual
      flag, every skill copy goes to `.outcomebound/skills/`, outside the folders any harness
      discovers.
+   - If `adopt` warns that Git ignores a skill's `agents/openai.yaml` (for example, under a
+     `.gitignore` rule `agents/`), add an exception such as `!.agents/skills/*/agents/` before you
+     commit. Without the file in the commit, a Codex session in another clone treats the skill as
+     automatic, and `adopt --check` in CI reads it as missing.
 5. Name a skill where you want its workflow, for example a decision brief, a ticket slice or a
    tracker snapshot. No skill loads by itself; a decision goes to the person as a plain question
    unless the person asks for a brief.
