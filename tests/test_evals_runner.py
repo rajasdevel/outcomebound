@@ -8,10 +8,12 @@ call leaves under `$CODEX_HOME/sessions`.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -901,66 +903,40 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
             check=True,
         ).stdout
 
-    historical = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(ROOT),
-            "log",
-            "-1",
-            "-S",
-            "CONDITIONS =",
-            "--format=%H",
-            "--",
-            "outcomebound_tools/adopt.py",
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-    ).stdout.strip()
-    # The deletion commit has no constants; its parent is the historical engine.
-    if b"CONDITIONS =" not in at_head("outcomebound_tools/adopt.py"):
-        historical += "^"
-    condition = b"when a fix did not hold"
+    # The last release with condition routing: a tag, so the engine stays in the history that
+    # CI checks out, whatever the merge of later work did to its branch commits.
+    historical = "v1.9.0"
+    condition = b"when a failure's cause is unknown, or a fix did not hold"
     adopt_text = at_head("outcomebound_tools/adopt.py")
     facts_text = at_head("outcomebound_tools/facts.py")
     read_guidance = (
         b"ONCE = (\n"
-        b'    "Read a file below when work you have read shows its condition holds; '
-        b'it stays in force for "\n'
-        b'    "the session, through its later turns and requests; read it again only when the '
-        b"next step's \"\n"
-        b'    "rules from it are missing, uncertain or may have changed.\\n"\n'
-        b'    "Use the listed project path even if the skill catalog omits it or a personal '
-        b'skill has "\n'
-        b'    "the same name."\n'
+        b'    "Read each file below when its condition first holds; it stays in force for the '
+        b'session. "\n'
+        b"    \"Read it again when the next step's rules from it are missing, incomplete, "
+        b'uncertain or may "\n'
+        b'    "have changed; a compaction alone is no reason."\n'
         b")"
     )
     assert condition in adopt_text and facts_text.count(read_guidance) == 1
-    assert adopt_text.count(b'\nif __name__ == "__main__":') == 1
-    ref_rules = b'\nRULES = {name: "A ref rule for " + name + "." for name in RULES}\n'
-    ref_acts = b'ACTS = {name: "a ref act for " + name for name in ACTS}\n'
-    ref_references = (
-        b'REFERENCE_POINTERS = (("a ref reference condition", '
-        b'"using-outcomebound/references/ref-only.md"),)\n'
+    fragments_text = at_head("outcomebound_tools/fragments.py")
+    skills = ast.literal_eval(
+        next(
+            node.value
+            for node in ast.parse(fragments_text).body
+            if isinstance(node, ast.Assign)
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "SKILLS"
+        )
     )
     commit = _commit_of(
         {
-            # Above the main guard: the ref's adopt runs as a program, so lines after it never run.
-            "outcomebound_tools/adopt.py": adopt_text.replace(
-                condition, b"a ref's own condition"
-            ).replace(
-                b'\nif __name__ == "__main__":',
-                ref_rules + ref_acts + ref_references + b'\nif __name__ == "__main__":',
-            ),
+            "outcomebound_tools/adopt.py": adopt_text.replace(condition, b"a ref's own condition"),
             "outcomebound_tools/facts.py": facts_text.replace(
                 read_guidance,
                 b"ONCE = \"a ref's own reread.\\nA ref's own listed path.\"",
-            )
-            + b'\nRULES_LEAD = "A ref rules lead:"\n',
-            "skills/using-outcomebound/references/ref-only.md": b"A ref reference.\n",
-            "outcomebound_tools/fragments.py": at_head("outcomebound_tools/fragments.py")
+            ),
+            "outcomebound_tools/fragments.py": fragments_text
             + b"\nSKILLS = tuple(reversed(SKILLS))\n",
         },
         base=historical,
@@ -976,30 +952,11 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
         assert "a ref's own condition" in notes
         assert "a ref's own reread.\nA ref's own listed path." in notes
-        assert "when a fix did not hold" not in notes
-        assert (
-            "- a ref act for review-council: read .agents/skills/review-council/SKILL.md"
-        ) in notes.splitlines()
-        assert (
-            "- a ref act for land-change: read .agents/skills/land-change/SKILL.md"
-        ) in notes.splitlines()
-        assert "Read a file below when work you have read shows its condition holds" not in notes
-        assert "A ref rules lead:" in notes
-        historical_rules = (
-            "using-outcomebound",
-            "diagnose",
-            "tests-worth-keeping",
-            "gather-requirements",
-            "decision-brief",
-            "review-findings",
-            "land-change",
-        )
-        ordered_rules = [notes.index(f"- A ref rule for {skill}.") for skill in historical_rules]
-        assert ordered_rules == sorted(ordered_rules)
-        assert (
-            "- a ref reference condition: read "
-            ".agents/skills/using-outcomebound/references/ref-only.md"
-        ) in notes
+        assert "when a failure's cause is unknown" not in notes
+        assert "Read each file below when its condition first holds" not in notes
+        # The pointer lines follow the ref's own skill list, which it reverses.
+        pointed = re.findall(r": read \.agents/skills/([\w-]+)/SKILL\.md$", notes, re.M)
+        assert pointed and pointed == [name for name in reversed(skills) if name in pointed]
 
 
 def test_the_current_arm_without_install_json_has_the_full_installs_pointers(
