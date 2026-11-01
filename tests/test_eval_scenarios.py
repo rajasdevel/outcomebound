@@ -1173,7 +1173,7 @@ def test_no_file_the_model_can_read_names_its_fixture_or_states_a_claims_risk(
 def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
     workspace: Callable[..., Path], name: str
 ) -> None:
-    from outcomebound_tools import schemacheck
+    from outcomebound_tools import adopt, schemacheck
 
     run = _load("eval_run_protected", "evals/run.py")
     schema = json.loads((ROOT / "schemas/validation-plan.schema.json").read_text("utf-8"))
@@ -1187,9 +1187,11 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
     assert not [path for path in protected if path.startswith("checks/")]
     if "OUTCOMEBOUND_GRADER_DIR" in json.dumps(_plan(name)):
         assert any((stage_of(target) / "checks").iterdir())
+    # The fixture carries the core skill as an install writes it, with its manual flag.
+    installed = adopt.skill_files(ROOT, "using-outcomebound")["SKILL.md"]
     for root in SKILL_ROOTS:
         skill = target / root / "using-outcomebound" / "SKILL.md"
-        assert skill.read_bytes() == (ROOT / "skills/using-outcomebound/SKILL.md").read_bytes()
+        assert skill.read_bytes() == installed
         assert f"{root}/using-outcomebound/SKILL.md" in protected
     # A claims plan the fixture declares names paths that its working directory holds, so a
     # brief built from it sends the implementer to the folder its tests run in.
