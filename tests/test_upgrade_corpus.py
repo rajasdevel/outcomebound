@@ -360,9 +360,7 @@ CASES = {
         install=LOCAL_ONLY,
         refusal=REFUSAL + "; the difference is",
     ),
-    "local-edited-alike-rendered-anew": Case(
-        local_edited_alike, release=optional_line_reworded
-    ),
+    "local-edited-alike-rendered-anew": Case(local_edited_alike, release=optional_line_reworded),
     "subfolder-local-edited-alike-rendered-anew": Case(
         local_edited_alike, release=optional_line_reworded, folder="component"
     ),
