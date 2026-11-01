@@ -1663,20 +1663,67 @@ def ignored_notes(target: Path, owned: Sequence[str]) -> Notes:
     data = b"".join(os.fsencode(path) + b"\0" for path in owned)
     raw = discovery.git_read(target, "check-ignore", "-v", "-z", "--stdin", data=data)
     fields = os.fsdecode(raw or b"").split("\0")
-    notes: Notes = []
+    rules: dict[tuple[str, str, str], list[str]] = {}
     for source, line, pattern, path in zip(*[iter(fields)] * 4, strict=False):
-        if pattern.startswith("!"):
-            continue
+        if not pattern.startswith("!"):
+            rules.setdefault((source, line, pattern), []).append(path)
+    notes: Notes = []
+    for (source, line, pattern), ignored in rules.items():
         rule = _printable(f"{source}:{line}: {pattern}")
+        exception = _exception(target, source, ignored)
+        fix = f"add `{_printable(exception)}` after that rule" if exception else "un-ignore it"
+        if len(ignored) == 1:
+            subject = f"{_printable(ignored[0])}: Git ignores it ({rule}), so it stays"
+            them = "it"
+        else:
+            subject = (
+                f"{len(ignored)} files of the install, such as {_printable(ignored[0])}: Git "
+                f"ignores them ({rule}), so they stay"
+            )
+            them = "them"
         notes.append(
             (
                 "warning",
-                f"{_printable(path)}: Git ignores it ({rule}), so it stays out of "
-                f"every commit while {MANIFEST} records it, and another clone reads it missing "
-                "in adopt --check; un-ignore it, or choose a harness whose files Git keeps",
+                f"{subject} out of every commit while {MANIFEST} records {them}, and another "
+                f"clone reads {them} missing in adopt --check; {fix}, or choose a harness whose "
+                "files Git keeps",
             )
         )
     return notes
+
+
+def _exception(target: Path, source: str, paths: Sequence[str]) -> str | None:
+    """One negated pattern, for the ignore file `source`, that un-ignores every path in `paths`:
+    the shallowest ignored folder of each path (the path itself where no folder is ignored),
+    with each part that differs between them as `*`, anchored at the folder of `source`. None
+    where the ignored folders lie at different depths or outside that folder. Git cannot re-include
+    a path whose parent folder it ignores, so the pattern names the ignored folder itself."""
+
+    parts = [path.split("/") for path in paths]
+    folders = sorted({"/".join(path[:end]) + "/" for path in parts for end in range(1, len(path))})
+    data = b"".join(os.fsencode(folder) + b"\0" for folder in folders)
+    raw = discovery.git_read(target, "check-ignore", "-z", "--stdin", data=data) if data else b""
+    ignored = set(os.fsdecode(raw or b"").split("\0"))
+    shapes: list[list[str]] = []
+    for path in parts:
+        end = next(
+            (end for end in range(1, len(path)) if "/".join(path[:end]) + "/" in ignored),
+            len(path),
+        )
+        shapes.append(path[:end] + ([""] if end < len(path) else []))
+    base = [] if Path(source).name != ".gitignore" else Path(source).parent.parts
+    if base and Path(source).is_absolute():
+        return None
+    width = len(shapes[0])
+    if any(len(shape) != width for shape in shapes) or width <= len(base):
+        return None
+    if any(list(shape[: len(base)]) != list(base) for shape in shapes):
+        return None
+    pattern = [
+        column[0] if len(set(column)) == 1 else "*"
+        for column in zip(*(shape[len(base) :] for shape in shapes), strict=True)
+    ]
+    return "!/" + "/".join(pattern)
 
 
 def _printable(text: str) -> str:
@@ -2251,8 +2298,8 @@ def _missing_detail(record: Record, commit: Commit | None) -> str:
 
 
 NOT_COMMITTED = (
-    "a new worktree from HEAD does not hold these bytes, and whether a stash or a branch switch "
-    "takes them away depends on the paths and the options"
+    "commit them to keep the install: a new worktree from HEAD does not hold these bytes, and "
+    "whether a stash or a branch switch takes them away depends on the paths and the options"
 )
 
 
@@ -2724,9 +2771,9 @@ def detect(target: Path, source: Path) -> int:
 
 USAGE = """outcomebound adopt <target> [--harness H[,H]]... [--fragments IDS] [--done CMD]...
                             [--setup CMD]... [--human-style ste] [--facts-only | --full]
-                            [--dry-run] [--force]
+                            [--dry-run [--diff]] [--force]
        outcomebound adopt <target> --detect | --check
-       outcomebound adopt <target> --remove [--dry-run] [--force]"""
+       outcomebound adopt <target> --remove [--dry-run [--diff]] [--force]"""
 DESCRIPTION = """\
 Install or upgrade OutcomeBound in <target>, inside a Git work tree. A flag you omit keeps the
 value the manifest records (--harness, --fragments, --done, --setup, --human-style, the mode
@@ -2891,7 +2938,15 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="print what would change, with a unified diff of each text file; write nothing",
+        help=(
+            "print what would change, with a unified diff of each text file outside the skill "
+            "folders; write nothing"
+        ),
+    )
+    parser.add_argument(
+        "--diff",
+        action="store_true",
+        help="with --dry-run, print the diff of each skill file too",
     )
     parser.add_argument(
         "--force",
@@ -2976,10 +3031,16 @@ def _report(planned: Planned, edited: Sequence[str], notes: Notes) -> None:
         print(f"{verb:<8} {text}")
 
 
-def _diffs(planned: Planned) -> None:
-    """A unified diff for each planned text change; a file that is not UTF-8 text is named."""
+def _diffs(planned: Planned, skills: bool = False) -> None:
+    """A unified diff for each planned text change, and for a skill file only with `skills`
+    (the report's summary line counts skill files already, and their diffs are most of the
+    text); a file that is not UTF-8 text is named."""
 
+    held = 0
     for path, (before, after) in planned.items():
+        if not skills and before is not None and _skill_root(path) is not None:
+            held += 1
+            continue
         if before is None and after is not None:
             # A new file is its whole text, which the install writes as shipped: its size only,
             # and a new skill file is counted in the report's summary line, not named again.
@@ -2996,6 +3057,8 @@ def _diffs(planned: Planned) -> None:
         new_name = "/dev/null" if after is None else f"b/{path}"
         text = "".join(difflib.unified_diff(old, new, old_name, new_name))
         print(text if text.endswith("\n") or not text else text + "\n\\ No newline at end of file")
+    if held:
+        print(f"{'diff':<8} {held} skill file(s) change; --diff prints their diffs")
 
 
 def retired_notes(args: argparse.Namespace) -> Notes:
@@ -3032,7 +3095,7 @@ def _run(args: argparse.Namespace, target: Path, source: Path) -> int:
         notes = [*retired_notes(args), *notes]
     if args.dry_run:
         _report(planned, edited, notes)
-        _diffs(planned)
+        _diffs(planned, args.diff)
         print("dry run: nothing written")
         return 0
     fileplan.write(
@@ -3051,6 +3114,8 @@ def main(argv: Sequence[str] | None = None, *, source: Path = ENGINE) -> int:
     args = parser.parse_args(argv)
     if (args.detect or args.check) and (args.dry_run or args.force):
         parser.error("--dry-run and --force apply to an install and to --remove")
+    if args.diff and not args.dry_run:
+        parser.error("--diff applies to --dry-run")
     chosen = args.harness or args.fragments is not None or args.done is not None
     chosen = chosen or args.human_style is not None or args.setup is not None
     chosen = chosen or args.mode is not None

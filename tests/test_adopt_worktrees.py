@@ -253,7 +253,7 @@ def test_an_install_that_is_not_committed_is_named_and_the_exit_is_left_alone(
     (line,) = warns(out)
     assert line.startswith("warn     not committed: AGENTS.md (operating-contract), ")
     assert adopt.MANIFEST in line and "absent from HEAD's commit or differ from it" in line
-    assert "a new worktree from HEAD does not hold these bytes" in line
+    assert "commit them to keep the install: a new worktree from HEAD does not hold" in line
     assert "depends on the paths and the options" in line
     assert snapshot(main) == before and head(main) == commit
 
@@ -460,3 +460,15 @@ def git_out(root: Path, *arguments: str) -> str:
         encoding="utf-8",
     )
     return done.stdout.strip()
+
+
+def test_a_grouped_line_names_the_first_worktrees_and_counts_the_rest() -> None:
+    """Breaks if a set past the shown names is listed whole, loses its count, or drops a name
+    when it is no larger than the shown ones."""
+
+    from outcomebound_tools import adopt_worktrees
+
+    names = [f"w{number}" for number in range(1, adopt_worktrees.SHOWN + 3)]
+
+    assert adopt_worktrees._named(names) == "w1, w2, w3, w4, w5 and 2 more"
+    assert adopt_worktrees._named(names[: adopt_worktrees.SHOWN]) == "w1, w2, w3, w4, w5"

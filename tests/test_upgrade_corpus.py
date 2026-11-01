@@ -90,7 +90,7 @@ KINDS = (
     (re.compile(r"(\S+): a session here also loads "), "{}: a session here also loads"),
     (re.compile(r"tickets: the claim `"), "tickets: the claim"),
     (re.compile(r"tickets: the claims plan "), "tickets: the claims plan"),
-    (re.compile(r".+: Git ignores it "), "Git ignores it"),
+    (re.compile(r".+: Git ignores (?:it|them) "), "Git ignores"),
     (re.compile(r"AGENTS\.md holds changes that are not committed"), "AGENTS.md uncommitted"),
 )
 TICKETS = {
@@ -104,6 +104,11 @@ TICKETS = {
 }
 TEST_LINE = "- when writing, changing or judging a test"
 OPTIONAL_WORDS = "an incidental step in other work does not call for one"
+# A pointer line edit for each render: a line for each skill before 2.0.0, the optional line since.
+POINTER_EDITS = (
+    (TEST_LINE, "- when writing or judging a test"),
+    ("only when the person names it", "when the person names it"),
+)
 CWD_WARNINGS = frozenset({"tickets: the claim", "tickets: the claims plan"})
 
 needs_permissions = pytest.mark.skipif(
@@ -277,8 +282,8 @@ def local_and_pointer_line_edited(project: Path) -> None:
     local_edited_alike(project)
     path = project / "AGENTS.md"
     text = path.read_text(encoding="utf-8")
-    assert text.count(TEST_LINE) == 1
-    write(path, text.replace(TEST_LINE, "- when writing or judging a test"))
+    old, new = next(edit for edit in POINTER_EDITS if text.count(edit[0]) == 1)
+    write(path, text.replace(old, new))
     commit(project, "pointer line")
 
 

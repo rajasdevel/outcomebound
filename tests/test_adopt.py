@@ -2522,15 +2522,36 @@ def test_every_install_keeps_outcomebounds_local_records_out_of_git(
     assert not (target / adopt.LOCAL_IGNORE).exists()
 
 
-def test_an_install_warns_for_each_path_git_ignores(tmp_path: Path, capsys: Capture) -> None:
+def ignored_by_rule(out: str) -> dict[str, int]:
+    """For each ignore-rule warning, its rule and how many of the install's paths it ignores."""
+
+    found: dict[str, int] = {}
+    for line in warnings(out):
+        hit = re.search(
+            r"warning +(?:(\d+) files of the install, such as \S+|\S+): "
+            r"Git ignores (?:it|them) \(([^)]*)\)",
+            line,
+        )
+        if hit:
+            found[hit.group(2)] = int(hit.group(1) or 1)
+    return found
+
+
+def test_an_install_warns_once_for_each_rule_that_ignores_its_paths(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if an ignored path goes uncounted, if one rule gets a warning per path, or if the
+    suggested exception would not un-ignore the folder the rule ignores."""
+
     target = repo(tmp_path / "t", {".gitignore": ".claude/\n"})
 
     code, out, _ = run(capsys, str(target), "--harness", "claude-code,codex")
 
     assert code == 0
-    ignored = [line.split()[1].rstrip(":") for line in warnings(out)]
-    assert ignored == sorted(path for path in manifest_paths(target) if path.startswith(".claude/"))
-    assert all("(.gitignore:1: .claude/)" in line for line in warnings(out))
+    claude = [path for path in manifest_paths(target) if path.startswith(".claude/")]
+    assert ignored_by_rule(out) == {".gitignore:1: .claude/": len(claude)}
+    (line,) = warnings(out)
+    assert "add `!/.claude/` after that rule" in line
 
 
 @pytest.mark.parametrize("extra", [(), ("--dry-run",)], ids=["install", "dry-run"])
@@ -2559,11 +2580,93 @@ def test_a_repeat_install_warns_for_unchanged_owned_paths_and_preserves_unmanage
     code, out, err = run(capsys, str(target), "--harness", "claude-code,codex", *extra)
 
     assert code == 0, err
-    assert [line.split()[1].rstrip(":") for line in warnings(out)] == expected
+    rules = [*(f".gitignore:{number}: {prefix}" for number, prefix in enumerate(prefixes, 1))]
+    counts = {
+        rule: sum(path.startswith(prefix) for path in expected)
+        for rule, prefix in zip(rules, prefixes, strict=True)
+    }
+    counts[f".gitignore:4: {adopt.MANIFEST}"] = 1
+    assert ignored_by_rule(out) == {rule: count for rule, count in counts.items() if count}
     assert unmanaged not in out and snapshot(target) == before
     _, out, _ = run(capsys, str(target), "--harness", "codex", "--dry-run")
     assert not any(".claude/" in line for line in warnings(out))
     assert unmanaged not in out and snapshot(target) == before
+
+
+def test_one_ignore_rule_over_several_harness_folders_gets_one_exception_that_keeps_them(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the paths one rule ignores get a warning each, or if the suggested line does not
+    un-ignore every one of them while the rule still ignores the folders it was written for."""
+
+    target = repo(tmp_path / "t", {".gitignore": "agents/\n"})
+    owned = [
+        f"{root}/skills/{skill}/{name}"
+        for root in (".agents", ".claude", ".cursor")
+        for skill in ("diagnose", "land-change")
+        for name in ("SKILL.md", "agents/openai.yaml")
+    ]
+
+    notes = adopt.ignored_notes(target, owned)
+
+    assert len(notes) == 1
+    verb, text = notes[0]
+    assert verb == "warning" and text.startswith("6 files of the install, such as ")
+    assert "(.gitignore:1: agents/)" in text
+    exception = re.search(r"add `([^`]+)` after that rule", text)
+    assert exception and exception.group(1) == "!/*/skills/*/agents/"
+    write(target / ".gitignore", f"agents/\n{exception.group(1)}\n")
+    checked = [path for path in owned if path.endswith("openai.yaml")] + ["tools/agents/x"]
+    still = subprocess.run(
+        [GIT, "check-ignore", "--no-index", *checked],
+        cwd=target,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout.split()
+    assert still == ["tools/agents/x"]
+
+
+def test_paths_one_rule_ignores_at_different_depths_get_no_suggested_pattern(
+    tmp_path: Path,
+) -> None:
+    """Breaks if a pattern is suggested that cannot cover paths at different depths."""
+
+    target = repo(tmp_path / "t", {".gitignore": "openai.yaml\n"})
+
+    notes = adopt.ignored_notes(target, [".agents/skills/a/agents/openai.yaml", "x/openai.yaml"])
+
+    ((_, text),) = notes
+    assert text.startswith("2 files of the install, such as ")
+    assert "un-ignore it, or choose" in text and "after that rule" not in text
+
+
+def test_a_dry_run_leaves_out_skill_diffs_unless_asked(capsys: Capture) -> None:
+    """Breaks if a dry run prints a skill file's diff by default, drops another file's diff, or
+    stops counting the skill files it leaves out."""
+
+    planned: dict[str, tuple[bytes | None, bytes | None]] = {
+        "AGENTS.md": (b"old kernel\n", b"new kernel\n"),
+        ".claude/skills/diagnose/SKILL.md": (b"old skill\n", b"new skill\n"),
+    }
+
+    adopt._diffs(planned)
+    out = capsys.readouterr().out
+    assert "+new kernel" in out and "+new skill" not in out
+    assert "diff     1 skill file(s) change; --diff prints their diffs" in out
+
+    adopt._diffs(planned, skills=True)
+    out = capsys.readouterr().out
+    assert "+new kernel" in out and "+new skill" in out and "--diff prints" not in out
+
+
+def test_diff_applies_only_to_a_dry_run(tmp_path: Path, capsys: Capture) -> None:
+    target = repo(tmp_path / "t")
+
+    with pytest.raises(SystemExit):
+        run(capsys, str(target), "--diff")
+
+    assert "--diff applies to --dry-run" in capsys.readouterr().err
 
 
 def manifest_paths(target: Path) -> list[str]:
