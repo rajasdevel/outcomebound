@@ -3,8 +3,8 @@
 What this module decides: the lines of the `project-facts` block, each a label and the fact
 verbatim (Done, Setup, CI test, Irreversible edges, Text for people, Precedence), a fact it cannot
 observe left out and named UNVERIFIED; the `guidance-pointers` block, the project's own `local`
-fragment inline and then one `- <condition>: read <path>` line per selected fragment and per
-installed skill, or, in a facts-only install, the `local` fragment alone;
+fragment inline and then one optional line naming every installed working skill and copied
+fragment at its installed path, or, in a facts-only install, the `local` fragment alone;
 and how the test command a project's CI runs is read: lexically, from GitHub Actions `run:`
 steps, each from its working directory, and GitLab CI `script:` entries, running nothing and
 following no symlink, and leaving out, named, each command the reading cannot settle; and the
@@ -501,7 +501,7 @@ class Rendered:
 
 
 class Chosen(NamedTuple):
-    """What the adopter chose for the facts block: the Done commands, in run order, the style
+    """What the adopter chose for the facts and pointers: the Done commands, in run order, the style
     for text a person reads, a key of `STYLES`, or none, and the Setup commands, in run order,
     which adopt records as the person's fact and never runs; and the install mode, `FULL` or
     `FACTS_ONLY`."""
@@ -517,7 +517,7 @@ def render(
     selected: Sequence[Fragment],
     done: Sequence[str],
     files: Sequence[str],
-    skills: Sequence[tuple[str, str]],
+    skills: Sequence[str],
     style: Sequence[str] = (),
 ) -> Rendered:
     """The facts and pointers blocks for `target`, for a project that records no Setup:
@@ -531,14 +531,14 @@ def render_chosen(
     selected: Sequence[Fragment],
     chosen: Chosen,
     files: Sequence[str],
-    skills: Sequence[tuple[str, str]],
+    skills: Sequence[str],
 ) -> Rendered:
     """The facts and pointers blocks for `target`.
 
     `selected` holds the selected fragments in order, `local` among them when chosen; `chosen`
     the recorded Done and Setup commands in run order and the style for text a person reads;
-    `files` the co-loaded instruction files, AGENTS.md first; `skills` a (condition, path) pair
-    per installed skill. A facts-only install keeps the whole selection's edges, and renders
+    `files` the co-loaded instruction files, AGENTS.md first; `skills` the installed paths
+    listed on the optional line. A facts-only install keeps the whole selection's edges, and renders
     Precedence without the clauses on OutcomeBound's guidance, which it does not install, and
     a pointers block with the `local` fragment alone.
     """
@@ -587,7 +587,10 @@ def render_chosen(
     shown = selected if mode == FULL else [item for item in selected if item.id == LOCAL]
     return Rendered(
         facts,
-        pointers(shown, skills if mode == FULL else []),
+        pointers(
+            shown,
+            skills if mode == FULL else [],
+        ),
         tuple(unverified),
         dict(sorted(inputs.items())),
         tuple(absent),
@@ -616,27 +619,24 @@ def inline(fragment: Fragment) -> str:
     return f"**{fragment.id}** ({fragment.family}) — {fragment.applies}\n\n{fragment.body}"
 
 
-ONCE = (
-    "Read each file below when its condition first holds; it stays in force for the session. "
-    "Read it again when the next step's rules from it are missing, incomplete, uncertain or may "
-    "have changed; a compaction alone is no reason."
-)
+def optional_line(paths: Sequence[str]) -> str:
+    """The one optional line, with each installed path in a code span."""
+
+    return (
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
+        + ", ".join(f"`{path}`" for path in paths)
+        + "."
+    )
 
 
-def pointers(selected: Sequence[Fragment], skills: Sequence[tuple[str, str]]) -> str | None:
-    """The `local` fragment inline, then one pointer line per fragment and skill; None if empty."""
+def pointers(selected: Sequence[Fragment], skills: Sequence[str]) -> str | None:
+    """The project's local text inline, then one optional list of installed paths."""
 
     parts = [inline(item) for item in selected if item.id == LOCAL]
-    lines = [
-        f"- {item.condition or 'for ' + item.applies}: read {FRAGMENT_DIR}/{item.id}.md"
-        for item in selected
-        if item.id != LOCAL
-    ]
-    lines += [f"- {condition}: read {path}" for condition, path in skills]
-    # Read once: session records showed one fragment read again dozens of times in one session.
-    # A read after every compaction repeats files whose rules the next step does not use.
-    lines = [ONCE, *lines] if lines else []
-    parts += ["\n".join(lines)] if lines else []
+    paths = [*skills, *(f"{FRAGMENT_DIR}/{item.id}.md" for item in selected if item.id != LOCAL)]
+    if paths:
+        parts.append(optional_line(paths))
     if not parts:
         return None
     return identity.format_managed_block(POINTERS, VERSION, "\n\n".join(parts))

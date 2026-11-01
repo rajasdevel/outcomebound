@@ -2,7 +2,6 @@
 id: team
 family: setup
 applies: repositories with code owners, branch protection, or required review
-condition: when a change needs review, crosses code owners or reaches a protected branch
 detect: ["CODEOWNERS", ".github/CODEOWNERS"]
 version: 5
 ---

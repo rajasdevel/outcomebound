@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 180,
+  "claims": [
+    {
+      "name": "requirements-kept",
+      "risk": "The built screen loses a stated label, column, filter, order or row value.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/mockup_guard.py\" requirements-kept"
+      ]
+    },
+    {
+      "name": "inference-labelled",
+      "risk": "The toolbar placement has no record with basis inferred, or is claimed as stated.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/mockup_guard.py\" inference-labelled"
+      ]
+    },
+    {
+      "name": "missing-state-open",
+      "risk": "The empty state is not recorded as open, or the screen adds an unstated empty-state message.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/mockup_guard.py\" missing-state-open"
+      ]
+    },
+    {
+      "name": "scope-kept",
+      "risk": "The task changed its source notes, other files, or committed the work.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/mockup_guard.py\" scope-kept"
+      ]
+    },
+    {
+      "name": "plain-summary",
+      "risk": "WORDING only, not required: the answer does not name the screen and the open empty state.",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/mockup_guard.py\" plain-summary"
+      ]
+    }
+  ]
+}

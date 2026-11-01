@@ -1,6 +1,7 @@
 ---
 name: explorable
-description: Use when the person wants to understand something, or wants it explained to others, where trying it teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. Builds a learning, explain, decision or interview page the engine checks; a decision page goes beside the decision brief and never in place of it, and a set of questions can go on an interview page. The decision-brief, gather-requirements and explain-spec skills send a decision, an interview or a lesson here where text serves it badly.
+description: Use when the person wants to understand something or have it explained to others, where trying teaches more than reading, asks for an interactive page, or wants to try options with their own numbers. A decision page accompanies the decision brief, never replaces it.
+disable-model-invocation: true
 ---
 
 # Explorable
@@ -10,10 +11,12 @@ flows and read charts. It is of one of four kinds. You write its source; the eng
 shared shell and checks it. A page that teaches comes first: **learning** teaches the person in this
 session, **explain** teaches readers who are not in it, **decision** helps the person decide, and
 **interview** asks the questions the work waits on. You are done when the person can open the page
-and use it: `outcomebound explorable check` passes on the page (with `--browser` where a
-Chromium-family browser exists, else the run is `UNVERIFIED` and your report says so), every
-number the page's lesson or answer rests on has an expectation, your report names each output that
-reads `UNVERIFIED`, and the page's path is in the text the person reads, beside the decision brief
+and use it: `outcomebound explorable check` reports no `FAIL` (its shell, hosts and parts read
+`PASS`; its run line is always `UNVERIFIED`); the page's own check, run in a browser you drive,
+shows no script error and every expectation passing, its result is copied into the working file
+beside the page, and your report names the browser tool and what the result held (with no browser
+to drive, the run is `UNVERIFIED` and your report says so); every number the page's lesson or answer rests on
+has an expectation; your report names each output that reads `UNVERIFIED`; and the page's path is in the text the person reads, beside the decision brief
 when there is one. You have looked at the page, and it shows what the person asked for, with data
 that supports that meaning, not only a matching label; where the data cannot, your report says so.
 
@@ -138,7 +141,18 @@ Rework and repeated text take the person's time and add nothing to the page:
 5. `outcomebound explorable build <name>.source.html` writes `<name>.html`. When it refuses the
    source, fix the source and build again; never edit the built page, which the next build
    replaces.
-6. `outcomebound explorable check <name>.html --browser` runs the page and its expectations.
+6. `outcomebound explorable check <name>.html` checks the shell, the hosts and the parts. Its run
+   line is always `UNVERIFIED`: the engine starts no browser. Run the page yourself in a browser
+   tool the harness gives you (an in-app browser, Playwright, a browser extension): open the
+   address that line names, which ends in `#explorable-check`, wait until the element with the id
+   `explorable-check-result` shows no library as `"pending"`, and read it as
+   `references/runtime.md` says. Where the tool shows a file from disk without running its
+   scripts, serve the page's folder on the loopback address (`python3 -m http.server --bind
+   127.0.0.1`), open the page there with the same fragment, and stop the server after. Copy the
+   result's text into the working file beside the page. A script
+   error or a failed expectation is a defect to fix in the source. Do not start a browser
+   from the shell for this: a browser started and killed that way can leave its processes and
+   files behind.
 7. Name the page's path in your message, beside the brief where there is one. Open the page for
    the person with the system's opener (`open` on macOS, `xdg-open` on Linux, `wslview` under WSL;
    on Windows `Invoke-Item` or `start ""`, which have not been run) only when they ask, or when they

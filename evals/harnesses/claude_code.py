@@ -69,6 +69,7 @@ from evals.claude_stream import (
     session_tokens,
     start_event,
     stream_transcript,
+    workspace_catalog,
     workspace_instructions,
     workspace_skills,
 )
@@ -415,7 +416,9 @@ class ClaudeCodeHarness:
 
         own = workspace_skills(cwd)
         foreign = tuple(skill for skill in ob_skills() if skill not in own)
-        return Expected(self.plugin_dirs, own, foreign, cwd, workspace_instructions(cwd))
+        return Expected(
+            self.plugin_dirs, own, foreign, cwd, workspace_instructions(cwd), workspace_catalog(cwd)
+        )
 
     def prepare_cell(
         self, request: Request, cwd: Path, write_roots: tuple[Path, ...], keep: Path

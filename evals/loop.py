@@ -31,7 +31,10 @@ The folder must resolve inside the evals home's `third-party/` folder (run.py's
 
 An arm of kind `earlier` may give `earlier_ref`, a Git ref of this checkout such as a release tag:
 `{"label": "v1.8.0", "arm": "earlier", "earlier_ref": "v1.8.0"}`, passed to run.py as
-`--earlier-ref`. A results folder that recorded another ref for the label is refused.
+`--earlier-ref`. A results folder that recorded another ref for the label is refused. An arm of
+kind `earlier` may instead give `earlier_verbatim`, a folder of another guidance set's own files
+(an `AGENTS.md` and `skills/<name>/SKILL.md`), passed to run.py as `--earlier-verbatim`:
+`{"label": "ponytail", "arm": "earlier", "earlier_verbatim": "/abs/third-party/set"}`.
 
 In place of `fixtures`, `pack` names a pack: `XS`, `S`, `M` or `L` is every fixture whose
 `suite.json` gives that tier, `panel` every fixture whose `suite.json` says `panel: true`; a
@@ -124,7 +127,17 @@ PROFILES = {
     "small": "claude-code",
 }
 ARM_KEYS = frozenset(
-    ("label", "arm", "drop", "add", "edits", "plugin_dir", "keep_skills", "earlier_ref")
+    (
+        "label",
+        "arm",
+        "drop",
+        "add",
+        "edits",
+        "plugin_dir",
+        "keep_skills",
+        "earlier_ref",
+        "earlier_verbatim",
+    )
 )
 DONE = ("ran", "ran with failures")
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -144,6 +157,7 @@ class Arm(NamedTuple):
     plugin_dir: str = ""
     keep_skills: tuple[str, ...] = ()
     earlier_ref: str = ""
+    earlier_verbatim: str = ""
 
 
 class Plan(NamedTuple):
@@ -260,7 +274,21 @@ def _arm(
         kind != "earlier" or not isinstance(ref, str) or not REF.match(ref)
     ):
         raise PlanError(f"arm {label}: earlier_ref is a Git ref, on the earlier arm only")
-    return Arm(label, str(kind), drop, add, edits, folder, keep, ref)
+    verbatim = _verbatim(entry, label, str(kind), ref, base)
+    return Arm(label, str(kind), drop, add, edits, folder, keep, ref, verbatim)
+
+
+def _verbatim(entry: Any, label: str, kind: str, ref: str, base: Path) -> str:
+    """The arm's `earlier_verbatim` folder, or an empty string; on the earlier arm only, and
+    never with `earlier_ref`."""
+
+    if "earlier_verbatim" not in entry:
+        return ""
+    if kind != "earlier" or ref:
+        raise PlanError(
+            f"arm {label}: earlier_verbatim is a folder, on the earlier arm without earlier_ref"
+        )
+    return str(_path(entry["earlier_verbatim"], f"arm {label}: earlier_verbatim", base))
 
 
 def read_plan(path: Path, runner: ModuleType) -> Plan:
@@ -491,6 +519,8 @@ def argv(plan: Plan, arm: Arm, repetition: int, fixture: str, out: Path) -> tupl
         words += ["--keep-skills", ",".join(arm.keep_skills)]
     if arm.earlier_ref:
         words += ["--earlier-ref", arm.earlier_ref]
+    if arm.earlier_verbatim:
+        words += ["--earlier-verbatim", arm.earlier_verbatim]
     words += [
         "--arm-label",
         arm.label,
@@ -666,7 +696,7 @@ def record(plan: Plan) -> None:
             {
                 key: value
                 for key, value in arm._asdict().items()
-                if key not in ("keep_skills", "earlier_ref") or value
+                if key not in ("keep_skills", "earlier_ref", "earlier_verbatim") or value
             }
             for arm in plan.arms
         ],

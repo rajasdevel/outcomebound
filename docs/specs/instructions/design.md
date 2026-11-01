@@ -24,6 +24,7 @@ How: `outcomebound instructions check --help` and `outcomebound_tools/instructio
 
 | Decision | Rejected alternative | Owner | Status |
 | --- | --- | --- | --- |
+| A full install carries every default rule in its kernel. The guidance-pointers block keeps the project's `local` text inline, then one optional line with every installed working skill and copied fragment at its real path. No skill or fragment is read by default. All installed skills carry `disable-model-invocation: true` and an `agents/openai.yaml` policy with `allow_implicit_invocation: false`, in every mode that installs skills. The [install design](../install/design.md) defines the line and root selection. These flags exempt no file from any audit check | auditing only automatically listed skills; treating a manual flag as an audit ruling | user | decided |
 | The engine audits an adopting project's instruction files | leaving them to the model that loads them | user | decided |
 | `check` is lexical, and OutcomeBound's own suite runs it on this repository | waiting for a model-assisted audit | user | decided |
 | The adopt skill's review of a target's instruction files runs `check` and reports for the person to judge; it never edits their files | adopt rewriting a target's instruction files | user | decided |

@@ -21,6 +21,7 @@ from pathlib import Path
 import pytest
 
 from evals.harnesses import CallResult, Request
+from tests.adopt_helpers import MANUAL_SKILLS, assert_native_skill
 from tests.eval_helpers import HERMETIC_GIT, ROOT, RUN, copy_fixture_sources
 from tests.portable import needs_posix_bash, needs_session_seal
 
@@ -341,14 +342,26 @@ def test_each_arm_is_its_kernel_file_or_the_block_adopt_installs() -> None:
     assert prompt == RUN.kernel("current") + "\n\nTask:\nFix it.\n"
 
 
-def test_the_unsized_arm_is_the_current_arm_less_the_sizing_paragraph_alone() -> None:
+def test_the_unsized_arm_removes_only_the_first_size_rule() -> None:
+    """Catch an ablation that also removes required process, test selection, reuse or repair."""
+
     current, unsized = RUN.load_arm("current"), RUN.load_arm(RUN.UNSIZED)
-    assert RUN.SIZING in current.kernel and RUN.SIZING not in unsized.kernel
-    kept = [part for part in current.kernel.split("\n\n") if not part.startswith(RUN.SIZING)]
-    assert unsized.kernel == "\n\n".join(kept)
-    assert unsized.files == current.files and unsized.launcher == current.launcher
-    with pytest.raises(SystemExit):
-        RUN.without_sizing("a kernel with no such paragraph")
+    rule = (
+        "- Size every step to the changed risk: a spec, ticket, review, loop, abstraction, "
+        "record or test is work; add one only where the outcome needs it.\n"
+    )
+    assert current.kernel.count(rule) == 1
+    assert rule not in unsized.kernel
+    assert unsized.kernel == current.kernel.replace(rule, "", 1)
+    assert "\nSize\n" in unsized.kernel and "\nEvidence\n" in unsized.kernel
+    remaining = current.kernel.split("\nSize\n", 1)[1].split("\nEvidence\n", 1)[0].splitlines()[1:]
+    assert len(remaining) == 4
+    assert all(line in unsized.kernel.splitlines() for line in remaining)
+    assert current.files == unsized.files and current.launcher == unsized.launcher
+    with pytest.raises(SystemExit, match="single sizing rule"):
+        RUN.without_sizing("a kernel with no such section")
+    with pytest.raises(SystemExit, match="single sizing rule"):
+        RUN.without_sizing(current.kernel + "\n" + rule)
 
 
 def test_a_runs_tokens_are_the_last_count_codex_printed() -> None:
@@ -383,7 +396,17 @@ def test_the_current_arm_is_a_codex_install_of_this_checkout() -> None:
     table = json.loads((ROOT / "adapters" / "harnesses.json").read_text(encoding="utf-8"))
     skills = table["codex"]["skill_install_path"].rstrip("/")
     current = RUN.load_arm("current")
-    assert current.files == _folders(skills, adopt.SKILLS)
+    expected, files = _folders(skills, adopt.SKILLS), dict(current.files)
+    expected.update(
+        {
+            f"{skills}/{name}/agents/openai.yaml": b"policy:\n  allow_implicit_invocation: false\n"
+            for name in MANUAL_SKILLS
+        }
+    )
+    for path in [path for path in expected if path.endswith("/SKILL.md")]:
+        assert_native_skill(files.pop(path), path.split("/")[-2])
+        del expected[path]
+    assert files == expected
     assert next(iter(current.files)) == f"{skills}/using-outcomebound/SKILL.md"
     assert (current.kernel, current.launcher) == (RUN.kernel("current"), ROOT / LAUNCHER)
     assert current.record()["arm_files"] == {
@@ -404,7 +427,10 @@ def test_the_current_arm_carries_every_installs_skills_and_the_fixtures_fragment
     skills = table["codex"]["skill_install_path"].rstrip("/")
     selected = RUN.load_arm("current", ("tickets",))
     fragment = ".outcomebound/fragments/tickets.md"
-    assert set(selected.files) - {fragment} == set(_folders(skills, adopt.SKILLS))
+    expected = set(_folders(skills, adopt.SKILLS)) | {
+        f"{skills}/{name}/agents/openai.yaml" for name in MANUAL_SKILLS
+    }
+    assert set(selected.files) - {fragment} == expected
     assert selected.files[fragment] == adopt._fragment_bytes(fragments.load_all(ROOT)["tickets"])
     assert f"{skills}/slice-tickets/references/github.md" in selected.files
     assert (selected.kernel, selected.launcher) == (RUN.kernel("current"), ROOT / LAUNCHER)
@@ -523,8 +549,6 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     facts-only arm lacks the facts or holds a pointer; or if the bare arm keeps any note; the
     other arms keep the note as the fixture wrote it."""
 
-    from outcomebound_tools import adopt
-
     arguments = ("--arm", arm, "--model", "gpt-6-sol", "--fixtures", "slice-a-spec")
     _done, out = _invoke(tmp_path, arguments, action=":")
     meta = _meta(out, "slice-a-spec")
@@ -547,13 +571,14 @@ def test_an_install_arm_s_fixture_carries_what_adopt_writes_into_agents_md(
     pointer = "before planning work here"
     if arm in RUN.INSTALLED:
         assert pointer not in note and "id=project-facts" in note, note
-        for skill in ("using-outcomebound", "slice-tickets"):
-            assert f"- {adopt.CONDITIONS[skill]}: read .agents/skills/{skill}/SKILL.md" in note
-        assert "read .outcomebound/fragments/tickets.md" in note
+        (optional,) = [line for line in note.splitlines() if line.startswith("Optional: ")]
+        for skill in MANUAL_SKILLS:
+            assert f"`.agents/skills/{skill}/SKILL.md`" in optional
+        assert "`.outcomebound/fragments/tickets.md`" in optional
         assert seed_note == note
     elif arm in (RUN.FACTS_ONLY, RUN.FACTS_ONLY_NOSKILLS):
         assert pointer not in note and "id=project-facts" in note, note
-        assert "id=operating-contract" not in note and ": read " not in note, note
+        assert "id=operating-contract" not in note and "Optional:" not in note, note
         assert seed_note == note
     else:
         assert "id=project-facts" not in note
@@ -613,7 +638,9 @@ def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_pa
 
     def at_head(path: str) -> bytes:
         return subprocess.run(
-            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"], capture_output=True, check=True
+            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"],
+            capture_output=True,
+            check=True,
         ).stdout
 
     done, out = _invoke(tmp_path, ("--arm", "earlier", "--earlier-ref", "HEAD", *SMALL_FIX[2:]))
@@ -633,13 +660,29 @@ def test_the_earlier_ref_makes_the_earlier_arm_a_full_install_of_that_ref(tmp_pa
     assert [name for name in shipped.HOME if not (launcher.parent.parent / name).exists()] == []
     repo = Path(meta["fixture_repo"])
     skill = at_head("skills/using-outcomebound/SKILL.md")
-    for root in (".agents/skills", ".outcomebound/skills"):
-        assert (repo / root / "using-outcomebound" / "SKILL.md").read_bytes() == skill
+    native = (repo / ".agents/skills/using-outcomebound/SKILL.md").read_bytes()
+    assert (
+        hashlib.sha256(native).hexdigest()
+        == meta["arm_files"][".agents/skills/using-outcomebound/SKILL.md"]
+    )
+    generic = (repo / ".outcomebound/skills/using-outcomebound/SKILL.md").read_bytes()
+    from outcomebound_tools import adopt
+
+    assert adopt.description(generic) == adopt.description(skill)
+    assert generic.split(b"\n---\n", 1)[1] == skill.split(b"\n---\n", 1)[1]
     assert (repo / ".agents/skills/decision-brief/SKILL.md").is_file()
     prompt = (out / "small-fix.prompt.md").read_text(encoding="utf-8")
     assert "Task:" in prompt and "id=operating-contract" not in prompt
     assert "id=operating-contract" in (repo / "AGENTS.md").read_text(encoding="utf-8")
-    assert hashlib.sha256(RUN.kernel("current").encode()).hexdigest() == meta["kernel_sha256"]
+    from outcomebound_tools import identity
+
+    installed_kernel = adopt.block_text((repo / "AGENTS.md").read_text("utf-8"), adopt.KERNEL)
+    assert installed_kernel is not None
+    assert hashlib.sha256(installed_kernel).hexdigest() == meta["kernel_sha256"]
+    expected = identity.parse_managed_block(at_head(RUN.TEMPLATE).decode("utf-8"), adopt.KERNEL)
+    actual = identity.parse_managed_block(installed_kernel.decode("utf-8"), adopt.KERNEL)
+    assert actual.body == expected.body
+    assert actual.version == at_head("VERSION").decode("utf-8").strip()
 
 
 def test_the_earlier_ref_is_refused_for_another_arm_and_for_an_unknown_ref(tmp_path: Path) -> None:
@@ -826,9 +869,7 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
         capture_output=True,
         check=True,
     ).stdout
-    changed = template.replace(
-        b"neither underengineer nor overengineer", b"a variant's own words", 1
-    )
+    changed = template.replace(b"do the core work the outcome needs", b"a variant's own words", 1)
     assert changed != template
     # The whole folder of a skill goes, as a variant would drop it.
     tree = subprocess.run(
@@ -876,29 +917,81 @@ def test_the_earlier_ref_carries_an_arbitrary_ref_with_its_own_kernel_and_skills
 
 
 def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: Path) -> None:
-    """What an install generates, the Done fact, the reread line and each skill's condition,
+    """What an install generates, the reread line, rules and skill and reference pointers,
     comes from the ref's engine, on an adopted fixture (its own adopt) and on one without an
     install.json (its own renderer): a ref whose engine words them differently shows its words,
     and this checkout's never reach the earlier arm."""
 
     def at_head(path: str) -> bytes:
         return subprocess.run(
-            ["git", "-C", str(ROOT), "show", f"HEAD:{path}"], capture_output=True, check=True
+            ["git", "-C", str(ROOT), "show", f"{historical}:{path}"],
+            capture_output=True,
+            check=True,
         ).stdout
 
-    from outcomebound_tools import adopt, facts
-
-    condition = adopt.CONDITIONS["decision-brief"].encode()
+    historical = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(ROOT),
+            "log",
+            "-1",
+            "-S",
+            "CONDITIONS =",
+            "--format=%H",
+            "--",
+            "outcomebound_tools/adopt.py",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
+    # The deletion commit has no constants; its parent is the historical engine.
+    if b"CONDITIONS =" not in at_head("outcomebound_tools/adopt.py"):
+        historical += "^"
+    condition = b"when a fix did not hold"
     adopt_text = at_head("outcomebound_tools/adopt.py")
     facts_text = at_head("outcomebound_tools/facts.py")
-    reread = b"a compaction alone is no reason."
-    assert condition in adopt_text and facts_text.count(reread) == 1
+    read_guidance = (
+        b"ONCE = (\n"
+        b'    "Read a file below when work you have read shows its condition holds; '
+        b'it stays in force for "\n'
+        b'    "the session, through its later turns and requests; read it again only when the '
+        b"next step's \"\n"
+        b'    "rules from it are missing, uncertain or may have changed.\\n"\n'
+        b'    "Use the listed project path even if the skill catalog omits it or a personal '
+        b'skill has "\n'
+        b'    "the same name."\n'
+        b")"
+    )
+    assert condition in adopt_text and facts_text.count(read_guidance) == 1
+    assert adopt_text.count(b'\nif __name__ == "__main__":') == 1
+    ref_rules = b'\nRULES = {name: "A ref rule for " + name + "." for name in RULES}\n'
+    ref_acts = b'ACTS = {name: "a ref act for " + name for name in ACTS}\n'
+    ref_references = (
+        b'REFERENCE_POINTERS = (("a ref reference condition", '
+        b'"using-outcomebound/references/ref-only.md"),)\n'
+    )
     commit = _commit_of(
         {
-            "outcomebound_tools/adopt.py": adopt_text.replace(condition, b"a ref's own condition"),
-            "outcomebound_tools/facts.py": facts_text.replace(reread, b"a ref's own reread."),
+            # Above the main guard: the ref's adopt runs as a program, so lines after it never run.
+            "outcomebound_tools/adopt.py": adopt_text.replace(
+                condition, b"a ref's own condition"
+            ).replace(
+                b'\nif __name__ == "__main__":',
+                ref_rules + ref_acts + ref_references + b'\nif __name__ == "__main__":',
+            ),
+            "outcomebound_tools/facts.py": facts_text.replace(
+                read_guidance,
+                b"ONCE = \"a ref's own reread.\\nA ref's own listed path.\"",
+            )
+            + b'\nRULES_LEAD = "A ref rules lead:"\n',
+            "skills/using-outcomebound/references/ref-only.md": b"A ref reference.\n",
+            "outcomebound_tools/fragments.py": at_head("outcomebound_tools/fragments.py")
+            + b"\nSKILLS = tuple(reversed(SKILLS))\n",
         },
-        base="HEAD",
+        base=historical,
     )
     for fixture in ("small-fix", "slice-a-spec"):
         assert (ROOT / "evals/fixtures" / fixture / "install.json").is_file() == (
@@ -909,8 +1002,203 @@ def test_the_earlier_ref_arm_gets_no_wording_of_this_checkouts_engine(tmp_path: 
         done, out = _invoke(tmp_path / fixture, (*arguments, "--fixtures", fixture))
         assert done.returncode == 0, done.stdout + done.stderr
         notes = (Path(_meta(out, fixture)["fixture_repo"]) / "AGENTS.md").read_text("utf-8")
-        assert "a ref's own condition" in notes and "a ref's own reread." in notes
-        assert adopt.CONDITIONS["decision-brief"] not in notes and facts.ONCE not in notes
+        assert "a ref's own condition" in notes
+        assert "a ref's own reread.\nA ref's own listed path." in notes
+        assert "when a fix did not hold" not in notes
+        assert (
+            "- a ref act for review-council: read .agents/skills/review-council/SKILL.md"
+        ) in notes.splitlines()
+        assert (
+            "- a ref act for land-change: read .agents/skills/land-change/SKILL.md"
+        ) in notes.splitlines()
+        assert "Read a file below when work you have read shows its condition holds" not in notes
+        assert "A ref rules lead:" in notes
+        historical_rules = (
+            "using-outcomebound",
+            "diagnose",
+            "tests-worth-keeping",
+            "gather-requirements",
+            "decision-brief",
+            "review-findings",
+            "land-change",
+        )
+        ordered_rules = [notes.index(f"- A ref rule for {skill}.") for skill in historical_rules]
+        assert ordered_rules == sorted(ordered_rules)
+        assert (
+            "- a ref reference condition: read "
+            ".agents/skills/using-outcomebound/references/ref-only.md"
+        ) in notes
+
+
+def test_the_current_arm_without_install_json_has_the_full_installs_pointers(
+    tmp_path: Path,
+) -> None:
+    """Breaks if the manual path omits rules or references, or changes the install's order."""
+
+    from outcomebound_tools import adopt, facts
+
+    fixture = "slice-a-spec"
+    assert not (ROOT / "evals/fixtures" / fixture / "install.json").exists()
+    arm = RUN.load_arm("current", ("tickets",))
+    workspace = tmp_path / "workspace"
+    stage = tmp_path / "stage"
+    workspace.mkdir()
+    stage.mkdir()
+    extra: dict = {}
+    failure, _protected, _seed, _prompt = RUN.build_workspace(fixture, arm, workspace, extra, stage)
+    assert failure is None, (failure, extra)
+    manual = adopt.block_text((workspace / "AGENTS.md").read_text("utf-8"), facts.POINTERS)
+    assert manual is not None
+    (optional,) = [
+        line for line in manual.decode("utf-8").splitlines() if line.startswith("Optional: ")
+    ]
+    import re
+
+    assert re.findall(r"`([^`]+)`", optional) == [
+        *(f".agents/skills/{name}/SKILL.md" for name in adopt.SKILLS),
+        ".outcomebound/fragments/tickets.md",
+    ]
+    installed = subprocess.run(
+        [
+            str(ROOT / LAUNCHER),
+            "adopt",
+            str(workspace),
+            "--harness",
+            "codex",
+            "--fragments",
+            "tickets",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=RUN.fixture_setup_env(),
+    )
+    assert installed.returncode == 0, installed.stdout + installed.stderr
+    full = adopt.block_text((workspace / "AGENTS.md").read_text("utf-8"), facts.POINTERS)
+    assert manual == full
+
+
+def test_an_older_engine_without_manual_routing_keeps_its_rule_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catches imposing the new rule order on an earlier engine that rendered in skill order."""
+
+    monkeypatch.setattr(RUN, "EARLIER_REF", "synthetic")
+    monkeypatch.setattr(RUN, "earlier_source", lambda: ROOT)
+    monkeypatch.setattr(
+        RUN,
+        "earlier_engine",
+        lambda request: {
+            "skill_root": ".historical/skills",
+            "skills": ["diagnose", "decision-brief"],
+            "conditions": {"diagnose": "old diagnosis", "decision-brief": "old brief"},
+            "rules": {
+                "decision-brief": "An older brief rule.",
+                "diagnose": "An older diagnosis rule.",
+            },
+            "references": [],
+            "files": {},
+        },
+    )
+    assert RUN.load_arm("earlier").rules == (
+        "An older diagnosis rule.",
+        "An older brief rule.",
+    )
+
+
+@pytest.mark.parametrize(
+    "skill", ["tests-worth-keeping", "decision-brief", "using-outcomebound", "land-change"]
+)
+def test_dropping_a_skill_removes_its_optional_path_and_keeps_the_kernel(
+    tmp_path: Path, skill: str
+) -> None:
+    """Catch a skill ablation dropping default rules or keeping its optional path."""
+
+    from outcomebound_tools import adopt
+
+    arm = RUN.fixture_arms(
+        RUN._parser(), "current", ["small-fix"], RUN.Elements(dropped=(f"skill:{skill}",))
+    )["small-fix"]
+    workspace, stage = tmp_path / "workspace", tmp_path / "stage"
+    workspace.mkdir()
+    stage.mkdir()
+    extra: dict = {}
+    failure, _protected, _seed, _prompt = RUN.build_workspace(
+        "small-fix", arm, workspace, extra, stage
+    )
+    assert failure is None, (failure, extra)
+    note = workspace / "AGENTS.md"
+    text = note.read_text("utf-8")
+    path = f".agents/skills/{skill}/SKILL.md"
+    assert f"`{path}`" not in text
+    assert adopt.block_text(text, adopt.KERNEL) == adopt.kernel_block(ROOT).encode("utf-8")
+    assert RUN.element_problems(workspace, arm) == []
+    note.write_text(text.replace("one: `", f"one: `{path}`, `"), "utf-8")
+    assert RUN.element_problems(workspace, arm) == [f"skill:{skill}'s optional path present"]
+
+
+@pytest.mark.parametrize("has_render_chosen", [False, True])
+def test_an_earlier_engine_without_rules_or_references_renders_as_before(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, has_render_chosen: bool
+) -> None:
+    """An old engine has neither new name and accepts no rules argument; it gets no new text."""
+
+    source = tmp_path / "old-engine"
+    package = source / "outcomebound_tools"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", "utf-8")
+    (package / "adopt.py").write_text(
+        "from collections import namedtuple\n"
+        'CONDITIONS = {"diagnose": "old condition"}\n'
+        "def routes(root, names):\n"
+        "    assert names == ['codex']\n"
+        "    return [namedtuple('Route', 'skills')('.historical/skills')]\n",
+        "utf-8",
+    )
+    (package / "fragments.py").write_text('SKILLS = ("diagnose",)\n', "utf-8")
+    (package / "facts.py").write_text(
+        "from collections import namedtuple\n"
+        "Rendered = namedtuple('Rendered', 'facts pointers')\n"
+        "def render(target, selected, done, files, skills):\n"
+        "    assert selected == [] and done == ['old check'] and files == ['AGENTS.md']\n"
+        "    lines = '\\n'.join('- ' + condition + ': read ' + path\n"
+        "                      for condition, path in skills)\n"
+        "    return Rendered('old facts', 'old reread\\n' + lines)\n",
+        "utf-8",
+    )
+    if has_render_chosen:
+        with (package / "facts.py").open("a", encoding="utf-8") as output:
+            output.write(
+                "Chosen = namedtuple('Chosen', 'done')\n"
+                "def render_chosen(target, selected, chosen, files, skills):\n"
+                "    return render(target, selected, chosen.done, files, skills)\n"
+            )
+    monkeypatch.setattr(RUN, "earlier_source", lambda: source)
+    guidance = RUN.earlier_engine({"op": "guidance", "harness": "codex"})
+    assert guidance == {
+        "skill_root": ".historical/skills",
+        "skills": ["diagnose"],
+        "conditions": {"diagnose": "old condition"},
+        "rules": {},
+        "references": [],
+        "files": {},
+        "fragment_files": {},
+        "optional": False,
+    }
+    rendered = RUN.earlier_engine(
+        {
+            "op": "render",
+            "target": str(tmp_path),
+            "selected": [],
+            "done": ["old check"],
+            "skills": [["old condition", ".agents/skills/diagnose/SKILL.md"]],
+            "rules": [],
+        }
+    )
+    assert rendered == {
+        "facts": "old facts",
+        "pointers": "old reread\n- old condition: read .agents/skills/diagnose/SKILL.md",
+    }
 
 
 def test_NEGATIVE_CONTROL_the_child_process_itself_sees_no_api_key(tmp_path: Path) -> None:

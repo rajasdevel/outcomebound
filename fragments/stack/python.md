@@ -2,26 +2,19 @@
 id: python
 family: stack
 applies: Python projects
-condition: when choosing the checks for a Python change, or changing its dependencies or environment
 detect: ["pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini"]
-version: 8
+version: 9
 ---
-**Context** — the actual interpreter, resolved dependencies, and collected tests are the
-evidence. Use the project's dependency records when present; a version pin in `pyproject.toml`
-is a claim about the environment, not the environment.
-**Bounds** — preserve existing dependency selections and project-owned environment state;
-re-resolution is a deliberate scoped change. Task-created disposable environments and caches
-can be cleaned within their ownership. Where the project publishes, publishing to an index is an
-irreversible edge, which the `ci-release` fragment, or this project's local fragment, declares.
-**Mechanisms** — `failing-test-first` when a focused regression adds useful signal;
-`broad-suite` when the changed module is imported across packages.
-**Completion bar** — the affected project-native tests and existing static checks, with the formatter and the linter's own safe fix (`ruff format`,
-`ruff check --fix`, or the project's) run on the paths you changed before you read what the linter
-still reports, and their diff read; where a check
-runs only in a container or a managed environment, its floor claim runs there through the claim's
-`prefix` and keeps its baseline; a process that a harness or a CI job starts may hold no
-activated virtual environment, so a Done command names the project's interpreter
-(`.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the PATH of the process that
-runs it), not a tool only an activated environment holds; import-time behavior stays
-unverified until the package is imported in a clean interpreter.
+**Context** — Evidence is the actual interpreter, resolved dependencies and collected tests.
+Where present, use the project's dependency records; a `pyproject.toml` version pin claims an environment, not its actual state.
+**Bounds** — Preserve existing dependency selections and project-owned environment state; re-resolution is a deliberate scoped change.
+Task-created disposable environments and caches may be cleaned within their ownership.
+Where the project publishes, publishing to an index is an irreversible edge, declared by `ci-release` or this project's local fragment.
+**Mechanisms** — When a focused regression adds useful signal, use `failing-test-first`.
+When the changed module is imported across packages, use `broad-suite`.
+**Completion bar** — Run affected project-native tests and existing static checks.
+Before reading remaining lint findings, run the formatter and linter's own safe fix (`ruff format`, `ruff check --fix`, or the project's) on the paths you changed; read their diff.
+Where a check runs only in a container or managed environment, run its floor claim there through its `prefix` and keep its baseline.
+A Done command names the project's interpreter (`.venv/bin/python -m pytest`, or `uv run pytest` where `uv` is on the running process's PATH), never a tool held only in an activated environment: harness and CI processes may have none.
+Until the package is imported in a clean interpreter, import-time behavior stays unverified.
 **Distinguish** — edited ≠ tests collected ≠ passing ≠ installed in the target environment.

@@ -8,6 +8,7 @@ them is run. Assertions are about the commands read, the lines rendered and what
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,29 @@ from outcomebound_tools.fragments import Fragment, load_all
 from tests.portable import needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.mark.parametrize("name", list(load_all(ROOT)))
+def test_every_fragment_is_optional_and_local_stays_inline(name: str) -> None:
+    """Catch an automatic fragment read or the loss of the project's local text."""
+
+    item = load_all(ROOT)[name]
+    rendered = facts.pointers([item], ["custom/skills/diagnose/SKILL.md"])
+    assert rendered is not None
+    optional = [line for line in rendered.splitlines() if line.startswith("Optional: ")]
+    assert len(optional) == 1
+    expected = ["custom/skills/diagnose/SKILL.md"]
+    if name == "local":
+        assert facts.inline(item) in rendered
+    else:
+        expected.append(f".outcomebound/fragments/{name}.md")
+        assert item.body not in rendered
+    assert re.findall(r"`([^`]+)`", optional[0]) == expected
+    assert optional[0].startswith(
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
+    )
+
 
 PYTHON = """\
 name: Python

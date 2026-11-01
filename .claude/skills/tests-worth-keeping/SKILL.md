@@ -1,17 +1,14 @@
 ---
 name: tests-worth-keeping
-description: Use when writing, changing or judging a test, or when the project's tests already fail before you begin. What makes a test worth keeping, when no new test is warranted, and what the report keeps apart.
+description: Use when changing money, date, limit or permission logic, when project tests fail before work, when skipping, loosening or deleting a test, or when a test's proof of behaviour is uncertain. For each test added or assessed, assert through the caller's interface an expected value that neither the code under test nor a copy of its algorithm produces (a literal, worked example or spec). Name the break each added or assessed test would catch. For a refusal test, reach the named refusal, not setup failure or an earlier guard.
+disable-model-invocation: true
 ---
 
 # Tests worth keeping
 
-A test is worth keeping when some change to the code it covers would make it fail. Which tests
-to write, and when to run them, is yours, except the tests a hand-off package fixes, which stay
-as written (one that contradicts the requirement goes back to the package's author, with the
-conflict); this is the bar a test you keep meets, and what your
-report keeps apart. New logic that decides something (a branch, a parse, money, access) leaves one
-small test that would fail if it broke, unless an existing test already does; a change with no such
-logic needs none.
+Keep a test only if a production change would make it fail; name that break for each test you add or keep.
+For new deciding logic (a branch, parse, money or access), add one small test unless an existing test catches its break; changes without such logic need none.
+Choose tests and timing except fixed hand-off tests; keep those as written and send requirement conflicts to the package's author.
 
 ## In a project that already fails
 
@@ -33,37 +30,17 @@ claim declares has changed since (`CURRENT`, `CHANGED` or `UNVERIFIED`); it runs
 
 ## What a kept test shows
 
-- **A break it catches.** Name the production change that would make it fail. If none would,
-  the test cannot fail: an assertion that recomputes the expected value the way the code does, an
-  assertion on what a test double was told to return, a value compared with itself. Where you
-  doubt a test can fail, break the code and watch it; that settles the doubt, and is no step
-  every test needs. For a refusal or a deliberate break, check that the case reaches the
-  behaviour it names. A setup error or an earlier guard rejecting it is not evidence for
-  that behaviour.
-- **A snapshot that earns its upkeep.** For a snapshot or golden file that is routinely
-  restamped, name the unwanted behaviour it detects and whether another check already covers it.
-- **Observable behaviour.** Assert through the interface a caller uses, against an expected value
-  the code did not produce: a known-good literal, a worked example, the spec. A test that pins how
-  the code is written, such as the order of calls on collaborators, private state or the exact
-  wording of a message that is not the contract, fails on a refactor that changes nothing
-  observable. Rewrite it against the behaviour or drop it.
-- **The same verdict every run**, alone and beside other tests: a retry hides the cause.
-- **For a bug, the reported case**, as the `diagnose` skill reproduces it.
+If no production change would fail a test, delete or rewrite it and say what it caught before, if anything.
+If in doubt, break the code and watch the test fail; this is not required for every test.
+For a refusal or deliberate break, reach the named behaviour, not setup failure or an earlier guard.
+Assert observable behaviour through the caller's interface against a known-good literal, worked example or spec, never the code's result or a copy of its algorithm.
+Rewrite or drop tests that pin implementation without an observable change.
+If examples would settle doubt, read [examples](references/examples.md).
+For a routinely restamped snapshot or golden file, name the unwanted behaviour it detects and whether another check covers it.
+Keep verdicts stable alone and beside other tests; retries hide causes.
+For a bug, test the reported case as `diagnose` reproduces it.
 
-## When no new test is warranted
+## Coverage and report
 
-An existing test already fails on the break; the change is to generated files, configuration or
-documentation, where a build, render or lint check catches the break; or the risk sits at a layer
-a unit test does not reach, such as integration, delivery or rendering, where a runtime check is
-the test. Say so in the report, in place of a test that adds nothing.
-
-## Deleting a test that cannot fail
-
-A test no production change would fail, or one that fails only on refactors, is deleted or
-rewritten, and the change says what it caught before, if anything.
-
-## The report
-
-Failures that predate the work, apart from any the work caused; for each test added, the break it
-catches; and each completion-bar check or material claim that no check exercised, said to
-be unverified, with the evidence missing and what would settle it.
+When an existing test catches the break, a build, render or lint check catches a generated-file, configuration or documentation change, or the risk needs a runtime integration, delivery or rendering check, say which in the report instead of adding a redundant test.
+For each completion-bar check or material claim no check exercised, report it as unverified, with the missing evidence and what would settle it.

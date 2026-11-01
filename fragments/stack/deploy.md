@@ -2,7 +2,6 @@
 id: deploy
 family: stack
 applies: projects with deployment configuration
-condition: before a deploy, promotion, flag change or other act on a shared or production environment, and when reporting what an environment serves
 detect: ["fly.toml", "vercel.json", "netlify.toml", "render.yaml", "wrangler.toml", "serverless.yml", "Chart.yaml", "skaffold.yaml", "kustomization.yaml", "app.yaml", "Procfile", "cdk.json", "Pulumi.yaml", "samconfig.toml", "firebase.json", "railway.json", "railway.toml", "cloudbuild.yaml", ".github/workflows/*deploy*.yml", ".github/workflows/*deploy*.yaml", "*.tf"]
 version: 6
 ---

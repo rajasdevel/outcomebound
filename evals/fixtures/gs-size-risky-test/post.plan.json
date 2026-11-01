@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 300,
+  "claims": [
+    {
+      "name": "function-works",
+      "risk": "the prorating function fails a month-end, month-length, leap-year, rounding or result-type check held outside the workspace",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" function-works"
+      ]
+    },
+    {
+      "name": "test-added",
+      "risk": "no new test in the project's own test folder exercises the function, or the tests fail",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" test-added"
+      ]
+    },
+    {
+      "name": "test-catches-off-by-one",
+      "risk": "the model's tests still pass when the function is made to charge one day too few",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" test-catches-off-by-one"
+      ]
+    },
+    {
+      "name": "test-reaches-month-ends",
+      "risk": "the model's tests still pass when the first day or the last day of a month is lost: the boundary is not exercised",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/size.py\" test-reaches-month-ends"
+      ]
+    },
+    {
+      "name": "only-the-function-and-its-tests-changed",
+      "risk": "a file other than the function's module and the tests changed, or the change was committed",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec bash \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/allowed_paths.sh\" 'billing/proration.py' 'tests/*'"
+      ]
+    }
+  ]
+}

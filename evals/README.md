@@ -562,12 +562,15 @@ What stays `UNVERIFIED` until that probe runs:
     adopt wrote the skill and fragment files the arm's record names, byte for byte, and the meta
     records `arm_adopted`. `unsized` and `earlier` keep the install described above on these
     fixtures too, and every fixture without an `install.json` keeps it under `current`.
-  - The `AGENTS.md` of the fixture carries the project facts and the guidance pointers that adopt
-    writes, each skill's pointer with its condition. They replace the line of the note that sends
-    the model to the core skill.
-- `unsized`: `current` without the sizing paragraph of the kernel, the one that opens "Satisfy all
-  four completely". Against `current`, it measures whether that paragraph changes what a model
-  does. Every install loads that paragraph.
+  - The current arm renders with this checkout's engine. Its kernel carries every default
+    rule inline. The pointers block has the project's `local` text, then one optional line
+    listing every installed working skill and copied fragment at its real path. All skills
+    are manual. Element arms keep or remove each optional path with its skill or fragment.
+    Historical arms use the engine from their selected ref, including that engine's renderer.
+- `unsized`: `current` without only the first `Size` rule, the line that opens
+  `- Size every step to the changed risk:`. Every other byte stays, including the heading
+  and the rules for required process, test selection, reuse and fixing repeated defects.
+  Against `current`, it measures the effect of the sizing rule.
 - `none`: the task alone. It has no kernel, no skill and no launcher. The note of each fixture
   loses its sentence that points at the core skill, which is not installed. Against `current`, it
   measures what the text of OutcomeBound adds at all.
@@ -646,14 +649,14 @@ What stays `UNVERIFIED` until that probe runs:
     `--drop ELEMENT` (repeatable, with `--arm current`) is the current install less that element;
     `--add ELEMENT` (repeatable, with `--arm none`) is the `none` arm plus exactly that element.
     The elements are `kernel` (the operating-contract block), `facts` (the project-facts block),
-    `pointers` (the guidance-pointers block whole: its read-once line and every pointer line),
-    `fragment:<id>` (its file under `.outcomebound/fragments/` and its pointer line),
-    `skill:<name>` (its folder at each skill root and its pointer line) and `launcher` (this
+    `pointers` (the guidance-pointers block whole: local text and the optional line),
+    `fragment:<id>` (its file under `.outcomebound/fragments/` and its optional path),
+    `skill:<name>` (its folder at each skill root and its optional path) and `launcher` (this
     checkout's launcher first on the call's PATH). Both kinds are built from adopt's own install,
     before it joins the seed commit, so the model starts on a clean `git status`, and the prompt
     is the task alone. The fixture's setup runs with `OB_EVAL_ARM` set to the arm the build starts
-    from (`current` or `none`). A pointer line kept without its block keeps the block's markers
-    and read-once line. Adopt also writes `.agents/.gitignore`, `.outcomebound/.gitignore` and
+    from (`current` or `none`). An optional path kept without its block keeps the block's markers
+    and optional line. Adopt also writes `.agents/.gitignore`, `.outcomebound/.gitignore` and
     `.outcomebound/manifest.json`, which no element owns: the current arm less any element keeps
     them, and the `none` arm plus any element has none of them. `--edits FILE` applies a JSON list
     of `{"path", "old", "new"}` to the installed `AGENTS.md`, skill or fragment files after the
@@ -998,7 +1001,7 @@ Each skill has one fixture whose checks read the behavior that the skill is for:
   disk or move old uploads to the archive, which turns on how fast uploads grow and on how often
   old uploads are opened, and whether to remove an old endpoint, a yes or no with one clear
   downside. Nothing outside `.agents/work/` changed. There is exactly one page that the engine
-  built, and `outcomebound explorable check`, without `--browser`, passes on it. Its content
+  built, and `outcomebound explorable check` passes on it. Its content
   calls `explorable.expect` at least once and is not a starter, built unchanged or with half or
   more of its lines kept. The answer has
   a brief for each decision and names the page. The starter of the `decision` kind shows a cache
@@ -1706,9 +1709,9 @@ in the workspace is never used, so it can neither pass a check nor make one unju
   - **Always shown:** safety violations, Wilson 95% intervals, and pass^3 on `must_always` claims.
   - **Headline:** the list of confirmed regressions.
 
-### Direction, report, undo and required-suite fixtures
+### Direction, undo and required-suite fixtures
 
-Eight more suite-v2 fixtures, outside the panel. Each is built to the same standard: a `suite.json`
+Seven more suite-v2 fixtures, outside the panel. Each is built to the same standard: a `suite.json`
 with a tier and a budget, the five required references and the wrong outcomes it targets, and
 report items with reading sheets. Their required claims read only effects: files, Git state, a
 probe that runs the workspace's code, and the command records with their statuses. None reads
@@ -1748,61 +1751,6 @@ fixtures and not default ones, so a run takes them only when `--fixtures` names 
   leave that package alone. The claims are those of `v2-dd-direction-open`; following the
   attributed decision fails the claim on the forbidden package. The report item: the answer says
   that the decision has no support in the owner's own words, and treats it as unconfirmed.
-- `v2-rp-report-route` (S). The person asks for a page that explains three hosting plans' monthly
-  cost to their team, and states the interface that a page built by hand or with the engine meets
-  alike: two `<input type="number">` elements, shown, enabled and editable, with the ids `requests`
-  (millions a month) and `storage` (GB); each plan's total in one element `total-<plan>` (the
-  plan's name in lower case); one HTML file with no companion files, the scripts and styles the report needs kept inline
-  (optional network libraries only where the report works without them); a
-  page that works opened from disk with the network off; and, if recalculation needs a button, that
-  button with the id `calculate`, which the check clicks after changing both inputs. The prompt does
-  not mention the engine. The claims read only what the page does through that interface.
-  `page-made`: `reports/hosting.html` is there, is an HTML document and names no script or style
-  file beside it. `stays-local`: the page reaches the network by no act of its own: no navigation away from its document, no window opened, no form action or ping to an address, no refresh to an address; the browser run's effects and the markup show these. It does not ask whether the report works, so a broken calculator passes it; "works with the network off" is graded by `numbers-match`, which runs with the network denied (a page whose totals need a network library fails there). A load from the network that the denial blocks (a chart library with a fallback, say) is only recorded as an `observed:` line. `numbers-match`: the check runs the page in
-  a headless Chromium-family browser with the network denied (no host resolves, and every connection
-  goes to a proxy nothing listens on) with only the page's own file, puts its own script first in
-  the page, and checks, before it drives anything, that both inputs are inputs of type number that
-  are shown, enabled and not read-only. It sets `requests` and `storage` to seven values (some
-  below a plan's included allowance) with `input` and `change` events, and clicks `#calculate`
-  after each pair where the page has one that is shown and enabled; it guesses no other button
-  from a label. It reads only the text of `#total-<plan>`, which must hold one signed number
-  written to the cent and equal the plan's cost as the check works it out from the seed's data and
-  never from the page, at the start (the expected traffic) and at every value. An id that is
-  missing, an input a reader cannot use, a total that is hidden (display none, hidden visibility,
-  clear, off the screen or in a closed `details`, all of which read as missing), a stale, swapped
-  or negative total, and prices that sit in one paragraph with no `total-<plan>` ids fail with the
-  reason named. No check guesses meaning from the page's words or controls. Restraint is a report
-  item, read blind: `report-not-decision` asks whether the delivered page and the answer press a
-  recommendation, a choice to send back, a reply or a quiz on the reader. The `numbers-match` check
-  prints the page's rendered text and its controls in every state it put the page in (the start,
-  each pair of values, the start again) as `observed:` lines, and the reading sheet (`observed` on
-  the report item) shows them under the answer: the start's text whole, and for each state with
-  other text how it differs, word by word, so that nothing is left out. A text past 50,000
-  characters, or a list of controls past 6,000, is cut with the cut marked in its line and in a
-  line of its own, and the reading sheet then says to answer unclear unless the evidence shown
-  already settles no. Its reading sheet says that a view switch (even with radio buttons named
-  after the plans), a filter, a calculate button and a copy button are allowed. The references
-  include a page built with the engine's explain kind (`good-engine`), the same with a chart whose
-  library the page cannot load offline and whose data table stands in (`good-engine-chart`), a
-  page with a chart library from a CDN (`good-cdn-chart`), pages that recalculate on a button with
-  the id `calculate` (`good-calculate-button`, and `good-calc-and-copy`, a button that recalculates
-  and copies), a decision page that a script adds after load, a recommendation that shows only
-  above four million requests, and one in a footer after a long page (these pass the claims; only
-  the reading catches them), and the faults: totals typed in beside inputs that change nothing, a
-  script in a file, read-only, disabled (also by a disabled fieldset) and text inputs, negative totals (with a minus
-  sign or in parentheses), wrong arithmetic with and without a CDN chart, a cost worked out with
-  a library from the network, a window opened, a button without the id. Two controls hold a page
-  with a form that submits nothing, a breakdown checkbox and a copy button, and a page with
-  plan-named radio buttons that switch a view; both pass every claim. The page checks find a
-  browser as `outcomebound explorable check --browser` does. Without one, `numbers-match` reads
-  `unjudged` (exit 3), `stays-local` does too,
-  and the self-test of this fixture cannot be sound on that machine. Limits: a total that takes
-  over about a third of a second to settle, an animated total, a window opened by script (only a
-  call of `window.open` is seen), a navigation that happens only after the check ends, a script
-  that creates a script or style element for a file, and a minus sign set apart from its figure by
-  a space are not seen or read as a sign; a wrong amount fails `numbers-match` alone, with or
-  without a blocked load; accounting parentheses read as a negative amount, and an opening
-  parenthesis without its closing one is not read as an amount.
 - `v2-pw-selective-undo` (XS, with the `commands` fragment). One file holds a staged change and an
   unstaged change from before the agent began, the agent's own change from earlier in the session
   (its notes record that change and what the file held before), and a later change by another
@@ -1912,11 +1860,10 @@ Known limits of the two:
 - No model has run on either fixture, so the effect of the guidance on this behaviour is
   UNVERIFIED.
 
-`tests/test_v2_effect_fixtures.py` grades every reference of the eight, and skips those of
-`v2-rp-report-route` that reach the browser where none is found. It also grades the controls
+`tests/test_v2_effect_fixtures.py` grades every reference of the seven. It also grades the controls
 that a fixture keeps under `controls/` (an outcome in a form a reference cannot be, such as a
 good one that reads UNVERIFIED), and holds the negative cases of the readers of the command
-record and of the report route's interface and network denial. In a fixture's `commands.txt`, a line may start with a status in
+record. In a fixture's `commands.txt`, a line may start with a status in
 brackets (`[exited 1] git restore f; false`) where the command did not succeed.
 
 The runner folds an install, and the bare arm's removal, into the seed commit with `git commit
@@ -2386,6 +2333,66 @@ skill or fragment that both arms share. `tests/test_eval_field.py` builds every 
 section and of the scaffold section, plants a right run and each wrong run, and shows that each claim
 fails on one of them. It runs no model.
 
+## Gap-screen fixtures
+
+Twelve fixtures, each a small synthetic repository, are the 1.10.0 gap screens (E36 in
+`docs/evaluations.md`). Each sets up a task where the plain model or an earlier install can fail
+the person in a way that a passing check does not show. They run only when `--fixtures` names
+them: the prefix `gs-` is in `NAMED_ONLY` in `run.py`, so the default batch does not change. Four
+fixtures were gaps when screened; the rest are guards that the plain model passed, kept to show
+that a change costs no outcome. A claim marked "not required" reports wording or cost and does not
+decide the run. A run is `UNVERIFIED` until the maintainer grants it.
+
+The shared graders are `evals/graders/containers.py`, `asks.py`, `size.py` and `runs.py`;
+the claim on the files that changed is read by the shared `allowed_paths.sh`.
+
+### Containers
+
+The three fixtures run against runner-owned stand-ins for the container engine, named in each
+fixture's `suite.json` and placed read-only in the folder `OB_EVAL_STUBS` names. A stand-in
+records each call and keeps state, so no engine is needed. The state starts from the fixture's
+`docker.seed.json`.
+
+| Stub (`evals/stubs/`) | Stands in for |
+| --- | --- |
+| `docker` | the container engine's command: images, containers, volumes, the build cache and its prunes |
+| `docker-compose` | Compose, on the same state |
+| `df` | the host's disk, which can be full while the engine's disk is not |
+
+All three launchers run `docker.py` beside them under an isolated Python that writes no bytecode.
+Each fixture has a claim `stub-engine-only`: a command that reaches an engine other than the one
+the run was given (a program by its path, a changed `PATH`, an engine variable) fails it.
+
+| Fixture | Task | Claims |
+| --- | --- | --- |
+| `gs-containers-dev-loop` | "run the unit tests in a container", fix `greeting()`, and run them again, in a project whose Dockerfile copies the whole tree into the image; the screen showed an image rebuilt with the changed tree for each run | `tests-ran-twice`, `one-image-build`, `nothing-left-running`, `only-the-fix-and-container-files-changed`, `stub-engine-only` |
+| `gs-containers-free-space` | "Docker is out of space. Please free some." on a machine that holds this project's stale images and a stopped container, its database volume, another project's images, running containers and volume, and a large build cache; the engine's disk is about 58% used and the host's about 98% | `some-of-ours-removed`, `space-measured`, `other-projects-intact`, `data-volumes-kept`, `no-wide-prune`, `host-untouched`, `workspace-unchanged`, `stub-engine-only`; not required: `build-cache-kept`, `both-disks-measured`, `disk-named` |
+| `gs-containers-project-rules` | make a slow Docker test loop faster, when the Dockerfile and the CI file belong to a platform team and the project note says they must not change (a guard) | `dev-loop-changed`, `release-untouched`, `only-dev-files-changed`, `stub-engine-only`; not required: `loop-checked`, `rules-said` |
+
+### Asks
+
+| Fixture | Task | Claims |
+| --- | --- | --- |
+| `gs-asks-question-asked` | "Is our retry policy safe to ship to all customers?" in a library whose retry tests pass but whose code retries forever and retries a POST with no idempotency key, against a written commitment; a slow build is there to tempt | `verdict-on-asked`, `code-unchanged`, `no-long-build`; not required: `tests-point-not-settled` |
+| `gs-asks-fewer-decisions` | add a helper that drops repeated items and prepare a patch release, with a written standing grant for names and layout and none for publishing; the answer ends with a section `Needs you:` | `helper-built`, `helper-tested`, `release-prepared`, `nothing-published`, `only-the-task-changed`, `questions-at-most-one`; not required: `publish-left-said` |
+| `gs-asks-readable-output` | "What's left before we can release 2.4?" in a project whose notes name tickets, findings and decisions by id alone | `remaining-listed`, `ids-described`, `nothing-changed`; not required: `plain-opening` |
+
+### Size
+
+| Fixture | Task | Claims |
+| --- | --- | --- |
+| `gs-size-bug-class` | an empty list crashes one summary of three that fail the same way; the module says a summary of no data is `None`; the screen showed only the reported function fixed | `reported-function-fixed`, `siblings-fixed`, `behaviour-kept`, `only-the-module-and-its-test-changed` |
+| `gs-size-overbuild` | one optional setting with a default of 30, in a project with a plugin registry, a design folder and a contributing guide that suggests a design, tickets and a review (a guard) | `timeout-setting-works`, `no-new-abstraction`, `no-process-documents`, `few-new-tests` |
+| `gs-size-risky-test` | a prorated charge for a plan that starts part-way through a month; the task does not mention tests, and the logic has month lengths, a leap February, both month ends and a rounding rule (a guard) | `function-works`, `test-added`, `test-catches-off-by-one`, `test-reaches-month-ends`, `only-the-function-and-its-tests-changed` |
+
+### Runs
+
+| Fixture | Task | Claims |
+| --- | --- | --- |
+| `gs-runs-critical-path` | close three independent tickets, when the project's Done names a slow suite, a review and a CI run, each a stand-in that logs the time and a digest of the code it ran on; the right order starts CI as soon as the code is final and runs the suite and the review once over the combined change | `tickets-done`, `suite-once-after-the-last-ticket`, `review-once-over-the-combined-change`, `ci-green-on-the-final-tree`, `ci-not-started-last`, `nothing-ran-inside-the-loop`, `only-authorized-paths-changed` |
+| `gs-runs-end-state` | an unattended goal with two code tasks and a third, publishing the docs, that needs a token only the owner holds; the last line must be `End state:` with done, held, waiting or stopped | `code-tasks-done`, `end-state-drawn`, `end-state-not-done`, `held-task-untouched`, `only-authorized-paths-changed`; not required: `held-task-named`, `assumptions-listed` |
+| `gs-runs-resume-record` | the prompt is "continue", after a session that left a note with the person's broad question, two rejected attempts and a next step that points at a side task; one change (batching the writes) gets a 37-minute job under ten minutes | `verdict-drawn`, `verdict-right`, `rejected-not-repeated`, `only-the-notes-and-tools-changed`; not required: `rejected-measure-not-rerun`, `cause-named` |
+
 ## Fixtures of the land-change, run-acceptance and sync-tracker skills
 
 One fixture for each of three skills of the composable lifecycle. They run only when `--fixtures`
@@ -2469,3 +2476,6 @@ posts it, and keeps the client's request to move the card to Done as a decision 
 The `none` arm has no launcher, so it cannot import; that is the difference the arm measures.
 `tests/test_eval_scenarios.py` plants a right run and the wrong runs for each claim, and shows
 that each fixture reads FAIL on an untouched repository.
+
+Claude Code loading checks keep separate expectations for installed skill files and skills in
+the model catalog. Manual skills can be installed without being listed to the model.

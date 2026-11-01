@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 180,
+  "claims": [
+    {
+      "name": "every-item-dispositioned",
+      "risk": "A current source item has no unique disposition, source text or evidence, or an item is silently dropped.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/source_ledger_guard.py\" every-item-dispositioned"
+      ]
+    },
+    {
+      "name": "changed-item-reconsidered",
+      "risk": "The reworded order rule keeps the earlier input-order decision or output, or sorts names with regard to case.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/source_ledger_guard.py\" changed-item-reconsidered"
+      ]
+    },
+    {
+      "name": "added-item-reconsidered",
+      "risk": "The added owner column lacks a new implemented disposition or is absent from output.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/source_ledger_guard.py\" added-item-reconsidered"
+      ]
+    },
+    {
+      "name": "unchanged-items-kept",
+      "risk": "The update loses CSV, the header, row values or the existing archived-project exclusion.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/source_ledger_guard.py\" unchanged-items-kept"
+      ]
+    },
+    {
+      "name": "scope-kept",
+      "risk": "The source or unrelated files changed, or the work was committed.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/source_ledger_guard.py\" scope-kept"
+      ]
+    },
+    {
+      "name": "changes-explained",
+      "risk": "WORDING only, not required: the answer does not identify both the changed and added item.",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/source_ledger_guard.py\" changes-explained"
+      ]
+    }
+  ]
+}

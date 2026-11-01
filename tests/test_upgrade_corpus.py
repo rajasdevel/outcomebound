@@ -103,7 +103,7 @@ TICKETS = {
     "claims": ".outcomebound/ticket-claims.json",
 }
 TEST_LINE = "- when writing, changing or judging a test"
-TICKETS_CONDITION = "or their declaration"
+OPTIONAL_WORDS = "an incidental step in other work does not call for one"
 CWD_WARNINGS = frozenset({"tickets: the claim", "tickets: the claims plan"})
 
 needs_permissions = pytest.mark.skipif(
@@ -282,14 +282,14 @@ def local_and_pointer_line_edited(project: Path) -> None:
     commit(project, "pointer line")
 
 
-def tickets_condition_reworded(tree: Path) -> None:
-    """A release that renders the pointers block anew: the tickets fragment's condition, which
-    its pointer line carries, says it in other words."""
+def optional_line_reworded(tree: Path) -> None:
+    """A release that renders the pointers block anew: the optional line, which the engine
+    writes into the block, says it in other words."""
 
-    path = tree / "fragments/setup/tickets.md"
+    path = tree / "outcomebound_tools/facts.py"
     text = path.read_text(encoding="utf-8")
-    assert text.count(TICKETS_CONDITION) == 1
-    write(path, text.replace(TICKETS_CONDITION, f"{TICKETS_CONDITION} file"))
+    assert text.count(OPTIONAL_WORDS) == 1
+    write(path, text.replace(OPTIONAL_WORDS, "an incidental step in other work calls for none"))
 
 
 def unreadable_folder(project: Path) -> None:
@@ -344,6 +344,8 @@ def crlf_checkout(project: Path) -> None:
     commit(project, "crlf checkout")
 
 
+REFUSAL = "AGENTS.md (guidance-pointers) differs from what adopt wrote; restore it, or pass --force"
+LOCAL_MD = ".outcomebound/fragments/local.md"
 CASES = {
     "plain": Case(plain),
     "crlf-checkout": Case(crlf_checkout),
@@ -356,18 +358,16 @@ CASES = {
     "local-edited-in-block-only": Case(
         local_edited_in_block_only,
         install=LOCAL_ONLY,
-        refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
+        refusal=REFUSAL + "; the difference is",
     ),
-    "local-edited-alike-rendered-anew": Case(
-        local_edited_alike, release=tickets_condition_reworded
-    ),
+    "local-edited-alike-rendered-anew": Case(local_edited_alike, release=optional_line_reworded),
     "subfolder-local-edited-alike-rendered-anew": Case(
-        local_edited_alike, release=tickets_condition_reworded, folder="component"
+        local_edited_alike, release=optional_line_reworded, folder="component"
     ),
     "local-and-pointer-line-edited-rendered-anew": Case(
         local_and_pointer_line_edited,
-        refusal="AGENTS.md (guidance-pointers) differs from what adopt wrote",
-        release=tickets_condition_reworded,
+        refusal=REFUSAL + "; the difference is",
+        release=optional_line_reworded,
     ),
     "unreadable-folder": Case(unreadable_folder, locks=("locked",)),
     "ignored-copies": Case(ignored_copies),
@@ -561,6 +561,7 @@ def test_an_install_of_a_previous_release_upgrades_with_the_candidate(
     if case.refusal:
         assert upgrade.returncode == 1, report
         assert case.refusal in upgrade.stderr, report
+        assert f"the text of {LOCAL_MD} that the block holds" in upgrade.stderr, report
         assert state(project, set(), set()) == whole, "a refusal writes nothing"
         assert check.returncode != 0, check.stdout
         return
@@ -619,7 +620,7 @@ def test_a_previous_release_reads_the_candidates_manifest_and_the_candidate_read
     commit(project, f"OutcomeBound {tag} again")
 
     local_edited_alike(project)
-    candidate = released(tickets_condition_reworded)
+    candidate = released(optional_line_reworded)
     first = engine(candidate, "adopt", str(project), "--check")
     assert not edited(first.stdout), first.stdout
     upgrade = engine(candidate, "adopt", str(project))

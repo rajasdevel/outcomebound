@@ -2,7 +2,6 @@
 id: solo
 family: setup
 applies: single-maintainer repositories
-condition: when deciding who reviews or verifies a change, or before unattended work
 detect: []
 version: 6
 ---

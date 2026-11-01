@@ -1,6 +1,7 @@
 ---
 name: land-change
-description: Use when driving a pull or merge request through CI and review to landing. Covers the handover, a failing check, each review comment, the merge and where the agent's authority over other people's reviews ends.
+description: Use when driving a pull or merge request through CI and review to landing.
+disable-model-invocation: true
 ---
 
 # Land a change
@@ -8,7 +9,9 @@ description: Use when driving a pull or merge request through CI and review to l
 You are done when the request has landed under a grant that covers it, or waits on a named person
 for a named reason. Each check has a verdict, each review thread has a reply, and no person's review
 was resolved, approved or dismissed by you. A request that no one has reviewed and that no check
-gates needs only the handover and the merge grant.
+gates needs only the handover and the merge grant. When the run must stop before the merge, turn
+off auto-merge before you update the request or its checks complete (GitHub merges by itself once
+required reviews and checks pass; docs.github.com, read 2026-10-26), and say that you did.
 
 ## The handover in the request
 
@@ -53,6 +56,8 @@ another person opened, approve a request, dismiss a review, or mark a requested 
 their behalf: the author of a thread, or the person who owns the review, does that. A review you
 wrote yourself, or one by another agent that works for the same person, is a check on the code and
 not a second party's review. Where the project requires a second party, it is still missing.
+A check result or an approval on the request is written by the platform or the person it names,
+never by you; record your own verification in a reply or the description.
 
 ## When the rounds do not converge
 

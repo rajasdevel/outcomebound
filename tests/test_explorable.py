@@ -1,35 +1,24 @@
-"""`outcomebound explorable`: `new`, `build` and `check`, and the browser runner.
+"""`outcomebound explorable`: `new`, `build` and `check`.
 
 The seam is the command line, run in this process: a source in, a page out, the verdicts and the
-exit codes. The browser runner is tested with a fake browser script (POSIX) that prints a canned
-document and leaves a helper running, and, where a Chromium-family browser is found, with a
-small page that writes the check result itself. None of it depends on the stylesheet's or the
-runtime's content, only on their being inlined byte for byte."""
+exit codes. None of it depends on the stylesheet's or the runtime's content, only on their being
+inlined byte for byte. The engine starts no browser, so `check` leaves the run to the agent."""
 
 from __future__ import annotations
 
 import json
-import os
 import re
-import stat
-import sys
-import time
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from outcomebound_tools import (
     explorable,
-    explorable_browser,
-    explorable_check,
     explorable_shell,
 )
-from tests.processes import running
 
 ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = ROOT / "templates" / "explorable"
-POSIX = pytest.mark.skipif(os.name == "nt", reason="the fake browser is a POSIX script")
 KINDS = ("decision", "learning", "explain", "interview")
 
 
@@ -670,295 +659,19 @@ def test_check_fails_a_citation_without_what_build_adds(tmp_path, capsys):
 def test_check_exits_2_for_a_page_it_cannot_read_and_for_a_usage_error(tmp_path):
     assert run("check", tmp_path / "none.html") == 2
     with pytest.raises(SystemExit) as caught:
-        run("check", tmp_path / "x.html", "--timeout", "0")
+        run("check", tmp_path / "x.html", "--browser")
     assert caught.value.code == 2
 
 
-def test_a_page_that_fails_is_not_run(tmp_path, capsys, monkeypatch):
+def test_check_leaves_the_run_to_a_browser_the_agent_drives(tmp_path, capsys):
     page = built(tmp_path)
-    change(page, "default-src 'none'", "default-src *")
-    monkeypatch.setenv("OUTCOMEBOUND_BROWSER", str(tmp_path / "never"))
+    capsys.readouterr()
 
-    assert run("check", page, "--browser") == 1
+    assert run("check", page) == 0
 
-    assert "not run: the shell, hosts and parts do not all pass" in capsys.readouterr().out
-
-
-# The browser: discovery, with a fake environment.
-
-
-def fake_files(*present: str):
-    return lambda path: path in present
-
-
-def test_the_named_browser_comes_first_and_must_be_a_file(tmp_path):
-    chosen = tmp_path / "mine"
-    chosen.write_text("", encoding="utf-8")
-
-    found, _ = explorable_browser.find_browser(
-        {"OUTCOMEBOUND_BROWSER": str(chosen), "PATH": ""}, platform="linux"
-    )
-    assert found == str(chosen)
-    none, why = explorable_browser.find_browser(
-        {"OUTCOMEBOUND_BROWSER": str(tmp_path / "gone"), "PATH": ""}, platform="linux"
-    )
-    assert none is None and "not a file" in why
-
-
-@POSIX
-def test_programs_on_path_are_tried_in_the_documented_order(tmp_path):
-    for name in ("brave", "chromium"):
-        program = tmp_path / name
-        program.write_text("#!/bin/sh\n", encoding="utf-8")
-        program.chmod(program.stat().st_mode | stat.S_IXUSR)
-
-    found, how = explorable_browser.find_browser({"PATH": str(tmp_path)}, platform="linux")
-
-    assert found == str(tmp_path / "chromium") and "chromium" in how
-
-
-def test_install_folders_are_read_on_macos_and_windows():
-    mac = explorable_browser.MACOS_PATHS[1]
-    found, _ = explorable_browser.find_browser(
-        {"PATH": ""}, platform="darwin", is_file=fake_files(mac)
-    )
-    assert found == mac
-    edge = os.path.join("C:\\Programs", r"Microsoft\Edge\Application\msedge.exe")
-    found, _ = explorable_browser.find_browser(
-        {"PATH": "", "PROGRAMFILES": "C:\\Programs"}, platform="win32", is_file=fake_files(edge)
-    )
-    assert found == edge
-
-
-def test_no_browser_is_a_reason_not_an_error():
-    found, why = explorable_browser.find_browser({"PATH": ""}, platform="linux")
-
-    assert found is None and "Firefox" in why
-
-
-# The browser: result parsing.
-
-RESULT: dict[str, Any] = {
-    "done": True,
-    "errors": [],
-    "expectations": [{"label": "a", "pass": True, "expected": {"o": "30"}, "shown": {"o": "30"}}],
-    "outputs": {"names": ["o"], "covered": ["o"], "uncovered": []},
-    "libraries": {"chart": "unused", "mermaid": "failed"},
-    "diagrams": {"drawn": 0, "failed": 0},
-}
-
-
-def document(result: object) -> str:
-    return (
-        '<html><body><script type="application/json" id="explorable-check-result">'
-        f"{json.dumps(result)}</script></body></html>"
-    )
-
-
-def test_a_result_in_the_printed_document_is_read():
-    found, reason = explorable_browser.parse_result(document(RESULT))
-
-    assert found == RESULT and reason == ""
-
-
-@pytest.mark.parametrize(
-    "text, fragment",
-    [
-        ("<html></html>", "no check result"),
-        ('<script id="explorable-check-result">{', "not JSON"),
-        ('<script id="explorable-check-result">{</script>', "not JSON"),
-        (document({"done": False}), "not complete"),
-        (document([1]), "not complete"),
-    ],
-)
-def test_a_missing_or_malformed_result_is_named(text, fragment):
-    found, reason = explorable_browser.parse_result(text)
-
-    assert found is None and fragment in reason
-
-
-def test_the_verdict_of_a_result():
-    assert explorable_check.run(RESULT).status == "PASS"
-    failed = {**RESULT, "errors": ["boom"]}
-    assert explorable_check.run(failed).status == "FAIL"
-    wrong = {**RESULT, "expectations": [{**RESULT["expectations"][0], "pass": False}]}
-    assert explorable_check.run(wrong).status == "FAIL"
-    open_output = {**RESULT, "outputs": {"names": ["o", "p"], "covered": ["o"], "uncovered": ["p"]}}
-    verdict = explorable_check.run(open_output)
-    assert verdict.status == "UNVERIFIED" and "output p: UNVERIFIED" in verdict.details[0]
-    assert "mermaid failed" in explorable_check.run(RESULT).details[0]
-
-
-# The browser: a fake browser that prints a document and leaves a helper running.
-
-FAKE = """#!{python}
-import os, subprocess, sys, time
-folder = os.environ["FAKE_DIR"]
-profile = [a for a in sys.argv if a.startswith("--user-data-dir=")][0].split("=", 1)[1]
-open(folder + "/profile", "w").write(profile)
-open(folder + "/args", "w").write("\\n".join(sys.argv[1:]))
-helper = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
-open(folder + "/helper", "w").write(str(helper.pid))
-if os.environ.get("FAKE_MODE", "document") == "document":
-    sys.stdout.write(open(folder + "/document.html").read())
-    sys.stdout.flush()
-if os.environ.get("FAKE_MODE") == "exit":
-    sys.exit(0)
-time.sleep(120)
-"""
-
-
-@pytest.fixture
-def fake(tmp_path, monkeypatch):
-    folder = tmp_path / "fake"
-    folder.mkdir()
-    program = folder / "browser"
-    program.write_text(FAKE.format(python=sys.executable), encoding="utf-8")
-    program.chmod(0o755)
-    monkeypatch.setenv("FAKE_DIR", str(folder))
-    monkeypatch.setenv("OUTCOMEBOUND_BROWSER", str(program))
-    return folder, program
-
-
-def gone(pid: int) -> bool:
-    for _ in range(50):
-        if not running(pid):
-            return True
-        time.sleep(0.1)
-    return False
-
-
-@POSIX
-def test_the_runner_reads_to_the_end_of_the_document_then_stops_the_whole_group(fake, tmp_path):
-    folder, program = fake
-    (folder / "document.html").write_text(document(RESULT), encoding="utf-8")
-    page = tmp_path / "p.html"
-    page.write_text("x", encoding="utf-8")
-
-    ran = explorable_browser.run_page(str(program), page, 30)
-
-    assert ran.document is not None and "explorable-check-result" in ran.document
-    assert gone(int((folder / "helper").read_text(encoding="utf-8")))
-    assert not Path((folder / "profile").read_text(encoding="utf-8")).exists()
-    args = (folder / "args").read_text(encoding="utf-8").splitlines()
-    assert "--headless=new" in args and "--dump-dom" in args
-    assert args[-1] == page.resolve().as_uri() + "#explorable-check"
-
-
-@POSIX
-def test_a_browser_that_prints_nothing_reads_as_the_limit(fake, tmp_path, monkeypatch):
-    folder, program = fake
-    monkeypatch.setenv("FAKE_MODE", "silent")
-    page = tmp_path / "p.html"
-    page.write_text("x", encoding="utf-8")
-
-    # The limit is the behaviour under test. It runs from the browser's start, so it must hold
-    # the fake's two interpreter starts on a slow or busy machine before it reads the helper.
-    ran = explorable_browser.run_page(str(program), page, 3)
-
-    assert ran.document is None and "3 s limit" in ran.reason
-    assert gone(int((folder / "helper").read_text(encoding="utf-8")))
-
-
-@POSIX
-def test_a_browser_that_exits_without_a_document_reads_as_that(fake, tmp_path, monkeypatch):
-    _, program = fake
-    monkeypatch.setenv("FAKE_MODE", "exit")
-    page = tmp_path / "p.html"
-    page.write_text("x", encoding="utf-8")
-
-    ran = explorable_browser.run_page(str(program), page, 30)
-
-    assert ran.document is None and "without printing" in ran.reason
-
-
-# check --browser through the command line, with the fake browser.
-
-
-@POSIX
-@pytest.mark.parametrize(
-    "result, code, overall, run_line",
-    [
-        (RESULT, 0, "PASS", "run: PASS"),
-        ({**RESULT, "errors": ["x is not defined"]}, 1, "FAIL", "run: FAIL"),
-        (
-            {**RESULT, "outputs": {"names": ["o", "p"], "covered": ["o"], "uncovered": ["p"]}},
-            0,
-            "UNVERIFIED",
-            "run: UNVERIFIED",
-        ),
-    ],
-)
-def test_check_browser_reports_the_run(fake, tmp_path, capsys, result, code, overall, run_line):
-    folder, _ = fake
-    (folder / "document.html").write_text(document(result), encoding="utf-8")
-    page = built(tmp_path)
-
-    assert run("check", page, "--browser") == code
-
-    out = report(capsys)
-    assert out.startswith(f"explorable check: {overall}") and run_line in out
-
-
-@POSIX
-def test_check_browser_fails_a_page_that_wrote_no_result(fake, tmp_path, capsys):
-    folder, _ = fake
-    (folder / "document.html").write_text("<html></html>", encoding="utf-8")
-
-    assert run("check", built(tmp_path), "--browser") == 1
-
-    assert "the page wrote no check result" in capsys.readouterr().out
-
-
-@POSIX
-def test_check_browser_with_a_silent_browser_is_unverified_and_names_the_limit(
-    fake, tmp_path, capsys, monkeypatch
-):
-    monkeypatch.setenv("FAKE_MODE", "silent")
-
-    assert run("check", built(tmp_path), "--browser", "--timeout", "1") == 0
-
-    assert "run: UNVERIFIED not run: the browser printed no document within the 1 s limit" in (
-        capsys.readouterr().out
-    )
-
-
-def test_check_browser_with_no_browser_is_unverified(tmp_path, capsys, monkeypatch):
-    monkeypatch.delenv("OUTCOMEBOUND_BROWSER", raising=False)
-    monkeypatch.setenv("PATH", str(tmp_path))
-    monkeypatch.setattr(explorable_browser, "MACOS_PATHS", ())
-    monkeypatch.setattr(sys, "platform", "linux")
-
-    assert run("check", built(tmp_path), "--browser") == 0
-
-    assert "run: UNVERIFIED not run: no Chromium-family browser" in capsys.readouterr().out
-
-
-# A real browser, where one is found.
-
-HAND_MADE = """<!doctype html><html><body><script>
-var s = document.createElement('script');
-s.type = 'application/json'; s.id = 'explorable-check-result';
-s.textContent = JSON.stringify({done: true, errors: [], expectations: [],
-  outputs: {names: [], covered: [], uncovered: []}, libraries: {},
-  diagrams: {drawn: 0, failed: 0}});
-document.body.appendChild(s);
-</script></body></html>
-"""
-
-
-def test_a_real_browser_prints_the_result_a_page_writes(tmp_path):
-    browser, _ = explorable_browser.find_browser()
-    if browser is None:
-        pytest.skip("no Chromium-family browser on this machine")
-    page = tmp_path / "hand.html"
-    page.write_text(HAND_MADE, encoding="utf-8")
-
-    ran = explorable_browser.run_page(browser, page, 90)
-
-    assert ran.document is not None, ran.reason
-    result, reason = explorable_browser.parse_result(ran.document)
-    assert result is not None and result["done"] is True, reason
+    out = capsys.readouterr().out
+    assert out.startswith("explorable check: UNVERIFIED")
+    assert f"open {page.resolve().as_uri()}#explorable-check in a browser you drive" in out
 
 
 # Parser differentials, the reserved names, and what `check` finds in a page.
@@ -1032,33 +745,6 @@ def test_the_brief_drawings_own_names_do_not_fail_the_hosts_verdict(tmp_path, ca
     assert run("check", page) == 0
 
     assert "hosts: PASS" in capsys.readouterr().out
-
-
-def test_a_page_with_a_second_result_element_is_not_read(tmp_path):
-    fake = (
-        '<div id="explorable-check-result">{"done": true}</div>'
-        '<script>var s = "<script id=\\"explorable-check-result\\">";</script>'
-    )
-    one = document(RESULT)
-
-    assert explorable_browser.parse_result(one.replace("<body>", "<body>" + fake))[0] is None
-    found, reason = explorable_browser.parse_result(
-        one.replace("<body>", "<body>" + fake.split("<script>")[0])
-    )
-    assert found is None and "2 elements" in reason
-    inert = '<script>var s = "<script id=\\"explorable-check-result\\">";</script>'
-    assert explorable_browser.parse_result(one.replace("<body>", "<body>" + inert))[0] == RESULT
-
-
-@POSIX
-def test_check_browser_fails_a_page_whose_document_holds_two_results(fake, tmp_path, capsys):
-    folder, _ = fake
-    two = document(RESULT).replace("</body>", '<p id="explorable-check-result"></p></body>')
-    (folder / "document.html").write_text(two, encoding="utf-8")
-
-    assert run("check", built(tmp_path), "--browser") == 1
-
-    assert "2 elements" in report(capsys)
 
 
 def test_a_title_and_a_brief_with_script_markup_build_and_pass_the_shell(tmp_path, capsys):

@@ -25,8 +25,10 @@ from outcomebound_tools import adopt, facts, fileplan, fragments, identity, path
 from outcomebound_tools.declared_tests import PYTEST
 from tests.adopt_helpers import (
     GIT,
+    MANUAL_SKILLS,
     ROOT,
     Capture,
+    assert_native_skill,
     change_kernel,
     engine_copy,
     manifest,
@@ -47,7 +49,10 @@ SKILL_FILES = sorted(
     for p in (ROOT / "skills" / name).rglob("*")
     if p.is_file()
 )
-SKILL_RECORDS = ["skill"] * len(SKILL_FILES)
+NATIVE_SKILL_FILES = sorted(
+    [*SKILL_FILES, *(f"{name}/agents/openai.yaml" for name in MANUAL_SKILLS)]
+)
+SKILL_RECORDS = ["skill"] * len(NATIVE_SKILL_FILES)
 GENERIC_SKILL = ".outcomebound/skills/using-outcomebound/SKILL.md"
 PYTHON_FRAGMENT = ".outcomebound/fragments/python.md"
 LAUNCHER = ROOT / "scripts" / "outcomebound"
@@ -95,6 +100,8 @@ def sha(data: bytes) -> str:
 def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
     tmp_path: Path, capsys: Capture
 ) -> None:
+    """Catches missing install artifacts, restored kernel rules or the routine/full brief split."""
+
     files = {"README.md": "# T\n", "pyproject.toml": "[project]\n", "CLAUDE.md": "# Notes\n"}
     target = repo(tmp_path / "t", files)
 
@@ -104,14 +111,28 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
     agents = blocks(target, "AGENTS.md")
     assert list(agents) == [adopt.KERNEL, adopt.FACTS, adopt.POINTERS]
     assert agents[adopt.KERNEL].version == VERSION
+    template = identity.parse_managed_block(
+        (ROOT / adopt.KERNEL_TEMPLATE).read_text(encoding="utf-8"), adopt.KERNEL
+    )
+    assert agents[adopt.KERNEL].body == template.body
     shipped = (ROOT / "fragments/stack/python.md").read_bytes()
     assert (target / PYTHON_FRAGMENT).read_bytes() == shipped
     assert list(blocks(target, "CLAUDE.md")) == ["pointer-claude-md"]
     assert adopt.IMPORT in (target / "CLAUDE.md").read_text(encoding="utf-8").splitlines()
-    skill = (ROOT / "skills/using-outcomebound/SKILL.md").read_bytes()
-    brief = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
-    assert (target / CLAUDE_SKILL).read_bytes() == skill
-    assert (target / CLAUDE_BRIEF).read_bytes() == brief
+    skill = (target / CLAUDE_SKILL).read_bytes()
+    brief = (target / CLAUDE_BRIEF).read_bytes()
+    assert_native_skill(skill, "using-outcomebound")
+    assert_native_skill(brief, "decision-brief")
+    assert (
+        "A routine decision (one choice, a clear recommendation) is asked in plain words in "
+        "the text the person reads: the question, your recommendation, its consequence, what "
+        "waits and whether it can be undone; the brief below is for a choice between several "
+        "credible options, or when the person asks for a brief or a page. A question the "
+        "person asked is answered, not turned into a brief."
+    ) in brief.decode("utf-8")
+    assert "draw each brief this section's rules call for with `outcomebound brief -`" in (
+        brief.decode("utf-8")
+    )
     assert (target / "README.md").read_text(encoding="utf-8") == "# T\n"
 
     document = manifest(target)
@@ -124,7 +145,7 @@ def test_a_fresh_install_writes_the_contract_facts_pointers_skills_and_import(
         ("fragment", PYTHON_FRAGMENT, "python"),
         ("ignore", adopt.LOCAL_IGNORE, adopt.LOCAL_RECORDS),
         ("pointer", "CLAUDE.md", "pointer-claude-md"),
-        *[("skill", f".claude/skills/{file}", file.split("/")[0]) for file in SKILL_FILES],
+        *[("skill", f".claude/skills/{file}", file.split("/")[0]) for file in NATIVE_SKILL_FILES],
     ]
     assert records[1]["fragments"] == ["python"]
     by_path = {record["path"]: record for record in records}
@@ -195,7 +216,7 @@ def test_an_upgrade_rewrites_what_the_changed_source_renders_and_nothing_else(
     assert code == 0, err
     agents = blocks(target, "AGENTS.md")
     assert agents[adopt.KERNEL].version == "9.9.9"
-    assert "not least work, now." in agents[adopt.KERNEL].body
+    assert "nothing the outcome does not need, now." in agents[adopt.KERNEL].body
     assert adopt.block_text((target / "AGENTS.md").read_text(encoding="utf-8"), adopt.POINTERS) == (
         pointers
     )
@@ -203,6 +224,17 @@ def test_an_upgrade_rewrites_what_the_changed_source_renders_and_nothing_else(
     assert manifest(target)["engine_version"] == "9.9.9"
     code, out, _ = run(capsys, str(target), "--check", source=source)
     assert code == 0 and set(states(out).values()) == {"current"}
+
+
+def skill_pointer_lines(root: str, names: tuple[str, ...] = adopt.SKILLS) -> list[str]:
+    """The one optional line names the real path of every installed skill."""
+
+    return [
+        "Optional: read a skill or note below only when the person names it or explicitly asks "
+        "for its workflow; an incidental step in other work does not call for one: "
+        + ", ".join(f"`{root}/{name}/SKILL.md`" for name in names)
+        + "."
+    ]
 
 
 def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgrade(
@@ -226,14 +258,15 @@ def test_an_install_of_the_core_skill_alone_gains_the_other_core_skills_on_upgra
     assert code == 0, err
     after = snapshot(target)
     for name, path in gained.items():
-        assert after.pop(path) == (ROOT / "skills" / name / "SKILL.md").read_bytes()
+        assert_native_skill(after.pop(path), name)
     assert after.pop(adopt.MANIFEST) != before.pop(adopt.MANIFEST)
     old = adopt.block_text(before.pop("AGENTS.md").decode("utf-8"), adopt.POINTERS) or b""
-    added = [f"- {adopt.CONDITIONS[name]}: read {path}" for name, path in gained.items()]
-    assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == [
-        *old.decode("utf-8").splitlines()[1:-1],
-        *added,
-    ]
+    assert old.decode("utf-8").splitlines()[1:-1] == skill_pointer_lines(
+        ".claude/skills", ("using-outcomebound",)
+    )
+    assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == (
+        skill_pointer_lines(".claude/skills")
+    )
     after.pop("AGENTS.md")
     # Beside each gained skill arrive its folders and reference files, and nothing else.
     extra = {key for key in after if key not in before}
@@ -256,8 +289,7 @@ def test_a_brief_skill_the_target_already_holds_is_refused_unless_forced(
     assert code == 1 and CLAUDE_BRIEF in err
     assert snapshot(target) == before
     assert run(capsys, str(target), "--harness", "claude-code", "--force")[0] == 0
-    brief = (ROOT / "skills/decision-brief/SKILL.md").read_bytes()
-    assert (target / CLAUDE_BRIEF).read_bytes() == brief
+    assert_native_skill((target / CLAUDE_BRIEF).read_bytes(), "decision-brief")
 
 
 def test_an_edited_owned_block_is_refused_and_force_replaces_it(
@@ -266,7 +298,7 @@ def test_an_edited_owned_block_is_refused_and_force_replaces_it(
     target = repo(tmp_path / "t")
     assert run(capsys, str(target), "--harness", "codex")[0] == 0
     agents = target / "AGENTS.md"
-    edited = agents.read_text(encoding="utf-8").replace("Smallest complete", "Largest complete")
+    edited = agents.read_text(encoding="utf-8").replace("do the core work", "skip the core work")
     write(agents, edited)
 
     code, _, err = run(capsys, str(target))
@@ -357,10 +389,29 @@ def test_a_block_edit_that_differs_from_what_this_install_writes_still_needs_for
 
     assert code == 1
     assert f"{pointers} differs from what adopt wrote; restore it, or pass --force" in err
+    assert f"the difference is inside the text of {adopt.LOCAL_FRAGMENT}" in err
     assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
 
 
-COMMANDS_CONDITION = "when running a command whose output you read"
+def test_the_refusal_names_both_sides_when_the_block_differs_inside_and_outside_the_fragment(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a block edited in its inlined local text and in a pointer line is said to differ
+    on one side alone."""
+
+    target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
+    assert run(capsys, str(target), "--fragments", "local,runtime")[0] == 0
+    edit_local(
+        target, "**Distinguish** — committed ≠ pushed in this project.", "**Distinguish** — mine."
+    )
+    agents = target / "AGENTS.md"
+    text = agents.read_text(encoding="utf-8")
+    write(agents, text.replace("Optional: read", "Optional: always read"))
+
+    code, _, err = run(capsys, str(target))
+
+    assert code == 1
+    assert f"the difference is both inside and outside the text of {adopt.LOCAL_FRAGMENT}" in err
 
 
 def without_frame(target: Path) -> None:
@@ -374,13 +425,12 @@ def without_frame(target: Path) -> None:
 
 
 def render_anew(source: Path) -> None:
-    """Change the engine copy as a release that renders the pointers block anew would: the
-    commands fragment's condition, which its pointer line carries, in other words."""
+    """Change the installed skill root so the optional line must render again."""
 
-    path = source / "fragments/setup/commands.md"
-    text = path.read_text(encoding="utf-8")
-    assert text.count(COMMANDS_CONDITION) == 1
-    write(path, text.replace(COMMANDS_CONDITION, f"{COMMANDS_CONDITION} later"))
+    path = source / "adapters/harnesses.json"
+    table = json.loads(path.read_text(encoding="utf-8"))
+    table["codex"]["skill_install_path"] = ".project/skills/"
+    write(path, json.dumps(table))
 
 
 def rendered_lines(out: str) -> list[str]:
@@ -399,7 +449,7 @@ def test_an_install_records_the_pointers_frame(tmp_path: Path, capsys: Capture) 
     where no local fragment is selected."""
 
     target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
-    assert run(capsys, str(target), "--fragments", "local,commands")[0] == 0
+    assert run(capsys, str(target), "--fragments", "local,runtime")[0] == 0
 
     document = manifest(target)
     assert document["format_version"] == 2
@@ -426,7 +476,7 @@ def test_a_record_without_a_frame_is_read_and_the_install_adds_the_frame(
     without the frame is refused, or if the install does not add it."""
 
     target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
-    assert run(capsys, str(target), "--fragments", "local,commands")[0] == 0
+    assert run(capsys, str(target), "--fragments", "local,runtime")[0] == 0
     written = manifest(target)
     without_frame(target)
 
@@ -452,7 +502,12 @@ def test_a_block_with_only_the_local_fragments_edit_needs_no_force_when_the_rele
 
     source = engine_copy(tmp_path)
     target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
-    assert run(capsys, str(target), "--fragments", "local,commands", source=source)[0] == 0
+    assert (
+        run(
+            capsys, str(target), "--harness", "codex", "--fragments", "local,runtime", source=source
+        )[0]
+        == 0
+    )
     if recorded == "no-frame":
         without_frame(target)
         commit_all(target)
@@ -472,7 +527,7 @@ def test_a_block_with_only_the_local_fragments_edit_needs_no_force_when_the_rele
     assert code == 0, err
     assert rendered_lines(out) == [pointers]
     text = (target / "AGENTS.md").read_text(encoding="utf-8")
-    assert line in text and f"{COMMANDS_CONDITION} later" in text
+    assert line in text and ".project/skills/diagnose/SKILL.md" in text
     code, out, _ = run(capsys, str(target), "--check", source=source)
     assert code == 0 and set(states(out).values()) == {"current"}, out
 
@@ -487,12 +542,17 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
 
     source = engine_copy(tmp_path)
     target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
-    assert run(capsys, str(target), "--fragments", "local,commands", source=source)[0] == 0
+    assert (
+        run(
+            capsys, str(target), "--harness", "codex", "--fragments", "local,runtime", source=source
+        )[0]
+        == 0
+    )
     line = "**Distinguish** — committed ≠ pushed in this project."
     edited = edit_local(target, line, line)
     if shape == "frame-edited":
         agents = target / "AGENTS.md"
-        edited = edited.replace("- when writing, changing or judging a test", "- when testing")
+        edited = edited.replace("Optional: read", "Optional: always read")
         write(agents, edited)
     else:
         without_frame(target)
@@ -506,6 +566,7 @@ def test_a_block_that_is_not_only_the_local_fragments_edit_still_needs_force(
 
     assert code == 1
     assert f"{pointers} differs from what adopt wrote; restore it, or pass --force" in err
+    assert f"the difference is outside the text of {adopt.LOCAL_FRAGMENT}" in err
     assert (target / "AGENTS.md").read_text(encoding="utf-8") == edited
 
 
@@ -554,7 +615,7 @@ def test_a_file_edited_to_what_this_install_writes_needs_no_force(
     assert code == 1
     assert f"{skill} differs from what adopt wrote; restore it, or pass --force" in err
 
-    (target / skill).write_bytes(shipped.read_bytes())
+    (target / skill).write_bytes(adopt.skill_files(source, "decision-brief")["SKILL.md"])
     code, out, _ = run(capsys, str(target), "--check", source=source)
     assert states(out)[skill] == "stale"
 
@@ -562,7 +623,7 @@ def test_a_file_edited_to_what_this_install_writes_needs_no_force(
 
     assert code == 0, err
     assert kept(out) == [skill]
-    assert (target / skill).read_bytes() == shipped.read_bytes()
+    assert (target / skill).read_bytes() == adopt.skill_files(source, "decision-brief")["SKILL.md"]
 
 
 def test_a_manifest_of_another_format_is_refused_even_when_forced(
@@ -614,7 +675,7 @@ def test_an_install_reports_the_words_it_always_loads_and_refuses_no_size(
     ]
     assert words[2] > 20_000
     listed = [
-        len(adopt.description((ROOT / "skills" / name / "SKILL.md").read_bytes()).split())
+        len(adopt.description((target / ".claude/skills" / name / "SKILL.md").read_bytes()).split())
         for name in adopt.SKILLS
     ]
     assert all(listed)
@@ -773,6 +834,45 @@ def test_an_import_block_whose_file_became_a_link_is_dropped_not_followed(
     assert kinds(target) == ["block", "block", "block", "ignore", *SKILL_RECORDS]
 
 
+@pytest.mark.parametrize("name", ["CLAUDE.md", ".claude/CLAUDE.md", "GEMINI.md"])
+@pytest.mark.parametrize(
+    ("text", "warns"),
+    [
+        ("\n \t\n", False),
+        (
+            "\n<!-- outcomebound:begin id=pointer-example v=1.0.0 -->\n"
+            "@AGENTS.md\n<!-- outcomebound:end id=pointer-example -->\n \t\n",
+            False,
+        ),
+        (
+            "<!-- outcomebound:begin id=pointer-example v=1.0.0 -->\n"
+            "@AGENTS.md\n<!-- outcomebound:end id=pointer-example -->\n\n"
+            "# Project notes\nUse the project's build command.\n",
+            True,
+        ),
+        ("@AGENTS.md\n", False),
+    ],
+    ids=["whitespace", "managed", "project-text", "import-only"],
+)
+def test_guidance_file_warning_keeps_project_text_and_ignores_managed_blocks(
+    tmp_path: Path, capsys: Capture, name: str, text: str, warns: bool
+) -> None:
+    # Catch a silent second guidance file, a refusal, or an automatic move of project text.
+    target = repo(tmp_path / "t", {name: text})
+    before = (target / name).read_bytes()
+
+    code, out, err = run(capsys, str(target), "--harness", "generic")
+
+    assert code == 0, err
+    warning = (
+        f"warning  {name}: AGENTS.md should be the only guidance file; "
+        "the project's text here could move into AGENTS.md"
+    )
+    assert (warning in out.splitlines()) is warns
+    assert (target / name).read_bytes() == before
+    assert "# Project notes" not in (target / "AGENTS.md").read_text(encoding="utf-8")
+
+
 def test_a_plain_claude_md_gets_the_import_block_above_its_own_text(
     tmp_path: Path, capsys: Capture
 ) -> None:
@@ -803,7 +903,7 @@ def test_repeated_harness_flags_accumulate_and_naming_fewer_drops_the_rest(
             (".claude", "claude-code"),
             (".cursor", "cursor"),
         )
-        for file in SKILL_FILES
+        for file in NATIVE_SKILL_FILES
     }
 
     assert run(capsys, str(target), "--harness", "codex")[0] == 0
@@ -944,7 +1044,7 @@ def test_check_reads_each_record_as_current_edited_stale_or_missing(
         CLAUDE_SKILL: "edited",
         **{
             f".claude/skills/{file}": "current"
-            for file in SKILL_FILES
+            for file in NATIVE_SKILL_FILES
             if f".claude/skills/{file}" not in (CLAUDE_BRIEF, CLAUDE_SKILL)
         },
     }
@@ -989,6 +1089,63 @@ def test_check_without_a_manifest_names_the_command_that_proposes_an_install(
         f"next: outcomebound adopt {paths.shell_path(target)} --detect prints the command "
         "that installs OutcomeBound here",
     ]
+
+
+def test_a_real_install_prints_the_cloud_note_once_as_a_dry_run_does(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if a real run prints the cloud note, or the list of where each harness keeps its
+    setup step, more than once, or prints other lines than a dry run does."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    arguments = ("--harness", "claude-code,codex,cursor", "--fragments", "commands")
+
+    _, planned, _ = run(capsys, str(target), *arguments, "--dry-run")
+    code, written, err = run(capsys, str(target), *arguments)
+
+    assert code == 0, err
+    where = "Where each harness keeps that step:"
+    for out in (planned, written):
+        assert out.count("Cloud sessions start from a fresh clone") == 1
+        assert out.splitlines().count(f"{'note':<8} {where}") == 1
+        assert out.count("Codex cloud:") == 1
+    notes = [line for line in written.splitlines() if line.startswith("note       ")]
+    assert notes == [line for line in planned.splitlines() if line.startswith("note       ")]
+
+
+def test_check_in_a_checkout_older_than_the_install_names_the_branches_that_hold_one(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    """Breaks if the `missing` line stands alone where a local branch tip holds the install, if
+    a branch without it is named, or if the check writes anything or changes the exit code."""
+
+    target = repo(tmp_path / "t", {"README.md": "# T\n"})
+    commit_all(target)
+    older = subprocess.run(
+        [GIT, "-C", str(target), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        encoding="utf-8",
+    ).stdout.strip()
+    assert run(capsys, str(target), "--harness", "claude-code")[0] == 0
+    commit_all(target)
+    for name in ("installed", "other"):
+        subprocess.run([GIT, "-C", str(target), "branch", "-q", name], check=True)
+    subprocess.run([GIT, "-C", str(target), "branch", "-q", "plain", older], check=True)
+    subprocess.run([GIT, "-C", str(target), "checkout", "-q", "--detach", older], check=True)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--check")
+
+    assert code == 1
+    lines = out.splitlines()
+    assert lines[0] == f"missing  {adopt.MANIFEST}: HEAD's commit does not hold it either"
+    (note,) = [line for line in lines if line.startswith("note ")]
+    listed = note.split(": ", 1)[1].split("; ")[0].split(", ")
+    assert f"local branches whose tip holds {adopt.MANIFEST}" in note
+    assert {"installed", "other"} <= set(listed) and "plain" not in listed
+    assert lines.index(note) == 1 and lines[-1].startswith("next: ")
+    assert snapshot(target) == before
 
 
 def test_remove_leaves_every_byte_that_was_there_before(tmp_path: Path, capsys: Capture) -> None:
@@ -1155,6 +1312,54 @@ def test_detect_does_not_propose_the_workspace_for_skills_alone(
     code, out, _ = run(capsys, str(target), "--detect")
 
     assert code == 0 and "workspace" not in out
+
+
+@pytest.mark.parametrize(
+    ("files", "proposed"),
+    [
+        ({}, False),
+        ({"pyproject.toml": "[project]\n", "src/lib.py": "x = 1\n"}, False),
+        ({"Dockerfile": "FROM scratch\n"}, True),
+        ({".devcontainer/devcontainer.json": "{}\n"}, True),
+    ],
+    ids=["empty", "library", "dockerfile", "devcontainer"],
+)
+def test_detect_proposes_containers_only_where_a_container_file_exists(
+    tmp_path: Path, capsys: Capture, files: dict[str, str], proposed: bool
+) -> None:
+    target = repo(tmp_path / "t", files)
+    before = snapshot(target)
+
+    code, out, _ = run(capsys, str(target), "--detect")
+
+    assert code == 0 and snapshot(target) == before
+    words = shlex.split(out, comments=True)
+    listed = words[words.index("--fragments") + 1].split(",")
+    assert ("containers" in listed) is proposed
+
+
+def recorded_fragments(target: Path) -> list[str]:
+    return next(r["fragments"] for r in manifest(target)["artifacts"] if r["id"] == adopt.FACTS)
+
+
+def test_an_upgrade_keeps_a_recorded_containers_selection_and_adds_none_by_itself(
+    tmp_path: Path, capsys: Capture
+) -> None:
+    target = repo(tmp_path / "t", {"Dockerfile": "FROM scratch\n"})
+    assert run(capsys, str(target), "--harness", "claude-code", "--fragments", "python")[0] == 0
+    assert recorded_fragments(target) == ["python"]
+    assert run(capsys, str(target))[0] == 0  # an upgrade does not add the proposal
+    assert recorded_fragments(target) == ["python"]
+
+    arguments = (str(target), "--harness", "claude-code", "--fragments", "python,containers")
+    assert run(capsys, *arguments)[0] == 0
+    shipped = target / ".outcomebound/fragments/containers.md"
+    assert shipped.is_file()
+
+    assert run(capsys, str(target))[0] == 0  # omitted flags keep the recorded selection
+    assert recorded_fragments(target) == ["python", "containers"]
+    assert shipped.is_file()
+    assert run(capsys, str(target), "--check")[0] == 0
 
 
 def test_detect_proposes_the_commands_fragment_for_an_empty_repository(
@@ -1665,7 +1870,7 @@ def test_detect_prints_the_engines_own_paths_as_they_are(tmp_path: Path, capsys:
     )
 
 
-def test_the_commands_fragment_installs_a_pointer_and_a_copy_and_removes_both(
+def test_the_commands_fragment_installs_a_manual_name_and_copy_and_removes_both(
     tmp_path: Path, capsys: Capture
 ) -> None:
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
@@ -1678,7 +1883,9 @@ def test_the_commands_fragment_installs_a_pointer_and_a_copy_and_removes_both(
     pointer = (
         "when running a command whose output you read: read .outcomebound/fragments/commands.md"
     )
-    assert pointer in (target / "AGENTS.md").read_text(encoding="utf-8")
+    guidance = (target / "AGENTS.md").read_text(encoding="utf-8")
+    assert pointer not in guidance
+    assert "`.outcomebound/fragments/commands.md`." in guidance
     assert run(capsys, str(target), "--remove")[0] == 0
     assert snapshot(target) == before
 
@@ -1837,7 +2044,7 @@ def test_check_recomputes_the_facts_from_the_recorded_setup(
     assert code == 1 and "the setup recorded for AGENTS.md are not a list of names" in err
 
 
-def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
+def test_manual_fragment_has_no_read_line_and_local_stays_inline(
     tmp_path: Path, capsys: Capture
 ) -> None:
     target = repo(tmp_path / "t", {adopt.LOCAL_FRAGMENT: local_fragment()})
@@ -1850,14 +2057,11 @@ def test_each_selected_fragment_is_a_pointer_and_local_stays_inline(
     body = blocks(target, "AGENTS.md")[adopt.POINTERS].body
     inline, pointers = body.rsplit("\n\n", 1)
     assert inline == f"**local** (setup) — {local.applies}\n\n{local.body}"
-    assert pointers.splitlines() == [
-        facts.ONCE,
-        f"- {shipped.condition}: read {PYTHON_FRAGMENT}",
-        *(
-            f"- {adopt.CONDITIONS[name]}: read .agents/skills/{name}/SKILL.md"
-            for name in adopt.SKILLS
-        ),
-    ]
+    expected = (
+        skill_pointer_lines(".agents/skills")[0][:-1] + ", `.outcomebound/fragments/python.md`."
+    )
+    assert pointers == expected
+    assert ": read .outcomebound/fragments/python.md" not in body
     assert shipped.body not in (target / "AGENTS.md").read_text(encoding="utf-8")
     assert (target / PYTHON_FRAGMENT).read_bytes() == (
         ROOT / "fragments/stack/python.md"
@@ -1916,6 +2120,8 @@ def test_remove_takes_out_the_blocks_and_fragment_files_and_keeps_the_projects_o
 def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragment(
     tmp_path: Path, capsys: Capture
 ) -> None:
+    """Catches missing ticket act reads, a broad trigger, or a duplicate manual-only name."""
+
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
     before = snapshot(target)
 
@@ -1926,9 +2132,13 @@ def test_an_install_carries_the_ticket_skills_and_their_pointers_with_no_fragmen
         shipped = sorted(p for p in (ROOT / "skills" / name).rglob("*") if p.is_file())
         for file in shipped:
             relative = file.relative_to(ROOT / "skills").as_posix()
-            assert (target / ".claude/skills" / relative).read_bytes() == file.read_bytes()
+            data = (target / ".claude/skills" / relative).read_bytes()
+            if file.name == "SKILL.md":
+                assert_native_skill(data, name)
+            else:
+                assert data == file.read_bytes()
         path = f".claude/skills/{name}/SKILL.md"
-        assert f"{adopt.CONDITIONS[name]}: read {path}" in agents
+        assert f"`{path}`" in agents.split("Optional: ", 1)[1]
     assert len(list((ROOT / "skills/slice-tickets").rglob("*.md"))) > 1
     code, out, _ = run(capsys, str(target), "--check")
     assert code == 0
@@ -2034,7 +2244,7 @@ def test_the_research_fragment_installs_the_same_bytes_in_any_directory(
     assert (first / shipped).read_bytes() == (ROOT / "fragments/setup/research.md").read_bytes()
     assert snapshot(first) == snapshot(second)
     guidance = (first / "AGENTS.md").read_text(encoding="utf-8")
-    assert f"read {shipped}" in guidance
+    assert f"`{shipped}`" in guidance.split("Optional: ", 1)[1]
     assert "pushing to the research repository" in guidance
 
 
@@ -2132,14 +2342,29 @@ def test_no_harness_installs_the_skills_where_the_pointers_name_them(
 
     assert code == 0, err
     generic = {name: f".outcomebound/skills/{name}/SKILL.md" for name in adopt.SKILLS}
-    lines = [facts.ONCE]
-    lines += [f"- {adopt.CONDITIONS[name]}: read {path}" for name, path in generic.items()]
+    assert set(generic) == {
+        "using-outcomebound",
+        "decision-brief",
+        "gather-requirements",
+        "tests-worth-keeping",
+        "diagnose",
+        "review-findings",
+        "review-council",
+        "explain-spec",
+        "slice-tickets",
+        "hand-off-tickets",
+        "explorable",
+        "land-change",
+        "run-acceptance",
+        "sync-tracker",
+    }
+    lines = skill_pointer_lines(".outcomebound/skills")
     for name, path in generic.items():
-        assert (target / path).read_bytes() == (ROOT / f"skills/{name}/SKILL.md").read_bytes()
+        assert_native_skill((target / path).read_bytes(), name)
     assert blocks(target, "AGENTS.md")[adopt.POINTERS].body.splitlines() == lines
     skills = [r for r in manifest(target)["artifacts"] if r["kind"] == "skill"]
     assert sorted(r["path"] for r in skills) == sorted(
-        f".outcomebound/skills/{file}" for file in SKILL_FILES
+        f".outcomebound/skills/{file}" for file in NATIVE_SKILL_FILES
     )
     assert all(r["harnesses"] == ["generic"] for r in skills)
     assert any(line.startswith("UNVERIFIED generic") for line in out.splitlines())
@@ -2391,7 +2616,10 @@ def test_a_linked_worktree_under_its_own_project_does_not_warn_of_the_project_fi
     foreign = repo(main / "other", {"README.md": "# O\n"})
 
     _, out, _ = run(capsys, str(linked), "--harness", "claude-code")
-    assert warnings(out) == []
+    assert warnings(out) == [
+        "warning  CLAUDE.md: AGENTS.md should be the only guidance file; "
+        "the project's text here could move into AGENTS.md"
+    ]
     _, out, _ = run(capsys, str(foreign), "--harness", "claude-code")
     assert any("also loads ../CLAUDE.md" in line for line in warnings(out))
 
@@ -2627,7 +2855,7 @@ def test_a_report_counts_skill_files_and_keeps_every_other_file_on_its_own_line(
 
     target = repo(tmp_path / "t", {"README.md": "# T\n"})
 
-    _, out, _ = run(capsys, str(target), "--harness", "claude-code,codex,gemini", "--dry-run")
+    _, out, _ = run(capsys, str(target), "--harness", "claude-code,codex,cursor", "--dry-run")
     lines = out.splitlines()
     assert len(lines) < 60
     assert (
@@ -2640,7 +2868,7 @@ def test_a_report_counts_skill_files_and_keeps_every_other_file_on_its_own_line(
     assert not any("SKILL.md" in line for line in lines)
     assert any(line.startswith("create   AGENTS.md") for line in lines)
 
-    run(capsys, str(target), "--harness", "claude-code,codex,gemini")
+    run(capsys, str(target), "--harness", "claude-code,codex,cursor")
     path = target / ".claude" / "skills" / "diagnose" / "SKILL.md"
     path.write_text("changed\n", encoding="utf-8")
     _, out, _ = run(capsys, str(target), "--force")

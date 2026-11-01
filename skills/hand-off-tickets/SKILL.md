@@ -1,6 +1,6 @@
 ---
 name: hand-off-tickets
-description: Use when handing an accepted ticket from the ticket store to the agent or model that will build it. Finds the implementer's tier and writes the package that tier needs, from the ticket alone for a capable model to failing tests and stubs for a small one. Not for slicing, nor for a prompt or spec asked for outside the ticket store.
+description: Use when handing an accepted ticket from the ticket store to its implementing agent or model. For slicing, use `slice-tickets`; for a prompt or spec outside the ticket store, work directly.
 ---
 
 # Hand a ticket to its implementer

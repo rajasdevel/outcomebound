@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from itertools import pairwise
 from pathlib import Path
 
 from evals.records import Command
@@ -289,6 +290,37 @@ def session_tokens(
             "source": "stream",
         }
     return None
+
+
+def cache_misses(records: list[dict] | None) -> int | None:
+    """The input a call sent again but the provider did not serve from its cache, summed over
+    the native session's model calls: for each call after the first, the part of the shorter of
+    its input and the previous call's that is not counted cached. Each call is a `token_count`
+    event whose running total moved (codex repeats the last one). None where the session gives
+    no call's usage.
+
+    A call resends the previous call's input as its prefix, so with the cache working nearly all
+    of it is cached; a shortfall is the provider's cache state, not the run's behaviour."""
+
+    calls, total = [], None
+    for record in records or []:
+        payload = record.get("payload") if isinstance(record, dict) else None
+        if not isinstance(payload, dict) or payload.get("type") != "token_count":
+            continue
+        info = payload.get("info")
+        if not isinstance(info, dict):
+            continue
+        last = _counts(info.get("last_token_usage"))
+        running = _counts(info.get("total_token_usage"))
+        if last is None or running is None or running == total:
+            continue
+        total = running
+        calls.append((last["input_tokens"], last["cached_input_tokens"]))
+    if not calls:
+        return None
+    return sum(
+        max(0, min(before, sent) - cached) for (before, _), (sent, cached) in pairwise(calls)
+    )
 
 
 def observed_model(transcript: str) -> str | None:

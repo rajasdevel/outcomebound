@@ -192,7 +192,8 @@ def test_plan_names_each_reviewer_its_argv_and_safeguards_and_runs_nothing(
     assert "spends the person's credits" in out
     assert "reviewers from: --reviewer on the command line" in out
     assert f"reviewer r1: {CODEX_REVIEWER}" in out and f"reviewer r2: {CLAUDE_REVIEWER}" in out
-    assert "-s read-only" in out and "--ephemeral" in out and "--ignore-user-config" in out
+    assert "-s read-only" in out and "--ignore-user-config" in out
+    assert "--ephemeral" not in out, "the session is kept, so a usage tool counts its tokens"
     assert "--restricted" in out and "--tools Read,Grep,Glob" in out
     assert "--permission-mode dontAsk" in out and "--max-budget-usd 3" in out
     assert "timeout: 1800 s" in out
@@ -333,16 +334,18 @@ def test_a_failed_a_timed_out_and_an_unreadable_reviewer_are_reported_and_the_re
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Only the hanging reviewer gets the short limit: a reviewer that fails at once must not be
+    # timed out by a loaded machine's start-up time.
     cases = {
-        "fail": ("FAILED", "exit 3: boom: not logged in"),
-        "empty": ("FAILED", "its answer file is empty"),
-        "hang": ("TIMEOUT", "killed after 1 s"),
+        "fail": ("FAILED", "exit 3: boom: not logged in", "60"),
+        "empty": ("FAILED", "its answer file is empty", "60"),
+        "hang": ("TIMEOUT", "killed after 1 s", "1"),
     }
-    for number, (mode, (status, detail)) in enumerate(cases.items()):
+    for number, (mode, (status, detail, limit)) in enumerate(cases.items()):
         monkeypatch.setenv("FAKE_CODEX", mode)
         out_dir = tools / f"run{number}"
         code, out, _ = council(
-            capsys, repo, "--accept", "--base", "HEAD~1", "--timeout", "1", "--out", str(out_dir)
+            capsys, repo, "--accept", "--base", "HEAD~1", "--timeout", limit, "--out", str(out_dir)
         )
         assert code == 1
         assert f"r1 {CODEX_REVIEWER}: {status} after" in out and detail in out

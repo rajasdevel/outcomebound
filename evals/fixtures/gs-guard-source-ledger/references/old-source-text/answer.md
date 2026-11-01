@@ -1,0 +1,1 @@
+Updated the report and all four source items. R2 changed from input order to case-insensitive name order; R4 adds owner. I reconsidered both against the new text. The earlier R1 and R3 dispositions remain valid.

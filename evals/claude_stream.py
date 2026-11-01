@@ -731,6 +731,7 @@ class Expected(NamedTuple):
     foreign_skills: tuple[str, ...] = ()
     workdir: Path | None = None
     instructions: tuple[str, ...] = ()
+    catalog: tuple[str, ...] | None = None
 
 
 def workspace_skills(workdir: Path) -> tuple[str, ...]:
@@ -738,6 +739,22 @@ def workspace_skills(workdir: Path) -> tuple[str, ...]:
     `SKILL.md`."""
 
     return tuple(sorted(p.parent.name for p in (workdir / ".claude" / "skills").glob("*/SKILL.md")))
+
+
+def workspace_catalog(workdir: Path) -> tuple[str, ...]:
+    """The installed skills eligible for the model's catalog, excluding manual skills."""
+
+    return tuple(
+        name
+        for name in workspace_skills(workdir)
+        if not re.search(
+            r"^disable-model-invocation: true$",
+            (workdir / ".claude/skills" / name / "SKILL.md")
+            .read_text(encoding="utf-8")
+            .split("\n---\n", 1)[0],
+            re.MULTILINE,
+        )
+    )
 
 
 def workspace_instructions(workdir: Path) -> tuple[str, ...]:
@@ -815,15 +832,23 @@ def _stray(name: str, expected: Expected, namespaces: tuple[str, ...]) -> bool:
     return bare not in expected.skills and bare not in BUILTIN_SKILLS
 
 
-def _skill_problems(names: list[str], expected: Expected, plugins: Plugins) -> list[str]:
+def _skill_problems(
+    names: list[str], expected: Expected, plugins: Plugins, *, catalog: bool = False
+) -> list[str]:
     """What is wrong with a list of skill names: a plugin skill of a plugin that is neither
     the arm's nor built in, an OutcomeBound skill the arm does not carry, a bare name that is
     neither the workspace's nor built in, and a workspace skill the list lacks."""
 
     namespaces = (*plugins.own, *plugins.builtin)
-    stray = [name for name in names if _stray(name, expected, namespaces)]
+    required = expected.catalog if catalog and expected.catalog is not None else expected.skills
+    excluded = set(expected.skills) - set(required)
+    stray = [
+        name
+        for name in names
+        if _stray(name, expected, namespaces) or name.rpartition(":")[2] in excluded
+    ]
     listed = {name.rpartition(":")[2] for name in names}
-    missing = [name for name in expected.skills if name not in listed]
+    missing = [name for name in required if name not in listed]
     problems = [f"not the arm's: {', '.join(stray)}"] if stray else []
     problems += [f"the workspace's skills did not load: {', '.join(missing)}"] if missing else []
     return problems
@@ -836,7 +861,7 @@ def _skills_row(start: dict[str, Any], expected: Expected, plugins: Plugins) -> 
     if not isinstance(skills, list):
         return _row("skills", "UNVERIFIED", "the start event names no skills")
     names = [str(s.get("name") if isinstance(s, dict) else s) for s in skills]
-    problems = _skill_problems(names, expected, plugins)
+    problems = _skill_problems(names, expected, plugins, catalog=True)
     built = sorted({n for n in names if n in BUILTIN_SKILLS})
     detail = "; ".join(problems) or f"{len(names)} listed; built in accepted: {built or 'none'}"
     return _row("skills", "FAIL" if problems else "PASS", detail)
@@ -864,7 +889,7 @@ def _listing_row(
     names = [str(n) for item in listings for n in item.get("names") or [] if isinstance(n, str)]
     if not listings:
         return _row("skill-listing", "UNVERIFIED", "the native session holds no skill listing")
-    problems = _skill_problems(sorted(set(names)), expected, plugins)
+    problems = _skill_problems(sorted(set(names)), expected, plugins, catalog=True)
     detail = "; ".join(problems) or f"{len(set(names))} skills listed to the model"
     return _row("skill-listing", "FAIL" if problems else "PASS", detail)
 
@@ -1134,7 +1159,7 @@ def expected_start(workdir: Path, model: str, expected: Expected, session: str) 
         "model": model,
         "permissionMode": "acceptEdits",
         "apiKeySource": "none",
-        "skills": [*expected.skills],
+        "skills": list(expected.catalog if expected.catalog is not None else expected.skills),
         "plugins": [
             {"name": folder.name, "path": str(folder), "source": f"{folder.name}@inline"}
             for folder in expected.plugin_dirs
@@ -1151,7 +1176,11 @@ def expected_records(expected: Expected, session: str) -> list[dict[str, Any]]:
         {"path": str(workdir / name), "type": "Project", "content": ""}
         for name in expected.instructions
     ]
-    listing = {"type": "skill_listing", "names": [*expected.skills], "skillCount": 0}
+    listing = {
+        "type": "skill_listing",
+        "names": list(expected.catalog if expected.catalog is not None else expected.skills),
+        "skillCount": 0,
+    }
     return [
         {"type": "attachment", "sessionId": session, "attachment": attached}
         for attached in ({"type": "instructions", "files": files}, listing)

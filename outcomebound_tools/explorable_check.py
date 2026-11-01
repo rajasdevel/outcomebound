@@ -1,32 +1,27 @@
 """The explorable's verdicts: the shell, the hosts, the parts a kind needs, and the run.
 
 What this module decides: what each verdict reads and when it is PASS, FAIL or UNVERIFIED; that
-the overall verdict is the worst of them (FAIL, then UNVERIFIED, then PASS); and that the page is
-run only where the shell, the hosts and the parts pass.
+the overall verdict is the worst of them (FAIL, then UNVERIFIED, then PASS); and that the run is
+UNVERIFIED, since the engine starts no browser and the agent runs the page in one it drives.
 
 What it does not decide: that the page's content is right. Every verdict rests on data the agent
 wrote, except the shell, the pins and the policy, which come from the engine's templates. A pass
-says that the page is the shell plus the agent's content, with the parts its kind needs, and that
-for the declared inputs it shows what the agent expected.
+says that the page is the shell plus the agent's content, with the parts its kind needs.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any
 
 from outcomebound_tools import explorable_shell, explorable_source
 
 __all__ = [
     "Verdict",
     "hosts",
-    "no_result",
     "not_run",
     "overall",
     "parts",
-    "run",
     "script_literals",
     "shell",
 ]
@@ -170,50 +165,3 @@ def parts(kind: str, found: explorable_shell.Parts) -> Verdict:
 
 def not_run(reason: str) -> Verdict:
     return Verdict("run", UNVERIFIED, f"not run: {reason}")
-
-
-def no_result(reason: str) -> Verdict:
-    """The page ran and wrote no usable check result."""
-
-    return Verdict("run", FAIL, reason)
-
-
-def run(result: Mapping[str, Any]) -> Verdict:
-    """The run verdict from the check result the page wrote."""
-
-    details: list[str] = []
-    failed = False
-    for error in result.get("errors") or []:
-        failed = True
-        details.append(f"script error: {error}")
-    for item in result.get("expectations") or []:
-        if not item.get("pass"):
-            failed = True
-            details.append(
-                f"expectation {item.get('label')!r} failed: expected {item.get('expected')}, "
-                f"shown {item.get('shown')}"
-            )
-    uncovered = (result.get("outputs") or {}).get("uncovered") or []
-    unverified = [f"output {name}: UNVERIFIED (no expectation reads it)" for name in uncovered]
-    libraries = result.get("libraries") or {}
-    if libraries:
-        details.append(
-            "libraries (informational, never a failure): "
-            + ", ".join(f"{name} {state}" for name, state in libraries.items())
-        )
-    count = len(result.get("expectations") or [])
-    if failed:
-        return Verdict(
-            "run",
-            FAIL,
-            "the page ran with a script error or a failed expectation",
-            details + unverified,
-        )
-    if unverified:
-        return Verdict(
-            "run",
-            UNVERIFIED,
-            f"{count} expectation(s) pass; some outputs are not read by one",
-            unverified + details,
-        )
-    return Verdict("run", PASS, f"no script error; {count} expectation(s) pass", details)

@@ -57,6 +57,7 @@ SHIPPED_BESIDE = {
     CORE: ("references/lifecycle.md", "references/new-project.md"),
     "explorable": ("references/runtime.md",),
     "slice-tickets": ("references/github.md",),
+    "gather-requirements": ("references/scaffold.md",),
 }
 
 # How a skill writes a checkout path: under the checkout the launcher prints.
