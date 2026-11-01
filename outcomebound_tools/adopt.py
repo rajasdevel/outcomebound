@@ -3,8 +3,9 @@
 `adopt <target>` writes three blocks into the target's AGENTS.md: the
 operating contract; the project facts the engine observes or the adopter records
 (`outcomebound_tools.facts`); and the guidance pointers, the project's own `local`
-fragment inline and then one line per selected fragment, copied under
-`.outcomebound/fragments/`, and per skill in `SKILLS`. Selecting the workspace fragment also
+fragment inline and then one optional line naming every installed skill at its selected
+root, followed by every selected fragment copied under `.outcomebound/fragments/`. No skill
+or fragment is read by default. Selecting the workspace fragment also
 installs `.agents/.gitignore`, which keeps its four folders out of Git; every install writes
 `.outcomebound/.gitignore`, which keeps OutcomeBound's own local records out of Git. The install
 report warns where Git ignores a path the install owns, where AGENTS.md holds changes not
@@ -50,7 +51,7 @@ import shlex
 import subprocess
 import sys
 from collections.abc import Callable, Sequence, Set
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -93,49 +94,6 @@ FACTS_ONLY = facts.FACTS_ONLY
 # Where each block goes when it is new: directly after the block named here.
 AFTER = {FACTS: KERNEL, POINTERS: FACTS}
 SKILLS = fragments.SKILLS
-# The condition each skill's pointer line carries.
-CONDITIONS = {
-    "using-outcomebound": "when unsure how much design, testing, review or process a task needs",
-    "decision-brief": (
-        "when a decision is the user's to make, or an assumption sets the direction of later work"
-    ),
-    "gather-requirements": (
-        "when a request's outcome or completion bar is unclear, requirements arrive from an "
-        "existing source, or resumed work relies on a recorded direction choice"
-    ),
-    "tests-worth-keeping": (
-        "when writing, changing or judging a test, or when the project's tests already fail before "
-        "you begin"
-    ),
-    "diagnose": "when a failure's cause is unknown, or a fix did not hold",
-    "review-findings": "when acting on review findings, or writing a review the project requires",
-    "review-council": (
-        "when a second opinion from other models or harnesses is worth asking for, as for a "
-        "design, a release candidate, or a change whose miss would reach users"
-    ),
-    "explain-spec": (
-        "when a person must act on a spec they did not write, or says they do not follow it"
-    ),
-    "slice-tickets": "when breaking work into tickets",
-    "hand-off-tickets": (
-        "when handing an accepted ticket from the ticket store to the agent or model that will "
-        "build it"
-    ),
-    "explorable": (
-        "when the person wants to understand something, or wants it explained to others, where "
-        "trying it teaches more than reading, asks for an interactive page, or wants to try "
-        "options with their own numbers"
-    ),
-    "land-change": "when driving a pull or merge request through CI and review to landing",
-    "run-acceptance": (
-        "when preparing, running or recording acceptance of a delivered change by a person "
-        "outside the build"
-    ),
-    "sync-tracker": (
-        "when reading a card from a tracker that is not the project's ticket store, "
-        "or writing back to it"
-    ),
-}
 # Skills an earlier install carried and this engine no longer ships. A record of one is still
 # adopt's, so `--check` reads its files stale and the next install removes them.
 RETIRED_SKILLS: tuple[str, ...] = ()
@@ -210,6 +168,7 @@ FROM_SOURCE = (
     f"differs from its record only by the edit in {LOCAL_FRAGMENT}, as the release that wrote "
     "the record renders it, so it is no edit; adopt renders it again without --force"
 )
+
 
 Record = dict[str, Any]
 # Each path this run changes, in the order it is written: (bytes as read, bytes to write).
@@ -335,13 +294,9 @@ def guidance(
     roots = sorted({item.skills for item in found})
     root = GENERIC_SKILLS if GENERIC_SKILLS in roots else roots[0] if roots else None
     names = fragments.SKILLS
-    skills = [
-        (CONDITIONS.get(name, f"when the {name} skill applies"), f"{root}/{name}/SKILL.md")
-        for name in names
-    ]
+    skills = [f"{root}/{name}/SKILL.md" for name in names] if root else []
     hosts = [AGENTS, *sorted({item.host for item in found if item.host})]
     hosts = [h for h in hosts if h in (AGENTS, *importing) or os.path.lexists(target / h)]
-    skills = skills if root else []
     rendered = facts.render_chosen(target, selected, chosen, hosts, skills)
     return Guidance(rendered, files, names)
 
@@ -390,7 +345,15 @@ def skill_files(source: Path, name: str) -> dict[str, bytes]:
     except OSError as error:
         raise AdoptError(f"cannot read skills/{name}/ in the engine: {error}") from error
     names = ["SKILL.md", *(relative for relative in found if relative != "SKILL.md")]
-    return {relative: skill_file(source, name, relative) for relative in names}
+    files = {relative: skill_file(source, name, relative) for relative in names}
+    # Manual invocation applies to every installed working skill in every mode.
+    text = files["SKILL.md"].decode("utf-8")
+    head, separator, body = text.partition("\n---\n")
+    if head.startswith("---\n") and separator:
+        head += "\ndisable-model-invocation: true"
+        files["SKILL.md"] = (head + separator + body).encode("utf-8")
+    files["agents/openai.yaml"] = b"policy:\n  allow_implicit_invocation: false\n"
+    return files
 
 
 # --- Harnesses ------------------------------------------------------------------
@@ -401,7 +364,8 @@ class Route:
     """How one harness reaches the contract: where its skills live, the file that must
     import AGENTS.md (None when the harness reads AGENTS.md itself), the files whose
     absence lets it read AGENTS.md itself from version `since` (none: it always needs one), and
-    whether it lists the skills in its skill directory itself (`native_skills`)."""
+    whether it lists skills itself (`native_skills`), and whether its native directory
+    supports a manual invocation flag. Without that flag, skills use the generic root."""
 
     harness: str
     skills: str
@@ -409,6 +373,7 @@ class Route:
     unless: tuple[str, ...] = ()
     since: str = ""
     native: bool = False
+    manual: bool = False
 
 
 def _reads_itself(row: dict[str, Any]) -> tuple[tuple[str, ...], str]:
@@ -456,14 +421,20 @@ def route(name: str, row: object) -> Route | str:
     skills = str(row.get("skill_install_path") or "").rstrip("/")
     if not paths.admits(skills):
         return f"{name}: the harness table names no skill directory inside the target"
+    manual = row.get("manual_skill_invocation") in (
+        "disable-model-invocation",
+        "policy.allow_implicit_invocation",
+    )
+    if not manual:
+        skills = GENERIC_SKILLS
     mechanism = str(row.get("pointer_mechanism") or "")
     native = row.get("native_skills") is True
     if mechanism in (AGENTS, "native"):
-        return Route(name, skills, None, native=native)
+        return Route(name, skills, None, native=native, manual=manual)
     host, _, reference = mechanism.partition("@")
     if reference == AGENTS and paths.admits(host):
         unless, since = _reads_itself(row)
-        return Route(name, skills, host, unless, since, native)
+        return Route(name, skills, host, unless, since, native, manual)
     return f"{name} cannot be made to load AGENTS.md: the harness table routes it by {mechanism!r}"
 
 
@@ -482,7 +453,12 @@ def routes(source: Path, names: Sequence[str]) -> list[Route]:
     if reasons:
         listed = ", ".join([*loadable(table), GENERIC])
         raise AdoptError(*reasons, f"harnesses that load AGENTS.md: {listed}")
-    return [item for item in found if isinstance(item, Route)]
+    selected = [item for item in found if isinstance(item, Route)]
+    # A harness may also discover another route's native directory. Keep all copies outside
+    # discovery when any selected harness has no recorded manual mechanism.
+    if any(item.harness != GENERIC and not item.manual for item in selected):
+        selected = [replace(item, skills=GENERIC_SKILLS) for item in selected]
+    return selected
 
 
 def _imports(text: str) -> bool:
@@ -866,6 +842,39 @@ def framing(block: str, inline: str | None) -> str | None:
     return block.replace(inline, FRAME_MARK, 1)
 
 
+def where_it_differs(current: bytes, wanted: bytes | None, inline: str | None) -> str:
+    """For a pointers block that differs from the render, the clause that says whether the
+    difference lies inside the local fragment's inline text, outside it, or in both, and where to
+    look; empty where there is no inline text to tell the two apart.
+
+    The render is the text before the inline text, the inline text, and the text after it. The
+    block differs only inside when it keeps that text before and after; only outside when it
+    keeps the inline text itself."""
+
+    if wanted is None or not inline:
+        return ""
+    render = wanted.decode("utf-8")
+    start = render.find(inline)
+    if start < 0:
+        return ""
+    before, after = render[:start], render[start + len(inline) :]
+    text = current.decode("utf-8", "replace")
+    if len(text) >= len(before) + len(after) and text.startswith(before) and text.endswith(after):
+        return (
+            f"; the difference is inside the text of {LOCAL_FRAGMENT} that the block holds: "
+            "look at that file, or at the block"
+        )
+    if inline in text:
+        return (
+            f"; the difference is outside the text of {LOCAL_FRAGMENT} that the block holds: "
+            "look at the block"
+        )
+    return (
+        f"; the difference is both inside and outside the text of {LOCAL_FRAGMENT} that the "
+        "block holds: look at that file and at the block"
+    )
+
+
 def from_source(
     target: Path,
     current: bytes | None,
@@ -999,6 +1008,8 @@ class Run:
         self.files: dict[str, tuple[bytes | None, bytes | None]] = {}
         self.records: list[Record] = []
         self.edited: list[str] = []
+        # Where the difference of an edited pointers block lies, by the block's label.
+        self.where: dict[str, str] = {}
         self.notes: Notes = []
         # What the facts restate about this target: printed only by a run that changes a file,
         # so a run with nothing to change restates nothing.
@@ -1070,6 +1081,7 @@ class Run:
                 want.data,
                 record,
                 lambda: from_source(self.target, current, record, want.inline),
+                want.inline,
             )
             host.text = put(host.text, want.id, want.data.decode("utf-8"), AFTER.get(want.id))
         self.records.append(want.record())
@@ -1123,6 +1135,7 @@ class Run:
         wanted: bytes | None,
         record: Record | None,
         derived: Callable[[], bool] | None = None,
+        inline: str | None = None,
     ) -> None:
         """Note `name` as edited when its bytes are neither wanted nor what adopt recorded.
 
@@ -1133,7 +1146,10 @@ class Run:
         person regenerated by hand from the source it renders, are no edit: they are recorded
         as they are, and the report says so, so that no `--force` is needed to keep them. So
         are bytes that `derived` shows are the recorded render with only its source's edit in
-        it: they are written again, and the report says so."""
+        it: they are written again, and the report says so.
+
+        For the pointers block, `inline` is the local fragment's text as this run renders it;
+        the refusal then says whether the block differs inside that text or outside it."""
 
         if current is None:
             return
@@ -1148,6 +1164,9 @@ class Run:
             return
         if record is None or unrecorded:
             self.edited.append(name)
+            place = where_it_differs(current, wanted, inline)
+            if place:
+                self.where[name] = place
 
     def planned(self, manifest: Manifest, version: str) -> Planned:
         """Every change, the manifest last; a refusal when something edited is in the way."""
@@ -1156,6 +1175,7 @@ class Run:
             raise AdoptError(
                 *(
                     f"{name} differs from what adopt wrote; restore it, or pass --force"
+                    f"{self.where.get(name, '')}"
                     for name in self.edited
                 )
             )
@@ -1221,7 +1241,7 @@ def desired(
 
     The facts record holds the selection, the harnesses among them, whatever skills they get.
     A facts-only install (`chosen.mode`) has no kernel and no fragment file, and its skills go
-    only to the harnesses that list them natively: nothing points at them.
+    only to harnesses with native skill support, using manual placement: nothing points at them.
     """
 
     mode = chosen.mode
@@ -1292,10 +1312,11 @@ def _skills(source: Path, found: Sequence[Route], names: Sequence[str]) -> list[
         roots.setdefault(item.skills, []).append(item.harness)
     wants = []
     for name in names:
-        for relative, data in skill_files(source, name).items():
-            for root, harnesses in roots.items():
+        for root, harnesses in roots.items():
+            for relative, data in skill_files(source, name).items():
                 path = f"{root}/{name}/{relative}"
-                wants.append(Want("skill", path, name, data, {"harnesses": sorted(harnesses)}))
+                extra = {"harnesses": sorted(harnesses)}
+                wants.append(Want("skill", path, name, data, extra))
     return sorted(wants, key=lambda want: want.path)
 
 
@@ -1425,6 +1446,33 @@ def nested_bytes(run: Run, table: dict[str, Any], found: Sequence[Route]) -> Not
                         "first",
                     )
                 )
+    return notes
+
+
+def guidance_file_notes(target: Path) -> Notes:
+    """Suggest one guidance file where another host holds the project's own text; read only.
+
+    Unreadable hosts add no refusal to an install that does not otherwise need them.
+    """
+
+    notes: Notes = []
+    for name in ("CLAUDE.md", ".claude/CLAUDE.md", "GEMINI.md"):
+        try:
+            data = fileplan.current(target, name)
+            text = "" if data is None else textio.decode(data)
+            for block in reversed(identity.find_managed_blocks(text)):
+                text = text[: block.begin_offset] + text[block.end_offset :]
+        except (fileplan.WriteError, OSError, UnicodeDecodeError, identity.IdentityError):
+            continue
+        # A file that only imports AGENTS.md is the one guidance file's pointer, not a second one.
+        if any(line.strip() not in ("", IMPORT) for line in text.splitlines()):
+            notes.append(
+                (
+                    "warning",
+                    f"{name}: AGENTS.md should be the only guidance file; "
+                    "the project's text here could move into AGENTS.md",
+                )
+            )
     return notes
 
 
@@ -1741,6 +1789,7 @@ def install(
         run.drop(record)
     run.notes.append(footprint(wants))
     run.notes.extend(nested_bytes(run, table, found))
+    run.notes.extend(guidance_file_notes(target))
     run.notes.extend(ancestor_notes(target, found))
     run.notes.extend(reference_notes(target, found))
     run.notes.extend(hook_path_notes(target))
@@ -2293,6 +2342,13 @@ def check(target: Path, source: Path) -> int:
         else:
             detail = "HEAD's commit does not hold it either"
         print(f"missing  {MANIFEST}: {detail}")
+        held = _branches_holding_install(target)
+        if held:
+            print(
+                f"{'note':<8} local branches whose tip holds {MANIFEST}: "
+                f"{', '.join(textio.visible(name) for name in held)}; check one out to work "
+                "with that install"
+            )
         command = f"outcomebound adopt {paths.shell_path(target)} --detect"
         print(f"next: {command} prints the command that installs OutcomeBound here")
         return 1
@@ -2320,16 +2376,37 @@ def check(target: Path, source: Path) -> int:
     return min(sum(state != "current" for state in found), CHECK_CAP)
 
 
+def _branches_holding_install(target: Path) -> list[str]:
+    """The local branches, in Git's order, whose tip holds the manifest at the target's own path;
+    none where Git cannot list them. Git is read and nothing is written."""
+
+    listed = _git(target, "for-each-ref", "--format=%(refname:short)", "refs/heads")
+    if not listed:
+        return []
+    names = listed.decode("utf-8", "replace").splitlines()
+    specs = "".join(f"refs/heads/{name}:./{MANIFEST}\n" for name in names)
+    checked = _git(target, "cat-file", "--batch-check", stdin=specs.encode("utf-8"))
+    if checked is None:
+        return []
+    answers = checked.decode("utf-8", "replace").splitlines()
+    if len(answers) != len(names):
+        return []
+    return [
+        name for name, answer in zip(names, answers, strict=True) if not answer.endswith(" missing")
+    ]
+
+
 def _worktree_warnings(target: Path, source: Path) -> list[str]:
-    """The `warn` lines for each other worktree of the project whose install is older than this
-    engine, missing, not on disk as recorded or not as its commit holds it; none where Git cannot
-    list them. Informational: no exit changes."""
+    """The `warn` lines for the other worktrees of the project whose install is older than this
+    engine, missing, not on disk as recorded or not as its commit holds it, one line for each set
+    that the check says the same of; none where Git cannot list them. Informational: no exit
+    changes."""
 
     listed = _git(target, "worktree", "list", "--porcelain")
     if listed is None:
         return []
     text = listed.decode("utf-8", "replace")
-    found = adopt_worktrees.lines(target, text, engine_version(source), worktree_survey)
+    found = adopt_worktrees.grouped(target, text, engine_version(source), worktree_survey)
     return adopt_worktrees.render(found)
 
 
@@ -2661,9 +2738,12 @@ edges: those the selected fragments declare, and a floor loosening where a floor
 Text for people: with --human-style ste, documents a person keeps (pull request descriptions,
 commit messages, specs and handovers) in the style of ASD-STE100 Simplified Technical English,
 and not replies in conversation; Precedence); and the guidance pointers: the local
-fragment inline, then one line per fragment in --fragments, copied under
-.outcomebound/fragments/, and per skill: the fourteen working skills. The workspace fragment also
-gets .agents/.gitignore, which keeps its four folders out of Git, and every install gets
+fragment inline, then one optional line naming the fourteen working skills at their installed
+paths and each copied fragment under .outcomebound/fragments/. No skill or fragment is read by
+default. Every installed skill is manual, with its source description unchanged. Native skill
+paths are used only when every selected route except generic has a recorded manual mechanism;
+otherwise all copies use .outcomebound/skills/, outside discovery. The workspace
+fragment also gets .agents/.gitignore, which keeps its four folders out of Git. Every install gets
 .outcomebound/.gitignore, which keeps OutcomeBound's local records (the research inbox, the
 validation logs) out of Git. A fact it cannot observe is left out, and the install report names
 it UNVERIFIED. The report also warns, refusing nothing, for each path it writes that Git
@@ -2681,8 +2761,9 @@ which it records and names on a kept line, and a pointers block that is the reco
 only the local fragment's own edit in it, which it writes again and names on a render line. A
 refusal writes nothing. An install, a dry run and --check end with one note on how to install
 the outcomebound command in a cloud session, which starts from a fresh clone; the note writes
-no file. --check also prints one warn line for each other worktree of the project whose install
-is older than this engine.
+no file. --check also prints one warn line for each set of other worktrees of the project whose
+install is older than this engine or not as recorded and which the check says the same of, with
+the count and each branch; `outcomebound workspace audit` lists every worktree.
 
 --facts-only installs the project facts alone: AGENTS.md gets the project facts block and, where
 the local fragment is selected, a guidance pointers block holding the local fragment inline and

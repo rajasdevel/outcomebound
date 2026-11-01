@@ -2,7 +2,6 @@
 id: client
 family: setup
 applies: projects where a client or a regulator accepts the work
-condition: when preparing, running or recording an acceptance, promoting a build a client or regulator accepts, or recording who reviewed or approved a change
 detect: []
 version: 2
 ---

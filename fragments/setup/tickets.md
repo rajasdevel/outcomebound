@@ -2,7 +2,6 @@
 id: tickets
 family: setup
 applies: projects that declare a ticket store
-condition: when reading, working or changing this project's tickets or their declaration
 detect: []
 version: 15
 ---

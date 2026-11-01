@@ -226,6 +226,50 @@ def _expected(workdir: Path | None = None, plugins: tuple[Path, ...] = ()) -> cs
     return cs.Expected(plugins, ("diagnose",), ("using-outcomebound",), workdir, ("AGENTS.md",))
 
 
+def test_manual_installed_skills_need_not_appear_in_either_catalog(tmp_path: Path) -> None:
+    """Catch a false loading failure when a manual skill is absent from the model catalog."""
+
+    expected = cs.Expected(
+        skills=("diagnose", "automatic"), workdir=tmp_path, catalog=("automatic",)
+    )
+    start = _start(skills=["automatic"])
+    records = [_listing("automatic")]
+    rows = _verdicts(cs.loading_check([start], expected, records))
+    assert rows["skills"] == "PASS" and rows["skill-listing"] == "PASS"
+    missing = _verdicts(cs.loading_check([_start(skills=[])], expected, [_listing()]))
+    assert missing["skills"] == "FAIL" and missing["skill-listing"] == "FAIL"
+    stray = _verdicts(
+        cs.loading_check(
+            [_start(skills=["automatic", "stray"])], expected, [_listing("automatic", "stray")]
+        )
+    )
+    assert stray["skills"] == "FAIL" and stray["skill-listing"] == "FAIL"
+
+
+@pytest.mark.parametrize("manual", ["diagnose", "review"])
+@pytest.mark.parametrize("catalog", [(), ("automatic",)])
+def test_NEGATIVE_CONTROL_an_installed_manual_skill_in_either_catalog_fails(
+    manual: str, catalog: tuple[str, ...]
+) -> None:
+    """An installed skill excluded from the catalog must fail even with a built-in name."""
+
+    expected = cs.Expected(skills=(manual, *catalog), catalog=catalog)
+    names = [*catalog, manual]
+    rows = _verdicts(cs.loading_check([_start(skills=names)], expected, [_listing(*names)]))
+    assert rows["skills"] == "FAIL" and rows["skill-listing"] == "FAIL"
+
+
+def test_workspace_catalog_excludes_only_frontmatter_manual_skills(tmp_path: Path) -> None:
+    """Catch manual files being omitted from the installed inventory or listed implicitly."""
+
+    for name, flag in (("diagnose", "disable-model-invocation: true\n"), ("automatic", "")):
+        path = tmp_path / ".claude/skills" / name / "SKILL.md"
+        path.parent.mkdir(parents=True)
+        path.write_text(f"---\nname: {name}\n{flag}---\nBody.\n", encoding="utf-8")
+    assert cs.workspace_skills(tmp_path) == ("automatic", "diagnose")
+    assert cs.workspace_catalog(tmp_path) == ("automatic",)
+
+
 def test_a_cell_that_loads_what_its_arm_gives_passes_and_what_no_record_names_stays_unverified(
     tmp_path: Path,
 ) -> None:

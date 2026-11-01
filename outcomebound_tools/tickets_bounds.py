@@ -9,6 +9,7 @@ A folder may be written with a trailing `/`: `src/` grants what `src` grants.
 
 from __future__ import annotations
 
+import fnmatch
 import re
 
 __all__ = ["compiles", "covers", "folder", "whole_repository"]
@@ -42,7 +43,7 @@ def whole_repository(entry: str) -> bool:
 
 def _source(glob: str) -> str:
     """A glob as the source of a regular expression: `**` spans folders, `*` and `?`
-    stay in one, and a `[...]` class is kept as written."""
+    stay in one. The standard library translates each glob class; classes never span `/`."""
 
     out, index = [], 0
     while index < len(glob):
@@ -58,9 +59,22 @@ def _source(glob: str) -> str:
         elif glob[index] == "?":
             out.append("[^/]")
             index += 1
-        elif glob[index] == "[" and "]" in glob[index + 1 :]:
-            close = glob.index("]", index + 1)
-            out.append(glob[index : close + 1])
+        elif glob[index] == "[":
+            end = index + 1
+            if glob.startswith("!", end):
+                end += 1
+            if glob.startswith("]", end):
+                end += 1
+            close = glob.find("]", end)
+            if close == -1 or glob[index : close + 1] == "[^]":
+                raise ValueError("empty or unclosed glob class")
+            character_class = glob[index : close + 1]
+            # Keep the existing refusal for invalid ranges. fnmatch would discard them.
+            re.compile(character_class)
+            translated = fnmatch.translate(character_class)
+            # fnmatch anchors its whole input. Here the class is one part of the path.
+            translated = translated.removesuffix(r"\Z").removesuffix(r"\z")
+            out.append("(?!/)" + translated)
             index = close + 1
         else:
             out.append(re.escape(glob[index]))
@@ -74,7 +88,7 @@ def compiles(entry: str) -> bool:
 
     try:
         re.compile(_source(folder(entry)))
-    except re.error:
+    except (ValueError, re.error):
         return False
     return True
 
@@ -85,7 +99,7 @@ def _pattern(glob: str) -> re.Pattern[str]:
 
     try:
         return re.compile(_source(glob))
-    except re.error:
+    except (ValueError, re.error):
         return re.compile(re.escape(glob) + r"\Z")
 
 

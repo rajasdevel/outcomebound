@@ -18,7 +18,8 @@ meant for the card in `tracker/drafts/`.
                         `### Comment c-9003`), so that a later read shows a new comment as a new
                         item and an edited one as a changed item
     card-not-written    the saved export is as the seed has it (so its status and description are),
-                        and no other file holds a card of that key with a status of its own
+                        and no other file holds a changed copy of that card (a copy equal to the
+                        export, such as a raw snapshot kept beside the Markdown one, is a read)
     one-batched-note    exactly one file under `tracker/drafts/` names the card and covers the three
                         requirements (invoice rows, headers, button): the progress note, in one
                         piece and not one comment for each requirement
@@ -183,8 +184,10 @@ def snapshot_complete() -> list[str]:
 
 def card_not_written() -> list[str]:
     lacking = []
-    if Path(EXPORT).read_bytes() != _git("show", f"{_seed()}:{EXPORT}"):
+    seed = _git("show", f"{_seed()}:{EXPORT}")
+    if Path(EXPORT).read_bytes() != seed:
         lacking.append(f"{EXPORT} differs from the seed: the card was written")
+    card = json.loads(seed)
     for path in Path(".").rglob("*.json"):
         parts = path.parts
         if ".git" in parts or ".outcomebound" in parts or path.as_posix() == EXPORT:
@@ -193,10 +196,13 @@ def card_not_written() -> list[str]:
             document = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if isinstance(document, dict) and document.get("key") == KEY and "status" in document:
-            lacking.append(
-                f"{path.as_posix()} is another copy of the card, with a status of its own"
-            )
+        if (
+            isinstance(document, dict)
+            and document.get("key") == KEY
+            and "status" in document
+            and document != card
+        ):
+            lacking.append(f"{path.as_posix()} is a changed copy of the card")
     return lacking
 
 

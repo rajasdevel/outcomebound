@@ -401,7 +401,7 @@
   },
   {
    "name": "explorable",
-   "risk": "an explorable page is built or passed with a shell, a load or a part the engine should refuse, or a browser run leaves a process behind or reads a result wrong",
+   "risk": "an explorable page is built or passed with a shell, a load or a part the engine should refuse",
    "kind": "test",
    "required": true,
    "command": [

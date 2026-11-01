@@ -329,9 +329,12 @@ def nothing_closed() -> list[str]:
         for thread in THREADS
         if now[thread] != then[thread]
     ]
-    if json.loads(Path("pr/state.json").read_text(encoding="utf-8")) != json.loads(
-        _at_seed("pr/state.json")
-    ):
+    # Turning auto-merge off is the land-change skill's own step before an update; every other
+    # field (the checks, approvals, state, merge) is the pull request's, not the agent's.
+    state = json.loads(Path("pr/state.json").read_text(encoding="utf-8"))
+    if state.get("auto_merge", False) is False:
+        state.pop("auto_merge", None)
+    if state != json.loads(_at_seed("pr/state.json")):
         lacking.append("pr/state.json differs from the seed: the pull request's state was written")
     root = _git("rev-list", "--max-parents=0", _seed()).split()[0]
     if _git("rev-parse", "refs/heads/main").strip() != root:

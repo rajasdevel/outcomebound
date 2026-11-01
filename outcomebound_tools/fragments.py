@@ -10,8 +10,8 @@ names must be a registry id. Both are structural checks, not string matches, so
 a fragment is facts a model reads rather than a form it fills in.
 
 An install does not paste fragment bodies into AGENTS.md: each selected fragment
-is copied under `.outcomebound/fragments/` and reached through a pointer line
-carrying its `condition:`, and its `edges:` join the project facts
+is copied under `.outcomebound/fragments/` and named on the optional line;
+its `edges:` join the project facts
 (`outcomebound_tools.facts`). `compose --inline` emits fragment bodies, for a
 delegate's role prompt that may never open a pointer.
 
@@ -40,8 +40,8 @@ from outcomebound_tools.mechanisms import MECHANISMS, unknown
 FAMILIES = ("stack", "setup")
 SLOTS = ("Context", "Bounds", "Mechanisms", "Completion bar", "Distinguish")
 FRONTMATTER_KEYS = ("id", "family", "applies", "detect", "version")
-# A fragment may leave these out: its pointer's condition and the irreversible acts it names.
-OPTIONAL_KEYS = ("condition", "edges")
+# A fragment may leave out the irreversible acts it names.
+OPTIONAL_KEYS = ("edges",)
 ID_RE = re.compile(r"\A[a-z0-9][a-z0-9-]*\Z")
 SLOT_RE = re.compile(r"^\*\*(?P<slot>[^*]+)\*\* — ", re.MULTILINE)
 BACKTICKED = re.compile(r"`([^`]+)`")
@@ -87,7 +87,6 @@ class Fragment:
     version: int
     body: str
     mechanisms: tuple[str, ...]
-    condition: str = ""
     edges: tuple[str, ...] = ()
     digest: str = ""
     path: Path | None = None
@@ -299,7 +298,6 @@ def parse_fragment(text: str, source: str = "<fragment>") -> Fragment:
         version=fields["version"],
         body=body.strip(),
         mechanisms=named,
-        condition=fields.get("condition", ""),
         edges=fields.get("edges", ()),
         digest=hashlib.sha256(text.encode("utf-8")).hexdigest(),
     )

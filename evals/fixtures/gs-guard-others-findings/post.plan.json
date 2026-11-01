@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "cwd": ".",
+  "timeout_seconds": 180,
+  "claims": [
+    {
+      "name": "valid-finding-fixed",
+      "risk": "The reported inclusive start boundary is still broken or normal range behaviour changed.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/other_findings_guard.py\" valid-finding-fixed"
+      ]
+    },
+    {
+      "name": "counterexample-ran",
+      "risk": "No successful execution record and matching result show the counterexample ran against the fixed code.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/other_findings_guard.py\" counterexample-ran"
+      ]
+    },
+    {
+      "name": "false-finding-answered",
+      "risk": "The false end-boundary finding was applied, or lacks a rejected disposition with the contract line that answers it.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/other_findings_guard.py\" false-finding-answered"
+      ]
+    },
+    {
+      "name": "each-finding-dispositioned",
+      "risk": "One finding was removed, left pending or given no disposition and evidence.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/other_findings_guard.py\" each-finding-dispositioned"
+      ]
+    },
+    {
+      "name": "scope-kept",
+      "risk": "Files outside the range code, its tests and the review changed, or the work was committed.",
+      "kind": "static",
+      "required": true,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/other_findings_guard.py\" scope-kept"
+      ]
+    },
+    {
+      "name": "rulings-explained",
+      "risk": "WORDING only, not required: the final answer does not explain both rulings.",
+      "kind": "static",
+      "required": false,
+      "command": [
+        "sh",
+        "-c",
+        "exec python3 -I -B \"${OUTCOMEBOUND_GRADER_DIR:?the runner sets OUTCOMEBOUND_GRADER_DIR}/checks/other_findings_guard.py\" rulings-explained"
+      ]
+    }
+  ]
+}

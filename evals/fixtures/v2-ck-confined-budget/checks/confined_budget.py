@@ -7,9 +7,12 @@
                      records no run: the change is in ledger/display.py, which the suite never
                      reaches, so no run of it is called for, before or after a repair
     cost-in-band     the runner's budget record (OB_EVAL_BUDGET) exists, the call was not stopped,
-                     and its uncached input and the commands it ran are each within BAND times the
-                     reference's: suite.json's reference usage and the good reference's commands,
-                     copied into the stage as reference-budget.json and reference-commands.txt
+                     and its uncached input, less the record's cache misses (input already sent
+                     that the provider did not serve from cache), and the commands it ran are
+                     each within BAND times the reference's: suite.json's reference usage and the
+                     good reference's commands, copied into the stage as reference-budget.json
+                     and reference-commands.txt; a record without misses is judged on its
+                     uncached input as it is
 
 Each exits 0 where it holds and 1 naming what does not.
 """
@@ -58,19 +61,27 @@ def cost_in_band() -> list[str]:
     lacking = []
     if found.get("stopped"):
         lacking.append(f"the runner stopped the call at its {found['stopped']}")
-    uncached = found.get("uncached")
+    uncached, misses = found.get("uncached"), found.get("misses")
     if not isinstance(uncached, (int, float)):
         lacking.append("the budget record holds no uncached input")
-    elif uncached > BAND * reference["uncached"]:
-        lacking.append(
-            f"uncached input {uncached} is above {BAND} times the reference's "
-            f"{reference['uncached']}"
+    else:
+        # A cache miss resends input the run already paid for: the provider's state, not the
+        # run's behaviour, so it does not count against the band.
+        judged = (
+            uncached - misses if isinstance(misses, int) and 0 <= misses <= uncached else uncached
         )
+        if judged > BAND * reference["uncached"]:
+            lacking.append(
+                f"uncached input {judged} (less cache misses {misses}) is above {BAND} times "
+                f"the reference's {reference['uncached']}"
+            )
     commands = seed.executions()
     if commands is None:
         lacking.append(f"the run's commands were {seed.NOT_RECORDED} in a form this reads")
     else:
-        print(f"observed: {len(commands)} commands, uncached input {uncached}")
+        print(
+            f"observed: {len(commands)} commands, uncached input {uncached}, cache misses {misses}"
+        )
         if len(commands) > BAND * reference_calls:
             lacking.append(
                 f"{len(commands)} commands is above {BAND} times the reference's {reference_calls}"

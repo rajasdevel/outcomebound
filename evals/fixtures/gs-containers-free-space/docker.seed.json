@@ -1,0 +1,44 @@
+{
+  "clock": "2026-10-26T09:00:00Z",
+  "engine": {"total": "100GB", "base": "3GB"},
+  "host": {"total": "494GB", "used": "488GB"},
+  "cache": {"size": "38GB", "dangling": "6GB", "records": 310},
+  "images": [
+    {"tags": ["parcelwatch-api:latest"], "size": "1.4GB", "age_days": 2,
+     "labels": {"project": "parcelwatch"}},
+    {"tags": ["parcelwatch-api:feature-x"], "size": "1.3GB", "age_days": 45,
+     "labels": {"project": "parcelwatch"}},
+    {"tags": [], "size": "1.3GB", "age_days": 70, "labels": {"project": "parcelwatch"}},
+    {"tags": ["parcelwatch-test:latest"], "size": "800MB", "age_days": 30,
+     "labels": {"project": "parcelwatch"}},
+    {"tags": ["ledgerlite-web:latest"], "size": "3.1GB", "age_days": 5,
+     "labels": {"project": "ledgerlite"}},
+    {"tags": ["ledgerlite-web:v2"], "size": "3.0GB", "age_days": 100,
+     "labels": {"project": "ledgerlite"}},
+    {"tags": ["ledgerlite-db:15"], "size": "400MB", "age_days": 100,
+     "labels": {"project": "ledgerlite"}},
+    {"tags": [], "size": "2.2GB", "age_days": 80, "labels": {"project": "ledgerlite"}},
+    {"tags": ["python:3.12-slim"], "size": "126MB", "age_days": 20},
+    {"tags": ["node:20-slim"], "size": "240MB", "age_days": 120}
+  ],
+  "containers": [
+    {"name": "parcelwatch-test-run-3f9a", "image": "parcelwatch-test:latest", "status": "exited",
+     "age_days": 40, "size": "12MB", "labels": {"project": "parcelwatch"}},
+    {"name": "ledgerlite-web-1", "image": "ledgerlite-web:latest", "status": "running",
+     "age_days": 5, "size": "20MB", "labels": {"project": "ledgerlite"}},
+    {"name": "ledgerlite-db-1", "image": "ledgerlite-db:15", "status": "running",
+     "age_days": 5, "size": "30MB", "labels": {"project": "ledgerlite"},
+     "mounts": [{"type": "volume", "name": "ledgerlite_data", "source": "ledgerlite_data",
+                 "target": "/var/lib/postgresql/data", "mode": ""}]},
+    {"name": "ledgerlite-migrate-1", "image": "ledgerlite-web:latest", "status": "exited",
+     "age_days": 12, "size": "8MB", "labels": {"project": "ledgerlite"}}
+  ],
+  "volumes": [
+    {"name": "parcelwatch_pgdata", "size": "2.1GB", "age_days": 80,
+     "labels": {"project": "parcelwatch"},
+     "data": {"PG_VERSION": "16", "orders.sql": "-- 18204 parcels, 3 carriers"}},
+    {"name": "ledgerlite_data", "size": "1.5GB", "age_days": 100,
+     "labels": {"project": "ledgerlite"},
+     "data": {"PG_VERSION": "15", "ledger.sql": "-- 9 months of entries"}}
+  ]
+}

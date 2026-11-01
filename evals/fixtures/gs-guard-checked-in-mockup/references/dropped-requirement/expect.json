@@ -1,0 +1,10 @@
+{
+  "claims": {
+    "requirements-kept": "FAIL",
+    "inference-labelled": "PASS",
+    "missing-state-open": "PASS",
+    "scope-kept": "PASS",
+    "plain-summary": "PASS"
+  },
+  "report": {}
+}

@@ -5,14 +5,14 @@ questions.
 What this module decides: the three subcommands and their options; that `new` writes a starter
 source and never writes over a file; that `build` joins a source to the engine's shell, writes
 over a page it built (the generator `meta` marks it) and refuses to write over any other file;
-that `check` prints one overall verdict first, then the shell, hosts, parts and run verdicts; and
+that `check` prints one overall verdict first, then the shell, hosts and parts verdicts, and a run
+verdict that is always UNVERIFIED and names the address an agent opens in a browser it drives; and
 the exits: 0 when nothing fails (an UNVERIFIED is named); 1 for a FAIL or a refusal; 2 when a file
 cannot be read or on a usage error.
 
 What it does not decide: whether a page's content is right. It reads the source, the brief
-document a decision names and the engine's templates (`build`), or the page and, with
-`--browser`, the document the browser prints (`check`); it writes only `new`'s starter and
-`build`'s page. Standard library only.
+document a decision names and the engine's templates (`build`), or the page (`check`); it starts
+no browser, and writes only `new`'s starter and `build`'s page. Standard library only.
 """
 
 from __future__ import annotations
@@ -29,7 +29,6 @@ from pathlib import Path
 from outcomebound_tools import (
     decision_brief,
     decision_brief_html,
-    explorable_browser,
     explorable_check,
     explorable_shell,
     explorable_source,
@@ -39,7 +38,6 @@ from outcomebound_tools import (
 from outcomebound_tools.explorable_source import SOURCE_SUFFIX, SourceRefusal
 
 NAME = "explorable"
-DEFAULT_TIMEOUT = 60.0
 _GENERATED = re.compile(r'<meta name="generator" content="outcomebound explorable [^"]*">')
 _EPILOG = """\
 A source is an HTML fragment named <name>.source.html: its first element is the header,
@@ -58,15 +56,14 @@ build    joins the source to the shell. Reads the source, its brief document and
 check    verdicts: shell (policy, generator, kind, stylesheet, runtime and pins equal the
          engine's; else `next: build again`), hosts, parts (a decision holds a brief and the
          reply; an interview a data-question and the reply; a learning page the reply where it
-         holds a data-question and none where it holds none; an explanation no reply), and with
-         --browser run (no script error; each expectation
-         passes; each output with no expectation reads UNVERIFIED). The page is run only where
-         the first three pass. A pass never says that the page's content is right.
+         holds a data-question and none where it holds none; an explanation no reply), and run,
+         always UNVERIFIED: the engine starts no browser. It names the page's address with
+         #explorable-check, which an agent opens in a browser it drives; the page then writes its
+         own result into <script id="explorable-check-result">. A pass never says that the
+         page's content is right.
 
 Exits: 0 when nothing fails, any UNVERIFIED named; 1 on a FAIL or a refusal; 2 when a file cannot
-be read or on a usage error. Set SOURCE_DATE_EPOCH to make a build repeatable. The browser is
-OUTCOMEBOUND_BROWSER, else google-chrome, chromium, chromium-browser, msedge or brave on PATH,
-else an install folder; with none, or only Firefox or Safari, the run is UNVERIFIED.
+be read or on a usage error. Set SOURCE_DATE_EPOCH to make a build repeatable.
 """
 
 
@@ -104,14 +101,6 @@ def _parser() -> argparse.ArgumentParser:
         description="Print the verdicts for a built page. Writes nothing.",
     )
     checked.add_argument("page", metavar="PAGE", help="the built page")
-    checked.add_argument("--browser", action="store_true", help="also run the page headless")
-    checked.add_argument(
-        "--timeout",
-        type=float,
-        default=DEFAULT_TIMEOUT,
-        metavar="SECONDS",
-        help=f"how long the browser may take (default {DEFAULT_TIMEOUT:g})",
-    )
     return parser
 
 
@@ -300,19 +289,6 @@ def _print(page: Path, verdicts: list[explorable_check.Verdict]) -> None:
     )
 
 
-def _run_verdict(page: Path, timeout: float) -> explorable_check.Verdict:
-    browser, how = explorable_browser.find_browser()
-    if browser is None:
-        return explorable_check.not_run(how)
-    ran = explorable_browser.run_page(browser, page, timeout)
-    if ran.document is None:
-        return explorable_check.not_run(ran.reason)
-    result, reason = explorable_browser.parse_result(ran.document)
-    if result is None:
-        return explorable_check.no_result(reason)
-    return explorable_check.run(result)
-
-
 def _check(options: argparse.Namespace) -> int:
     page = Path(options.page)
     try:
@@ -334,12 +310,13 @@ def _check(options: argparse.Namespace) -> int:
     else:
         kind = html_kind(found)
         verdicts += [explorable_check.hosts(found), explorable_check.parts(kind, found)]
-    if not options.browser:
-        verdicts.append(explorable_check.not_run("--browser was not given"))
-    elif any(item.status != explorable_check.PASS for item in verdicts):
-        verdicts.append(explorable_check.not_run("the shell, hosts and parts do not all pass"))
-    else:
-        verdicts.append(_run_verdict(page, options.timeout))
+    verdicts.append(
+        explorable_check.not_run(
+            "the engine starts no browser; open "
+            f"{page.resolve().as_uri()}#explorable-check in a browser you drive and read "
+            '<script id="explorable-check-result">'
+        )
+    )
     _print(page, verdicts)
     return 1 if explorable_check.FAIL in {item.status for item in verdicts} else 0
 
@@ -353,8 +330,6 @@ def html_kind(found: explorable_shell.Parts) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     options = parser.parse_args(argv)
-    if options.command == "check" and not options.timeout > 0:
-        parser.error("--timeout is a number of seconds above 0")
     if options.command == "new":
         return _new(options)
     if options.command == "build":

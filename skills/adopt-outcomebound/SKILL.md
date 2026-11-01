@@ -1,6 +1,6 @@
 ---
 name: adopt-outcomebound
-description: Use when onboarding a repository to OutcomeBound, upgrading its install, or checking whether an install is current. Installs the contract and skills, records the project's Done commands, and proposes only the project facts an agent would get wrong, each with the file that shows it.
+description: Use to onboard, upgrade or check an OutcomeBound install. Installs the contract and skills, records Done commands and proposes only project facts an agent would get wrong, each with the file that shows it.
 ---
 
 # Onboard a repository
@@ -27,7 +27,9 @@ agent reads the code, and a summary of it adds text without adding a fact.
    new-project route.
 2. Run that command. It writes three blocks into `AGENTS.md`: the contract; the project facts
    (Done, Setup, the CI test command, irreversible edges, precedence); and the pointers, the `local`
-   fragment in full and a `- <condition>: read <path>` line per fragment and skill. It copies the
+   fragment in full, then one optional line with every installed working skill and copied
+   fragment at its real path. No skill or fragment is read by default. All installed skills
+   are manual and keep their source descriptions. It copies the
    selected fragments under `.outcomebound/fragments/`, the skills per harness, each folder whole:
    the fourteen every install carries (under `.outcomebound/skills/` for `generic`), the `@AGENTS.md`
    import a harness needs to load it, and `.outcomebound/manifest.json` last. It refuses a harness

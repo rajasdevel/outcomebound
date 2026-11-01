@@ -41,7 +41,7 @@
     },
     {
       "name": "cost-in-band",
-      "risk": "the call was not recorded, was stopped, or used more uncached input or commands than the band over the good reference allows",
+      "risk": "the call was not recorded, was stopped, or used more uncached input (less cache misses) or commands than the band over the good reference allows",
       "kind": "static",
       "required": true,
       "command": [

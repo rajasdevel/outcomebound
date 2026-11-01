@@ -2,7 +2,6 @@
 id: db-migrations
 family: stack
 applies: schema migrations (Django, Alembic, Prisma, Flyway, Rails)
-condition: when writing, applying or rolling back a schema migration
 detect: ["**/migrations/*.py", "prisma/schema.prisma", "alembic.ini", "db/migrate/*.rb"]
 version: 7
 ---

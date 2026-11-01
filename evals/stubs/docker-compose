@@ -1,0 +1,5 @@
+#!/bin/sh
+# The `docker-compose` stub's launcher: docker.py, beside this file, under an isolated Python that writes no
+# bytecode, told which command it stands for. The runner places the files, read-only, in the
+# folder OB_EVAL_STUBS names.
+exec python3 -I -B "$(dirname "$0")/docker.py" docker-compose "$@"

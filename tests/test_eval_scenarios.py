@@ -1173,7 +1173,7 @@ def test_no_file_the_model_can_read_names_its_fixture_or_states_a_claims_risk(
 def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
     workspace: Callable[..., Path], name: str
 ) -> None:
-    from outcomebound_tools import schemacheck
+    from outcomebound_tools import adopt, schemacheck
 
     run = _load("eval_run_protected", "evals/run.py")
     schema = json.loads((ROOT / "schemas/validation-plan.schema.json").read_text("utf-8"))
@@ -1187,9 +1187,11 @@ def test_every_fixture_builds_protects_its_graders_and_carries_the_core_skill(
     assert not [path for path in protected if path.startswith("checks/")]
     if "OUTCOMEBOUND_GRADER_DIR" in json.dumps(_plan(name)):
         assert any((stage_of(target) / "checks").iterdir())
+    # The fixture carries the core skill as an install writes it, with its manual flag.
+    installed = adopt.skill_files(ROOT, "using-outcomebound")["SKILL.md"]
     for root in SKILL_ROOTS:
         skill = target / root / "using-outcomebound" / "SKILL.md"
-        assert skill.read_bytes() == (ROOT / "skills/using-outcomebound/SKILL.md").read_bytes()
+        assert skill.read_bytes() == installed
         assert f"{root}/using-outcomebound/SKILL.md" in protected
     # A claims plan the fixture declares names paths that its working directory holds, so a
     # brief built from it sends the implementer to the folder its tests run in.
@@ -6079,6 +6081,18 @@ def test_land_change_fails_a_merge_and_a_resolved_thread(workspace: Callable[...
     _land(workspace, "resolved", resolved, LAND_ANSWER, no_thread_resolved_and_no_merge="FAIL")
     written = LAND_RIGHT + _edit("pr/state.json", '"failing"', '"passing"')
     _land(workspace, "state", written, LAND_ANSWER, no_thread_resolved_and_no_merge="FAIL")
+    turned_on = LAND_RIGHT + _edit(
+        "pr/state.json", '"merged": false,', '"merged": false, "auto_merge": true,'
+    )
+    _land(workspace, "auto-on", turned_on, LAND_ANSWER, no_thread_resolved_and_no_merge="FAIL")
+
+
+def test_land_change_lets_auto_merge_be_turned_off(workspace: Callable[..., Path]) -> None:
+    """The skill turns auto-merge off before an update; that write alone is not a state change."""
+    turned_off = LAND_RIGHT + _edit(
+        "pr/state.json", '"merged": false,', '"merged": false, "auto_merge": false,'
+    )
+    _land(workspace, "auto-off", turned_off, LAND_ANSWER)
 
 
 REPAIR_PARSE = _edit(
@@ -6709,6 +6723,13 @@ def test_sync_tracker_fails_a_write_to_the_card(workspace: Callable[..., Path]) 
         "Path('tracker/CARD-381.updated.json').write_text(json.dumps(card))\nPY\n"
     )
     _sync(workspace, "copy", _sync_right() + copy, card_not_written="FAIL")
+
+
+def test_sync_tracker_accepts_an_unchanged_copy_of_the_export(
+    workspace: Callable[..., Path],
+) -> None:
+    keep = "cp tracker/export/CARD-381.json tracker/snapshots/CARD-381.json\n"
+    _sync(workspace, "kept", _sync_right() + keep)
 
 
 def test_sync_tracker_reads_the_import(workspace: Callable[..., Path]) -> None:

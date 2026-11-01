@@ -1,0 +1,6 @@
+{
+  "clock": "2026-10-26T09:00:00Z",
+  "engine": {"total": "100GB", "base": "3GB"},
+  "host": {"total": "494GB", "used": "210GB"},
+  "images": []
+}

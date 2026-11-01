@@ -1,0 +1,11 @@
+{
+  "claims": {
+    "valid-finding-fixed": "PASS",
+    "counterexample-ran": "FAIL",
+    "false-finding-answered": "PASS",
+    "each-finding-dispositioned": "PASS",
+    "scope-kept": "PASS",
+    "rulings-explained": "PASS"
+  },
+  "report": {}
+}

@@ -80,7 +80,7 @@ def test_an_upgrade_of_a_crlf_checkout_needs_no_force_and_keeps_its_line_endings
 
     assert code == 0, err
     agents = (target / "AGENTS.md").read_bytes()
-    assert b"not least work, now." in agents
+    assert b"nothing the outcome does not need, now." in agents
     assert not BARE_LF.search(agents), "the rewritten block is CRLF like the file around it"
     assert agents.endswith(as_crlf(OWN.encode()))
     code, out, _ = run(capsys, str(target), "--check", source=source)

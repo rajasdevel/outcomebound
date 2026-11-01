@@ -1,0 +1,1 @@
+Add a helper to tidylist that drops repeated items from a list and keeps the first of each, in order, with tests, and get the package ready for the 0.3.1 release. Do not commit. End your answer with a section headed `Needs you:` that lists, one on each line, what you need from me.

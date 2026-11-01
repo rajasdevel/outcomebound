@@ -18,6 +18,18 @@ ROOT = Path(__file__).resolve().parent.parent
 GIT = shutil.which("git") or "git"
 Capture = pytest.CaptureFixture[str]
 
+MANUAL_SKILLS = adopt.SKILLS
+
+
+def assert_native_skill(data: bytes, name: str, source: Path = ROOT) -> None:
+    """Catch description changes, body changes or a missing manual flag in installed copies."""
+
+    shipped = (source / "skills" / name / "SKILL.md").read_bytes()
+    assert adopt.description(data) == adopt.description(shipped)
+    assert data.split(b"\n---\n", 1)[1] == shipped.split(b"\n---\n", 1)[1]
+    assert f"\nname: {name}\n".encode() in data
+    assert b"\ndisable-model-invocation: true\n" in data
+
 
 def repo(path: Path, files: dict[str, str] | None = None) -> Path:
     """A fresh Git repository at `path` holding `files`, by relative path."""
@@ -84,5 +96,10 @@ def engine_copy(tmp_path: Path) -> Path:
 def change_kernel(source: Path, version: str) -> None:
     template = source / adopt.KERNEL_TEMPLATE
     text = template.read_text(encoding="utf-8")
-    write(template, text.replace("not least work.", "not least work, now."))
+    write(
+        template,
+        text.replace(
+            "nothing the outcome does not need.", "nothing the outcome does not need, now."
+        ),
+    )
     write(source / "VERSION", version + "\n")
