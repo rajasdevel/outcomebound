@@ -28,6 +28,8 @@ __all__ = ["Survey", "Worktree", "describe", "grouped", "installed", "lines", "p
 MANIFEST = ".outcomebound/manifest.json"
 HOST = "AGENTS.md"
 KERNEL = "operating-contract"
+# The worktrees a grouped line names; it counts the rest.
+SHOWN = 5
 DOTTED = re.compile(r"\d+(\.\d+)*")
 # One worktree's install problems beside its version, and whether it is facts-only.
 Survey = Callable[[Path], tuple[list[str], bool]]
@@ -151,9 +153,10 @@ def grouped(
     survey: Survey | None = None,
 ) -> list[str]:
     """One `warn` line for each set of worktrees other than `target` of which `describe` says the
-    same thing: the count, then each worktree's branch, or its path where none is checked out,
-    then the text. A set keeps the order of its first worktree in the listing. The list for each
-    worktree is `lines`, and `outcomebound workspace audit`."""
+    same thing: the count, then the branch of each of the first `SHOWN` worktrees, or its path
+    where none is checked out, and how many more, then the text. A set keeps the order of its
+    first worktree in the listing. The list for each worktree is `lines`, and
+    `outcomebound workspace audit`."""
 
     sets: dict[str, list[str]] = {}
     for tree, text in _found(target, porcelain, engine, survey):
@@ -163,9 +166,17 @@ def grouped(
             name = textio.visible(tree.branch)
         sets.setdefault(text, []).append(name)
     return [
-        f"{len(names)} worktree{'' if len(names) == 1 else 's'} ({', '.join(names)}): {text}"
+        f"{len(names)} worktree{'' if len(names) == 1 else 's'} ({_named(names)}): {text}"
         for text, names in sets.items()
     ]
+
+
+def _named(names: Sequence[str]) -> str:
+    """The first `SHOWN` names, then how many more."""
+
+    if len(names) <= SHOWN:
+        return ", ".join(names)
+    return f"{', '.join(names[:SHOWN])} and {len(names) - SHOWN} more"
 
 
 def render(found: Sequence[str]) -> list[str]:

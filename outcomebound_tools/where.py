@@ -231,7 +231,7 @@ def _git_items(top: Path, inside: bool) -> list[Item]:
     if older:
         text = (
             f"{len(older)} worktree(s) have no readable install, one older than the engine, or "
-            "one missing on disk or not committed; `outcomebound adopt . --check` names each"
+            "one missing on disk or not committed; `outcomebound adopt . --check` groups them"
         )
         items.append(_item("worktree", "adopt_worktrees", NOTE, text))
     return items
