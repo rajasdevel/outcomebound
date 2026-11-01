@@ -129,6 +129,12 @@ def new_tests_docs():
         (baseline / "tests/test_feature_day.py").write_bytes(
             Path("tests/test_feature_day.py").read_bytes()
         )
+        # A module the work adds is not seed content; with it present the new tests load on
+        # the seed and each one is judged against the seed's own modules.
+        for path in Path("chatsvc").rglob("*.py"):
+            if not (baseline / path).exists():
+                (baseline / path).parent.mkdir(parents=True, exist_ok=True)
+                (baseline / path).write_bytes(path.read_bytes())
         before = delivered.run(baseline, argv)
     failed = set(
         re.findall(

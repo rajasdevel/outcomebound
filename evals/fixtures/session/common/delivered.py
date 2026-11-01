@@ -73,6 +73,26 @@ def overlay_machinery(target):
     sealed = HERE / "seed-checks"
     if sealed.is_dir():
         shutil.copytree(sealed, target, dirs_exist_ok=True)
+        # The sealed files run in place of the delivered ones; Git still reports the delivered
+        # state, so a recorded check that compares tracked files with a revision is judged on it.
+        if (target / ".git").is_dir():
+            names = [
+                path.relative_to(sealed).as_posix() for path in sealed.rglob("*") if path.is_file()
+            ]
+            tracked = subprocess.run(
+                ["git", "ls-files", "-z", "--", *names],
+                cwd=target,
+                capture_output=True,
+                check=True,
+            ).stdout.split(b"\0")
+            tracked = [name.decode("utf-8") for name in tracked if name]
+            if tracked:
+                subprocess.run(
+                    ["git", "update-index", "--assume-unchanged", "--", *tracked],
+                    cwd=target,
+                    capture_output=True,
+                    check=True,
+                )
     elif (HERE / "session.json").is_file():
         raise ValueError("unjudged: sealed seed machinery is unavailable")
 
