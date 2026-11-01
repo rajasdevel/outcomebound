@@ -88,9 +88,9 @@ Papers and pages are listed under Sources, with the day they were read.
 
 ### Key findings
 
-Each finding has an id (E1 to E36). Other documents may cite the id. The entries for E1 to E20
-are the findings in full, with their tables under Results where a pass has them. E21 to E34 and E36 each
-have a section of their own below, and their entries here sum them up.
+Each finding has an id (E1 to E38). Other documents may cite the id. The entries for E1 to E20
+are the findings in full, with their tables under Results where a pass has them. E21 to E34, E36 and E38
+each have a section of their own below, and their entries here sum them up.
 
 - **E1. On the four core fixtures, the task alone did the work. The install changed the
   report.** Without OutcomeBound, every run did the substantive work. All five failures were on
@@ -355,6 +355,11 @@ have a section of their own below, and their entries here sum them up.
   the `containers` fragment closed two container gaps; a `diagnose` trigger closed a sibling-defect
   gap. The kernel alone closed none of four gaps, and a full install less the kernel kept every
   outcome at a higher total input. UNVERIFIED as a reproduction: the run records are private.
+- **E38. The 2.0.0 guidance is no worse than no guidance on long sessions, at about 1.15 times
+  the cost.** Runs on gpt-6.1-sol (2026-10-31 to 2026-11-01). On three long sessions of several
+  turns, no session had more judged failures than no guidance, and two had fewer. The default
+  rules in the kernel closed five of eight gaps that no guidance leaves open, with every skill
+  manual. UNVERIFIED as a reproduction: the run records are private.
 
 ### What the results support, and what they do not
 
@@ -3262,3 +3267,79 @@ E35, with no part of this pass. Cost was reported, not a condition.
 One model and one harness; three runs a cell (two in the second check), so a rare loss is not
 excluded; the 25 tasks do not cross a lifecycle stage and read none of the seven skills whose bodies did not change; each run
 is one short session, so a cache that lapses in a long session is not measured.
+
+## E38. Release qualification: the 2.0.0 guidance against no guidance, on long sessions and gap fixtures, on Codex
+
+Date: 2026-10-31 to 2026-11-01. Model: Codex CLI 0.166.0, `gpt-6.1-sol`, medium effort, on every
+run. The run records are not in this repository: the figures below are stated from them and
+cannot be checked from the repository alone (`UNVERIFIED` as a reproduction).
+
+### Question
+
+The 2.0.0 text puts the default rules in the kernel and makes every skill manual: no skill loads
+unless the person names it or asks for its workflow. Does this text give outcomes no worse than no
+guidance, and better outcomes where no guidance fails, at no more than 1.25 times the cost of no
+guidance on long sessions?
+
+### Method
+
+- Long sessions: the three multi-turn fixtures `session-feature-day`, `session-incident` and
+  `session-release-prep` (#199). Each is a session of 20 to 30 minutes, in which a scripted person
+  sends follow-up messages: a status request, a changed ruling, added scope, a review finding, a
+  grant, a question, and a request for a note.
+- Arms: the candidate, installed by its own engine (`--earlier-ref`), and no guidance (`none`).
+  Five runs of each long session in the candidate arm, and six or seven in `none`.
+- Cost: the dollar cost of each run at list prices (input $2, cached input $0.10 and output $10
+  for each million tokens), the median for each fixture, and the geometric mean of the three
+  ratios to `none`.
+- Short fixtures: 16 gap-screen and guard fixtures, one run each in the candidate arm, compared
+  with the earlier runs of `none` on the same fixtures. A gap fixture is one that `none` almost
+  always fails; a guard fixture is one that `none` passes.
+- Text changes after the measurement: an independent review changed five sentences of the
+  kernel (when a check is repeated, which out-of-date documents are only reported, how long a
+  command is waited on, which output is printed, and when a worktree is used). `session-feature-day`
+  was measured again after the first four of these changes, with two runs. The worktree sentence
+  changed after a run in which the model created a worktree and a branch in a project with no
+  worktree practice; it was reviewed, and no model run measured it.
+- Grader corrections: three graders failed runs on a choice that the task does not name. Each was
+  corrected in both arms, and every saved run of both arms was graded again (#199). The replay of a
+  recorded check reports the delivered files to Git; the export test compares the file as written;
+  the seed comparison of new tests adds the modules that the work adds.
+
+### Result
+
+Cost:
+
+| Fixture | Candidate median | `none` median | Ratio |
+| --- | --- | --- | --- |
+| `session-feature-day` (after the review changes, 2 runs) | $1.06 | $0.88 | 1.20 |
+| `session-incident` | $1.39 | $1.21 | 1.15 |
+| `session-release-prep` | $1.23 | $1.12 | 1.10 |
+| Geometric mean | | | 1.15 |
+
+Outcomes on the long sessions, as judged failures after the grader corrections:
+
+- `session-feature-day`: 0 of 5 candidate runs, 0 of 6 `none` runs.
+- `session-incident`: replay 2 of 5 against 6 of 7; staging 5 of 5 against 6 of 7.
+- `session-release-prep`: 0 of 5 against 2 of 7.
+
+Outcomes on the short fixtures:
+
+- Gap fixtures, which `none` failed in 40 of 41 earlier runs: the candidate passed 5 of 8 (the
+  container dev loop, freeing container space, a defect with siblings, a diagnosis, and an
+  ordering task).
+- Guard fixtures: 4 of 5 held. The fifth failed on the export line ending, and passes after the
+  grader correction.
+- What manual skills cost: the decision fixture put the decision as a plain question, not as a
+  brief (0 of 1; the 1.8.0 install passed 6 of 7), and the tracker fixture failed without the
+  `sync-tracker` skill. These are the expected effect of a skill that loads only when the person
+  asks for it.
+- A resume guard failed in the candidate arm (no inventory before work, and no default with the
+  pause question). It has no `none` runs to compare.
+
+### What this supports, and what it does not
+
+It supports the release decision: on long sessions, the 2.0.0 text is no worse than no guidance
+on any fixture, and better on two, at about 1.15 times the cost. It closes five gaps that no
+guidance leaves open. It does not show the result on another model, and the short fixtures had
+one run each.

@@ -12,6 +12,103 @@ landed since the previous release; a pull request does not edit this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-01
+
+A major release. The default rules move into the kernel, and every skill becomes optional: no
+skill loads unless the person names it or asks for its workflow (#195). The kernel grows from
+about 300 to about 1,600 words, in seven sections, and the pointers block becomes one `Optional:`
+line. A new optional fragment, `containers`, covers local development with containers (#195).
+`explorable check` loses `--browser` and `--timeout`: the engine starts no browser, and the agent
+runs the page's check (#195). Evals for long sessions of several turns come with their driver and
+fixtures (#199). On three long sessions, the 2.0.0 text costs about 1.15 times no guidance, has no
+more judged failures than no guidance on any of them, and closes five gaps that no guidance leaves
+open (E38). The engine remains Python standard library only.
+
+Do these steps first:
+
+1. If you upgrade from 1.8.0 or earlier, do the steps of the 1.9.0 section first. Use Python 3.10
+   or later and Git 2.52.0 or later. These minimums do not change.
+2. Move every pin of the engine (CI, each machine) to 2.0.0 in the same change as the project
+   install. An engine before 2.0.0 reads a 2.0.0 install as stale, and its `adopt` writes its own
+   text back.
+3. Install the release: `uv tool install --force outcomebound==2.0.0`. The tagged Git URL
+   (`git+https://github.com/rajasdevel/outcomebound@v2.0.0`) installs the same release.
+4. In each project, run `outcomebound adopt . --check`, then `outcomebound adopt .`. Review the
+   diff and commit it with the project's own checks (#195):
+   - The kernel changes: the default rules are in it, in the sections Size, Evidence, Authority,
+     Decisions, Reports, Sessions, and Other people's systems.
+   - The pointers block holds the `local` fragment inline, then one `Optional:` line that lists
+     the installed skills and fragments. The conditional read lines are gone.
+   - Each installed skill gets its harness's manual flag: a Codex install writes
+     `agents/openai.yaml` with `policy.allow_implicit_invocation: false`, and a Claude Code
+     install writes `disable-model-invocation: true`. Where a selected harness has no manual
+     flag, every skill copy goes to `.outcomebound/skills/`, outside the folders any harness
+     discovers.
+5. Name a skill where you want its workflow, for example a decision brief, a ticket slice or a
+   tracker snapshot. No skill loads by itself; a decision goes to the person as a plain question
+   unless the person asks for a brief.
+6. A script that passes `--browser` or `--timeout` to `outcomebound explorable check` drops them
+   (#195).
+7. Take the `containers` fragment where a project builds or runs containers:
+   `outcomebound adopt . --fragments <the recorded list>,containers`. `--fragments` replaces the
+   list, so name every recorded id. No install or upgrade adds it by itself (#195).
+8. If your CI installs a pinned release, change the pin to `2.0.0` in the same change as the
+   managed install.
+9. One output changes. `adopt --check` groups the warnings for other worktrees into one line for
+   each state, so a script that reads its `warn` lines sees fewer of them (#195). No other exit
+   code or file format changes meaning.
+
+### Added
+
+- The `containers` fragment, for local development with containers: reuse a dev image and mount
+  the source; keep build state in volumes and caches, not layers; give concurrent worktrees their
+  own Compose project; inspect each object before a removal; never run a system prune or an `-a`
+  prune; measure the engine's disk and the host's and say which is full. A request to free space
+  grants removing the project's own disposable objects; a named volume, the build cache and
+  another owner's object need the person's yes. `--detect` proposes it only where a container file
+  exists (#195).
+- Evals for long sessions: a driver that runs a session of several turns with a scripted person,
+  the fixtures `session-feature-day`, `session-incident` and `session-release-prep`, and brief
+  fixtures (#199). Gap-screen and guard fixtures (`gs-`, run only when named) and a stand-in
+  `docker` stub (#195). `docs/evaluations.md` records E35 to E38 (#195, this release).
+
+### Changed
+
+- The kernel holds the default rules. Among them: reproduce a defect before a fix, and fix each
+  confirmed case of its class; batch edits before routine focused tests, and repeat a check only
+  for a reproduction, a diagnosis, changed inputs or a project requirement; print only the output
+  needed to judge a result; give a long command the longest wait that does not stop it; report a
+  document outside the request's scope that a change leaves out of date, and do not edit it;
+  check prior rulings before asking; take inventory before resumed work; keep a handoff current;
+  keep an assigned worktree, and use a task worktree only where the project's workflow,
+  isolation or another task needs one; remove only what the task made; reuse a dev container
+  image and mount the source (#195).
+- Every skill is manual (see the steps above). `decision-brief` and `gather-requirements` keep a
+  shorter core and move detail into references. `land-change` turns off auto-merge before a run
+  that must stop before the merge, and never writes a check result or an approval (#195).
+- `adopt --check` groups the warnings for other worktrees into one line for each state. A refusal
+  says whether the difference is inside the inlined `local` fragment text. A detached checkout
+  older than the install names the local branches that hold an install (#195).
+- The review council keeps the Codex reviewer's session, so that a usage tool counts its tokens
+  (#195).
+- CI shards the suite into three jobs on each Python and runs every Python on every run (#195).
+- Development tools: ruff 0.17.2; CI actions `actions/setup-python` 7.1.0 and
+  `pypa/gh-action-pypi-publish` 1.14.3 (#205).
+
+### Removed
+
+- `outcomebound explorable check --browser` and `--timeout`. The engine starts no browser; the
+  agent runs the page's check (#195).
+
+### Fixed
+
+- Three eval graders judged a choice that the task does not name: the replay of a recorded check
+  now reports the delivered files to Git, the decision-chain export test compares the file as
+  written, and the feature-day seed comparison adds the modules that the work adds (#199).
+- The descendant-stop test waits up to 60 s for the killed descendants, and says whether the stop
+  sent each one SIGKILL (#200). The earlier-ref test builds its ref on the `v1.9.0` tag, so it
+  holds on main's history (#204).
+
 ## [1.9.0] - 2026-10-26
 
 A minor release. Four changes to what an agent is told are the main work: a check that has
@@ -1894,7 +1991,8 @@ the contract into a repository and keeps it current.
 - Dependabot proposes updates for the pinned GitHub Actions. The new-issue page links to a
   private vulnerability report and to the research repository.
 
-[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v1.9.0...HEAD
+[Unreleased]: https://github.com/rajasdevel/outcomebound/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v2.0.0
 [1.9.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.9.0
 [1.8.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.8.0
 [1.7.0]: https://github.com/rajasdevel/outcomebound/releases/tag/v1.7.0

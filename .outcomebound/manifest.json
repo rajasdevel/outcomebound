@@ -1,12 +1,12 @@
 {
   "format_version": 2,
-  "engine_version": "1.9.0",
+  "engine_version": "2.0.0",
   "artifacts": [
     {
       "kind": "block",
       "path": "AGENTS.md",
       "id": "operating-contract",
-      "sha256": "94342aa2c52a9c4a6165b2612e9cadeb54b62ae56d77363ede750c2522c151ec"
+      "sha256": "c0e6c399add8d13bf25be49f53e35427e600e7b818669dabe18a884097913a0e"
     },
     {
       "kind": "block",
@@ -28,7 +28,7 @@
         "make test"
       ],
       "inputs": {
-        ".github/workflows/ci.yml": "51424b31ccb2f703a88babbc462e4e47f023bc08ce60f2eb7a1001313e4c1593",
+        ".github/workflows/ci.yml": "8b29942fb7f6b0beddd390816d8dce98414df2d07d7f4a24fb8b514848ba0f8c",
         ".github/workflows/main-green.yml": "085a330f09ea0414e172ac908f688132ae558b4b5339629615e9787cc00a139c",
         ".github/workflows/pr-text.yml": "5dd09f8a3acc217f4e0360dec696a8c9015003ef6599b9099051cc9de742e029",
         ".outcomebound/floor.json": "1d5c095ef7294e3f6c3e2bcc0c7a89fce29b153de394805038d7db11b0c78ad5",

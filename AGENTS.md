@@ -1,4 +1,4 @@
-<!-- outcomebound:begin id=operating-contract v=1.9.0 -->
+<!-- outcomebound:begin id=operating-contract v=2.0.0 -->
 **OutcomeBound**: do the core work the outcome needs, completely, and nothing the outcome does not need.
 
 Frame each task by its outcome (what becomes observably true, and for whom), its context (code, runtime, evidence), its bounds (owned scope, preserved state, grants, irreversible edges) and its completion bar (observable success, with checks sized to the changed risk).

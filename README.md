@@ -4,8 +4,8 @@
 
 **Work sized to the outcome. Evidence for each step.**
 
-OutcomeBound gives your coding agent a 300-word contract, fourteen skills it reads when a task
-needs them, and engine checks that run your project's own commands. The agent does the engineering
+OutcomeBound gives your coding agent a kernel of default rules, fourteen skills you call by
+name, and engine checks that run your project's own commands. The agent does the engineering
 that the outcome needs: no less, and no more. It holds only the decisions that are yours, and it
 reports what is true, what is not done, and which check shows it.
 
@@ -34,8 +34,8 @@ current  AGENTS.md (project-facts)
 current  .claude/skills/review-council/SKILL.md
 …
 note     Cloud sessions start from a fresh clone, … Add one of these lines to the cloud environment's setup step (this writes no file):
-note       uv tool install outcomebound==1.9.0
-note       python3 -m pip install outcomebound==1.9.0
+note       uv tool install outcomebound==2.0.0
+note       python3 -m pip install outcomebound==2.0.0
 note     Where each harness keeps that step:
 note       Claude Code on the web: the cloud environment's setup script
 note       Codex cloud: the environment's setup script
@@ -199,7 +199,7 @@ break, a second opinion that you approved first, and a ticket closed on evidence
 You need Python 3.10 or later, Git 2.52.0 or later, and a Git work tree.
 
 ```sh
-uv tool install outcomebound==1.9.0
+uv tool install outcomebound==2.0.0
 cd your-repo
 outcomebound adopt . --detect       # writes nothing; prints the install command for your files
 ```
@@ -245,7 +245,7 @@ what could end it, and builds a walking skeleton with a Done command that can fa
 ### Upgrade or remove
 
 ```sh
-uv tool install --force outcomebound==1.9.0
+uv tool install --force outcomebound==2.0.0
 outcomebound adopt .          # every managed file current; an edited block is kept unless --force
 outcomebound adopt . --remove # takes out what the install owns
 ```
@@ -261,9 +261,9 @@ keeps the setup step that installs `outcomebound`.
 <details>
 <summary>Other installers and environment requirements</summary>
 
-`pipx install outcomebound==1.9.0` also works, or `python -m pip install outcomebound==1.9.0`
+`pipx install outcomebound==2.0.0` also works, or `python -m pip install outcomebound==2.0.0`
 inside an activated virtual environment. Each release is on PyPI from 1.6.0; the tagged Git URL
-(`git+https://github.com/rajasdevel/outcomebound@v1.9.0`) installs the same release, and every
+(`git+https://github.com/rajasdevel/outcomebound@v2.0.0`) installs the same release, and every
 earlier one. These commands work in PowerShell, cmd and POSIX shells; detection prints commands
 for POSIX shells and PowerShell. On Windows, install [Git for Windows](https://gitforwindows.org).
 `pip install --user` is not supported. If the environment sets `PYTHONPATH`, use absolute folders
@@ -277,7 +277,7 @@ only. See [dependencies and portability](docs/dependencies.md).
 | --- | --- |
 | **The contract** | The inline kernel in `AGENTS.md`: frame each task by outcome, context, bounds and completion bar; size the plan to the risk; never claim a check that did not run. |
 | **Skills on demand** | Requirements, decision briefs, tests, diagnosis, review (and a council of other reviewers), specs, tickets, hand-offs, landing, acceptance and more. Read one only when you name it or explicitly ask for its workflow. |
-| **Decision briefs** | An act outside the agent's authority comes back as a question, what waits on it, the context, options with the recommendation marked on its option, evidence and an undo line. Other work continues. A hard choice can get an interactive page, and `brief open` and `brief lookup` find what is still unanswered and what was decided. |
+| **Decision briefs** | An act outside the agent's authority comes back as a plain question. Ask for the decision-brief skill, and it comes back as a brief: the question, what waits on it, the context, options with the recommendation marked on its option, evidence and an undo line. Other work continues. A hard choice can get an interactive page, and `brief open` and `brief lookup` find what is still unanswered and what was decided. |
 | **Find your place** | `outcomebound where` reads Git, pull requests, tickets, validation results, reviews, briefs and the newest handoff, and prints what is in flight after a pause or a compaction. |
 | **Second opinions** | `outcomebound review council` plans a read-only review by other harnesses and models, shows you the plan and its cost, and runs only after you say yes. |
 | **Ticket hand-off and proof** | Slice work into outcomes you accept, hand each one to an implementer with the detail its tier needs, and run the claims a ticket names with `tickets verify`. |
