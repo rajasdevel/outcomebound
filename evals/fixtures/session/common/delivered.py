@@ -79,13 +79,13 @@ def overlay_machinery(target):
             names = [
                 path.relative_to(sealed).as_posix() for path in sealed.rglob("*") if path.is_file()
             ]
-            tracked = subprocess.run(
+            listed = subprocess.run(
                 ["git", "ls-files", "-z", "--", *names],
                 cwd=target,
                 capture_output=True,
                 check=True,
             ).stdout.split(b"\0")
-            tracked = [name.decode("utf-8") for name in tracked if name]
+            tracked = [name.decode("utf-8") for name in listed if name]
             if tracked:
                 subprocess.run(
                     ["git", "update-index", "--assume-unchanged", "--", *tracked],

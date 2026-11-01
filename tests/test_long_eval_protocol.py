@@ -657,6 +657,9 @@ def test_cut_check_runs_from_stage_and_is_polled_at_five_seconds(tmp_path, monke
     driver.session = driver.session._replace(cut_check=(sys.executable, str(program)))
     clock = [base]
     monkeypatch.setattr(long_sessions.time, "monotonic", lambda: clock[0])
+    # The session clock starts on the patched clock, so the time left does not depend on how
+    # long the host has been up.
+    driver.started = base
     assert driver.cut_check() is None
     assert driver.cut_polls == 1
     records = sorted(driver.place.keep.parent.glob("*.cut-check-*.json"))
