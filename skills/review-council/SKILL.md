@@ -53,7 +53,7 @@ the run printed, which is an estimate.
 
 Where the person names a council and the host starts its own agents (T3 Code), you may run it as
 host threads instead. Run `outcomebound review council --defaults --council NAME`, with any
-`--lens`, `--timeout` or `--budget-usd`: it prints the resolved seats with the lens, timeout and
+lens, timeout or spend-cap option: it prints the resolved seats with the lens, timeout and
 cap that apply, or refuses as the plan would. Show the person those seats, the host provider each
 seat runs on, and that on host threads no spend cap and no read-only mode is enforced: the run is
 "read-only by brief, not enforced". Start one thread for each seat only after their yes to that.
