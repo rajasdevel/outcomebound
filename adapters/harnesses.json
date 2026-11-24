@@ -381,7 +381,7 @@
       "source": "https://cursor.com/docs/agent/hooks, https://cursor.com/docs/context/mcp and https://cursor.com/docs/cli/reference/permissions, read 2026-09-27; enable-all, endpoint and bypass keys are not settled"
     },
     "recheck_on": "2026-12-27",
-    "note": "rules_path is the per-path rules directory (.cursor/rules/*.mdc globs); nothing in this repository verifies or writes it. Under T3 Code as host, a Cursor child did not load the project's AGENTS.md in one observation on 2026-11-25 (observed once, not verified; references/portability.md)"
+    "note": "rules_path is the per-path rules directory (.cursor/rules/*.mdc globs); nothing in this repository verifies or writes it. Under T3 Code as host, whether a Cursor child loads the project's AGENTS.md is UNVERIFIED (references/portability.md)"
   },
   "pi": {
     "skill_install_path": ".pi/skills/",

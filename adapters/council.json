@@ -1,16 +1,21 @@
 {
   "version": 1,
-  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. `account` names the variable that sets the folder a harness keeps its login in (`home`) and the credential variables it may read (`keys`): the plan prints the folder and whether each key is set, never a value, and the plan id covers both. `max_prompt` lists the input limits of a harness; `review council` uses the first row that applies (`platform`: a `sys.platform` prefix; `programs`: the extensions of the program that would start) and checks the assembled prompt against it before the plan is shown and again before each reviewer starts. A row gives the `limit`; its `unit` (`characters`, counted as Unicode code points, `utf-16` code units, or UTF-8 `bytes`); what it `measure`s (`prompt`, the prompt alone; `command line`, the Windows command line with its final NUL; `arguments and environment`, every argument and environment string with its NUL and pointer); the `version` it was read for; its `source`; and the `read` day. A harness or platform with no row that applies has no limit checked, and the plan says so. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. `account` names the variable that sets the folder a harness keeps its login in (`home`), that folder under the home folder where the variable is unset (`default`), whether the reviewer may start with the variable set to that default (`set_default`; else it stays unset), the credential and route variables whose presence the plan shows (`presence`, never a value) and the endpoint variables whose value it shows (`values`); the plan prints the folder as its canonical path, and the plan id covers all of them. `max_prompt` lists the input limits of a harness; `review council` uses the first row that applies (`platform`: a `sys.platform` prefix; `programs`: the extensions of the program that would start) and checks the assembled prompt against it before the plan is shown and again before each reviewer starts. A row gives the `limit`; its `unit` (`characters`, counted as Unicode code points, `utf-16` code units, or UTF-8 `bytes`); what it `measure`s (`prompt`, the prompt alone; `command line`, the Windows command line with its final NUL; `arguments and environment`, every argument and environment string with its NUL and pointer); the `version` it was read for; its `source`; and the `read` day. A harness or platform with no row that applies has no limit checked, and the plan says so. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
       "account": {
         "home": "CODEX_HOME",
-        "keys": [
+        "default": ".codex",
+        "set_default": true,
+        "presence": [
           "CODEX_API_KEY",
           "OPENAI_API_KEY"
         ],
-        "source": "outcomebound-research harnesses/codex.md sections 1 and 10 (CODEX_HOME relocates the Codex folder; with --ignore-user-config, authentication still uses CODEX_HOME) and harnesses/non-interactive-modes.md section 3 (CODEX_API_KEY authenticates one invocation); that codex exec reads OPENAI_API_KEY is UNVERIFIED, and it is shown so that a key the person set is not hidden",
+        "values": [
+          "OPENAI_BASE_URL"
+        ],
+        "source": "outcomebound-research harnesses/codex.md sections 1 and 10 (the folder is .codex in the home folder and CODEX_HOME relocates it; with --ignore-user-config, authentication still uses CODEX_HOME) and harnesses/non-interactive-modes.md section 3 (CODEX_API_KEY authenticates one invocation); the installed codex-cli 0.172.0 holds the names CODEX_HOME, CODEX_API_KEY, OPENAI_API_KEY and OPENAI_BASE_URL; what each name does there beyond those sources is UNVERIFIED",
         "read": "2026-11-25"
       },
       "help_version": "codex-cli 0.163.0",
@@ -181,10 +186,23 @@
       "binary": "claude",
       "account": {
         "home": "CLAUDE_CONFIG_DIR",
-        "keys": [
-          "ANTHROPIC_API_KEY"
+        "default": ".claude",
+        "set_default": false,
+        "set_default_why": "UNVERIFIED that a CLAUDE_CONFIG_DIR set to the default folder finds the same login as one left unset, so the default is bound and shown, and the variable stays unset",
+        "presence": [
+          "ANTHROPIC_API_KEY",
+          "ANTHROPIC_AUTH_TOKEN",
+          "CLAUDE_CODE_OAUTH_TOKEN",
+          "CLAUDE_CODE_USE_BEDROCK",
+          "CLAUDE_CODE_USE_VERTEX",
+          "CLAUDE_CODE_USE_FOUNDRY"
         ],
-        "source": "outcomebound-research harnesses/claude-code.md section 5 (bare mode needs ANTHROPIC_API_KEY or an apiKeyHelper); that CLAUDE_CONFIG_DIR selects the folder that holds the login is UNVERIFIED: no first-party page was read for it",
+        "values": [
+          "ANTHROPIC_BASE_URL",
+          "ANTHROPIC_BEDROCK_BASE_URL",
+          "ANTHROPIC_VERTEX_BASE_URL"
+        ],
+        "source": "outcomebound-research harnesses/claude-code.md section 5 (bare mode needs ANTHROPIC_API_KEY or an apiKeyHelper); adapters/harnesses.json (the claude-code row's endpoint keys); the installed Claude Code 2.1.331 holds each name of `presence` and `values`, and a message that names the config directory as $CLAUDE_CONFIG_DIR, else .claude in the home folder; which login or route each one selects is UNVERIFIED",
         "read": "2026-11-25"
       },
       "help_version": "Claude Code 2.1.302",
@@ -395,7 +413,7 @@
       ],
       "notes": {
         "api_key": "login: ANTHROPIC_API_KEY is set, so the run uses --bare and bills the API key; the file tools are not confined to the working folder by a flag (the tool list and permission mode are what limit them: UNVERIFIED)",
-        "!api_key": "login: the person's Claude login (no ANTHROPIC_API_KEY is set), so the run uses --restricted and --safe-mode instead of --bare; whether those work with that login is UNVERIFIED"
+        "!api_key": "login: no ANTHROPIC_API_KEY is set, so the run uses --restricted and --safe-mode instead of --bare, and the login or route is the one the account lines show; whether those flags work with it is UNVERIFIED"
       }
     },
     "cursor": {

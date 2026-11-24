@@ -52,14 +52,20 @@ the run printed, which is an estimate.
 ## On a host that starts agents itself
 
 Where the person names a council and the host starts its own agents (T3 Code), you may run it as
-host threads instead: read the seats with `outcomebound review council --defaults`, and start one thread for each seat on its
-harness, model and effort. Each brief says what to review (the range or the files, at one
-revision), the lens, that the reviewer reads and changes nothing, and the one output file it
-writes, in the form the plan's prompt asks for (a `Verdict:` line first, then one `###` heading
-for each finding, with `path:line`). Label the run "read-only by brief, not enforced": the host's agents have no read-only
-mode and no snapshot hides the revision's instruction files. Say so, and get the person's yes to the
-seats and briefs, before you start them. When a thread ends, put `Reviewed: <revision>` first in
-its file, as the engine does.
+host threads instead. Run `outcomebound review council --defaults --council NAME`, with any
+`--lens`, `--timeout` or `--budget-usd`: it prints the resolved seats with the lens, timeout and
+cap that apply, or refuses as the plan would. Show the person those seats, the host provider each
+seat runs on, and that on host threads no spend cap and no read-only mode is enforced: the run is
+"read-only by brief, not enforced". Start one thread for each seat only after their yes to that.
+Each brief says what to review (the range or the files, at one revision), the lens, that the
+reviewer reads and changes nothing, and the one output file it writes, in the form the plan's
+prompt asks for (a `Verdict:` line first, then one `###` heading for each finding, with
+`path:line`).
+
+File an answer only if its first line is a verdict and a `FAIL` names at least one finding;
+otherwise report that seat to the person as a failed review, by name, and file nothing for it. In
+a filed answer, remove every `Disposition:` and `Reviewed:` line the reviewer wrote, since the
+dispositions are yours, and put `Reviewed: <revision>` first, as the engine does.
 
 ## Merge and dispose
 

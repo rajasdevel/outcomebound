@@ -18,7 +18,7 @@ import pytest
 
 from outcomebound_tools import programs, review_check, review_council
 from tests.fake_tools import shell_tool
-from tests.portable import WINDOWS
+from tests.portable import WINDOWS, needs_symlinks
 
 ROOT = Path(__file__).resolve().parent.parent
 IDENTITY = ("-c", "user.name=T", "-c", "user.email=t@example.test", "-c", "commit.gpgsign=false")
@@ -161,10 +161,13 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
     # The account the reviewers start with comes from the test alone: no key, no account folder
     # and no council file of the person running the suite.
-    for name in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.delenv("CODEX_HOME", raising=False)
-    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    for row in review_council.load_table()["harnesses"].values():
+        account = row.get("account", {})
+        for name in [account.get("home", ""), *account.get("presence", [])]:
+            monkeypatch.delenv(name, raising=False)
+        for name in account.get("values", []):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     (tmp_path / "home").mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
@@ -681,7 +684,7 @@ def test_claude_uses_bare_where_an_api_key_is_set_and_restricted_where_none_is(
     assert argvs(plain) and argvs(keyed)
     assert all("--restricted --safe-mode" in a and "--bare" not in a for a in argvs(plain))
     assert all("--bare" in a and "--restricted" not in a for a in argvs(keyed))
-    assert "bills the API key" in keyed and "the person's Claude login" in plain
+    assert "bills the API key" in keyed and "no ANTHROPIC_API_KEY is set" in plain
     assert "not-a-real-key" not in keyed + plain  # the key is never printed
     for argv_line in argvs(keyed):
         assert "--tools Read,Grep,Glob" in argv_line and "--permission-mode dontAsk" in argv_line
@@ -961,30 +964,78 @@ def _plan_id(out: str) -> str:
     return shown.group(1)
 
 
+def _real(place: Path) -> str:
+    return os.path.realpath(place)
+
+
+def _line(out: str, start: str) -> str:
+    """The one line of `out` that starts with `start` once its indent is dropped."""
+
+    (found,) = [line.strip() for line in out.splitlines() if line.strip().startswith(start)]
+    return found
+
+
 def test_a_named_council_of_the_persons_file_supplies_the_reviewers(
     tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     place = person / ".outcomebound/council.json"
     _write_config(
-        place, councils={"high2": ["codex:m-a:high", "claude:m-b:low"], "solo": ["codex:m-c"]}
+        place, councils={"pair": ["codex:m-a:high", "claude:m-b:low"], "trio": ["codex:m-c"]}
     )
     code, out, _ = council(
-        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "high2", pair=False
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "pair", pair=False
     )
     assert code == 0, out
-    assert f"reviewers from: the council high2 in the council file {place}" in out
+    assert f"reviewers from: the council pair in the council file {place}" in out
     assert "reviewer r1: codex:m-a:high" in out and "reviewer r2: claude:m-b:low" in out
     assert "reviewer r3" not in out
     # A project file hides the person's reviewers, as before, but not the person's councils.
     _write_config(repo / ".outcomebound/council.json", reviewers=["codex:project-model:high"])
     code, out, _ = council(
-        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "solo", pair=False
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "trio", pair=False
     )
     assert code == 0 and "reviewer r1: codex:m-c:high" in out and "project-model" not in out
+    # The listing shows each seat as the plan resolves it, not as the file spells it.
     _, out, _ = council(capsys, repo, "--defaults", pair=False)
     assert f"the person's council file: {place}" in out
-    assert "  council high2: codex:m-a:high, claude:m-b:low" in out
-    assert "  council solo: codex:m-c" in out
+    assert "  council pair: codex:m-a:high, claude:m-b:low" in out
+    assert "  council trio: codex:m-c:high" in out
+
+
+def test_the_host_listing_prints_the_resolved_seats_with_lens_timeout_and_cap(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    place = person / ".outcomebound/council.json"
+    _write_config(place, councils={"pair": ["codex:m-a", "claude:m-b:low"]}, lens="the lens")
+    code, out, err = council(
+        capsys,
+        repo,
+        "--defaults",
+        "--council",
+        "pair",
+        "--timeout",
+        "90",
+        "--budget-usd",
+        "2",
+        pair=False,
+    )
+    assert code == 0, err
+    lines = out.splitlines()
+    assert lines[0] == (
+        "COUNCIL SEATS for a host that starts its own agents (nothing has run): the council "
+        f"pair, from the council pair in the council file {place}"
+    )
+    assert lines[1] == f"lens: the lens (from the council file {place})"
+    assert lines[2] == "seat r1: codex:m-a:high; timeout 90 s; cap 2 USD"
+    assert lines[3] == "seat r2: claude:m-b:low; timeout 90 s; cap 2 USD"
+    assert "no spend cap, timeout or read-only mode holds except by the brief" in lines[4]
+    assert list((tools / "log").iterdir()) == []
+    # A seat the plan would refuse is refused here too.
+    _write_config(place, councils={"bad": ["gemini:x"]})
+    for args in (("--defaults", "--council", "bad"), ("--defaults",)):
+        code, out, err = council(capsys, repo, *args, pair=False)
+        assert code == 1 and f"in the council file {place}:" in err, (args, out, err)
+        assert "not in the table" in err
 
 
 def test_a_council_name_is_refused_with_reviewer_and_an_unknown_one_lists_the_names(
@@ -992,10 +1043,10 @@ def test_a_council_name_is_refused_with_reviewer_and_an_unknown_one_lists_the_na
 ) -> None:
     place = person / ".outcomebound/council.json"
     code, _, err = council(
-        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "high2", pair=False
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "pair", pair=False
     )
     assert code == 1 and f"the person's council file {place} does not exist" in err
-    _write_config(place, councils={"high2": ["codex:m-a:high"], "solo": ["codex:m-c"]})
+    _write_config(place, councils={"pair": ["codex:m-a:high"], "trio": ["codex:m-c"]})
     code, _, err = council(
         capsys,
         repo,
@@ -1003,19 +1054,19 @@ def test_a_council_name_is_refused_with_reviewer_and_an_unknown_one_lists_the_na
         "--base",
         "HEAD~1",
         "--council",
-        "high2",
+        "pair",
         "--reviewer",
         "codex",
         pair=False,
     )
     assert code == 1 and err == "COUNCIL_REFUSED: give --council or --reviewer, not both\n"
     code, _, err = council(
-        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "high3", pair=False
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "other", pair=False
     )
     assert code == 1
     assert err == (
-        'COUNCIL_REFUSED: there is no council named "high3" in the person\'s council file '
-        f"{place}; the councils it names: high2, solo\n"
+        'COUNCIL_REFUSED: there is no council named "other" in the person\'s council file '
+        f"{place}; the councils it names: pair, trio\n"
     )
     _write_config(place, councils={"bad": ["gemini:x"]})
     code, _, err = council(
@@ -1045,7 +1096,7 @@ def test_a_project_file_that_defines_councils_or_homes_is_refused(
     tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     project = repo / ".outcomebound/council.json"
-    for key, value in (("councils", {"high2": ["codex"]}), ("homes", {"codex": str(person)})):
+    for key, value in (("councils", {"pair": ["codex"]}), ("homes", {"codex": str(person)})):
         _write_config(project, reviewers=[CODEX_REVIEWER], **{key: value})
         code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
         assert code == 1, err
@@ -1054,7 +1105,34 @@ def test_a_project_file_that_defines_councils_or_homes_is_refused(
     assert list((tools / "log").iterdir()) == []
 
 
-def test_the_plan_shows_each_reviewers_account_folder_and_keys_and_its_id_binds_them(
+@needs_symlinks
+@pytest.mark.parametrize("linked", ["file", "folder"])
+def test_a_persons_file_that_resolves_inside_the_repository_is_not_the_persons(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str], linked: str
+) -> None:
+    inside = repo / "settings" / ".outcomebound"
+    _write_config(inside / "council.json", councils={"pair": [CODEX_REVIEWER]})
+    if linked == "file":
+        (person / ".outcomebound").mkdir()
+        (person / ".outcomebound/council.json").symlink_to(inside / "council.json")
+    else:
+        (person / ".outcomebound").symlink_to(inside, target_is_directory=True)
+    code, _, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "pair", pair=False
+    )
+    assert code == 1, err
+    assert f"inside the repository under review {repo}" in err and "councils are refused" in err
+    _write_config(inside / "council.json", homes={"codex": str(person)})
+    code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    assert code == 1 and "its homes are refused" in err, err
+    # Without councils or homes, the linked file still names reviewers, as any file may.
+    _write_config(inside / "council.json", reviewers=["codex:linked-model:high"])
+    code, out, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+    assert code == 0 and "reviewer r1: codex:linked-model:high" in out
+    assert list((tools / "log").iterdir()) == []
+
+
+def test_the_plan_shows_each_reviewers_account_folder_and_route_and_its_id_binds_them(
     tools: Path,
     repo: Path,
     person: Path,
@@ -1067,45 +1145,84 @@ def test_the_plan_shows_each_reviewers_account_folder_and_keys_and_its_id_binds_
         return out
 
     out = plan()
-    assert "  account folder: CODEX_HOME unset, the tool's default" in out
-    assert "  account folder: CLAUDE_CONFIG_DIR unset, the tool's default" in out
-    assert "  credentials: CODEX_API_KEY not set; OPENAI_API_KEY not set" in out
-    assert "  credentials: ANTHROPIC_API_KEY not set" in out
-    unset = _plan_id(out)
-    ids = {unset}
+    codex_default, claude_default = _real(person / ".codex"), _real(person / ".claude")
+    folders = [line for line in out.splitlines() if "account folder:" in line]
+    assert folders == [
+        f"  account folder: {codex_default} (unset: the tool's default; the reviewer starts "
+        f"with CODEX_HOME={codex_default})",
+        f"  account folder: {claude_default} (unset: the tool's default; the reviewer starts "
+        "with CLAUDE_CONFIG_DIR left unset)",
+    ]
+    assert _line(out, "credentials and route: CODEX_API_KEY") == (
+        "credentials and route: CODEX_API_KEY not set; OPENAI_API_KEY not set "
+        "(a value is never printed)"
+    )
+    assert _line(out, "credentials and route: ANTHROPIC_API_KEY") == (
+        "credentials and route: ANTHROPIC_API_KEY not set; ANTHROPIC_AUTH_TOKEN not set; "
+        "CLAUDE_CODE_OAUTH_TOKEN not set; CLAUDE_CODE_USE_BEDROCK not set; "
+        "CLAUDE_CODE_USE_VERTEX not set; CLAUDE_CODE_USE_FOUNDRY not set "
+        "(a value is never printed)"
+    )
+    assert _line(out, "endpoints: OPENAI") == "endpoints: OPENAI_BASE_URL not set"
+    assert "a different key or login in the same mode is not detected" in out
+    ids = {_plan_id(out)}
     for folder in ("a", "b"):
         monkeypatch.setenv("CODEX_HOME", str(tools / folder))
         out = plan()
-        assert (
-            f"  account folder: CODEX_HOME={tools / folder} (inherited from this environment)"
-            in out
-        )
+        assert f"account folder: {_real(tools / folder)} (inherited from this environment;" in out
         ids.add(_plan_id(out))
-    assert len(ids) == 3, "unset, one folder and another are three plans"
-    monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-real-key-0000")
+    monkeypatch.delenv("CODEX_HOME")
+    # Another home folder moves the tool's default folder.
+    other = tools / "other-home"
+    other.mkdir()
+    monkeypatch.setenv("HOME", str(other))
+    monkeypatch.setenv("USERPROFILE", str(other))
+    ids.add(_plan_id(plan()))
+    monkeypatch.setenv("HOME", str(person))
+    monkeypatch.setenv("USERPROFILE", str(person))
+    # A credential or a route set, and an endpoint, shown without a secret.
+    for name, value in (
+        ("OPENAI_API_KEY", "sk-not-a-real-key-0000"),
+        ("CLAUDE_CODE_OAUTH_TOKEN", "oauth-not-real-0000"),
+        ("CLAUDE_CODE_USE_BEDROCK", "bedrock-on-not-real"),
+        ("ANTHROPIC_BASE_URL", "https://user:pw-not-real@proxy.example.test/v1"),
+    ):
+        monkeypatch.setenv(name, value)
+        out = plan()
+        assert value not in out, name
+        ids.add(_plan_id(out))
+        monkeypatch.delenv(name)
+    assert len(ids) == 8, "each of these is a different plan"
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://proxy.example.test/v1")
     out = plan()
-    assert "OPENAI_API_KEY set (a value is never printed)" in out
-    assert "sk-not-a-real-key" not in out and _plan_id(out) not in ids
-    monkeypatch.delenv("OPENAI_API_KEY")
+    assert "endpoints: ANTHROPIC_BASE_URL=https://proxy.example.test/v1;" in out
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://user:pw-not-real@proxy.example.test/v1")
+    out = plan()
+    assert "ANTHROPIC_BASE_URL=https://[redacted]@proxy.example.test/v1" in out
+    assert "pw-not-real" not in out
+    monkeypatch.delenv("ANTHROPIC_BASE_URL")
     # The person's file sets the folder, over the inherited one.
     _write_config(
         person / ".outcomebound/council.json",
         homes={"codex": str(tools / "set"), "claude": str(tools / "claude-set")},
     )
+    monkeypatch.setenv("CODEX_HOME", str(tools / "a"))
     out = plan()
-    assert f"CODEX_HOME={tools / 'set'} (set by the person's council file)" in out
-    assert f"CLAUDE_CONFIG_DIR={tools / 'claude-set'} (set by the person's council file)" in out
+    assert f"account folder: {_real(tools / 'set')} (set by the person's council file;" in out
+    assert f"CLAUDE_CONFIG_DIR={_real(tools / 'claude-set')})" in out
     _, shown, _ = council(capsys, repo, "--defaults", pair=False)
     assert f"  home of codex: {tools / 'set'}" in shown
 
 
-def test_accept_refuses_a_changed_account_folder_and_runs_after_an_unrelated_change(
+def test_accept_starts_each_reviewer_with_the_planned_account_folder(
     tools: Path,
     repo: Path,
     person: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # A project file is in effect: the person's homes still apply.
+    _write_config(repo / ".outcomebound/council.json", reviewers=[CODEX_REVIEWER])
     _write_config(person / ".outcomebound/council.json", homes={"codex": str(tools / "set")})
     monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tools / "inherited"))
     _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1")
@@ -1127,14 +1244,96 @@ def test_accept_refuses_a_changed_account_folder_and_runs_after_an_unrelated_cha
     code, out, err = council(capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", approved)
     assert code == 0, out + err
     log = tools / "log"
-    assert (log / "codex.env").read_text(encoding="utf-8") == f"CODEX_HOME={tools / 'set'}\n"
+    assert (log / "codex.env").read_text(encoding="utf-8") == f"CODEX_HOME={_real(tools / 'set')}\n"
     assert (log / "claude.env").read_text(encoding="utf-8") == (
-        f"CLAUDE_CONFIG_DIR={tools / 'inherited'}\n"
+        f"CLAUDE_CONFIG_DIR={_real(tools / 'inherited')}\n"
     )
 
 
-def test_a_home_that_is_not_absolute_is_refused_and_names_the_persons_file(
+def test_a_default_account_folder_reaches_the_reviewer_as_planned(
     tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    code, out, err = council(capsys, repo, "--accept", "--base", "HEAD~1")
+    assert code == 0, out + err
+    log = tools / "log"
+    codex_default = _real(person / ".codex")
+    assert (log / "codex.env").read_text(encoding="utf-8") == f"CODEX_HOME={codex_default}\n"
+    assert (log / "claude.env").read_text(encoding="utf-8") == "CLAUDE_CONFIG_DIR=(unset)\n"
+
+
+@needs_symlinks
+def test_accept_refuses_a_linked_account_folder_whose_target_changed(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for name in ("profile-a", "profile-b"):
+        (tools / name).mkdir()
+    link = tools / "profile"
+    link.symlink_to(tools / "profile-a", target_is_directory=True)
+    _write_config(person / ".outcomebound/council.json", homes={"codex": str(link)})
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1", "--reviewer", "codex:m")
+    assert f"account folder: {_real(tools / 'profile-a')} (set by" in plan
+    approved = _plan_id(plan)
+    link.unlink()
+    link.symlink_to(tools / "profile-b", target_is_directory=True)
+    code, _, err = council(
+        capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex:m", "--plan-id", approved
+    )
+    assert code == 1 and "differs from the plan" in err
+    assert list((tools / "log").iterdir()) == []
+    link.unlink()
+    link.symlink_to(tools / "profile-a", target_is_directory=True)
+    code, out, err = council(
+        capsys, repo, "--accept", "--base", "HEAD~1", "--reviewer", "codex:m", "--plan-id", approved
+    )
+    assert code == 0, out + err
+    assert (tools / "log/codex.env").read_text(encoding="utf-8") == (
+        f"CODEX_HOME={_real(tools / 'profile-a')}\n"
+    )
+
+
+def test_accept_refuses_another_program_a_changed_file_or_a_moved_base(
+    tools: Path,
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    git(repo, "branch", "reviewed-base", "HEAD~1")
+    args = ("--base", "reviewed-base", "--file", "spec.md", "--reviewer", CODEX_REVIEWER)
+    _, plan, _ = council(capsys, repo, "--plan", *args)
+    approved = _plan_id(plan)
+    assert _line(plan, "program:").startswith(f"program: {programs.find('codex')} (")
+    assert Path(programs.find("codex") or "").parent == tools / "bin"
+
+    def refused() -> None:
+        code, _, err = council(capsys, repo, "--accept", *args, "--plan-id", approved)
+        assert code == 1 and "differs from the plan" in err, err
+        assert list((tools / "log").iterdir()) == []
+
+    # Another codex first on PATH.
+    other = tools / "other-bin"
+    shell_tool(other, "codex", CODEX)
+    path = os.environ["PATH"]
+    monkeypatch.setenv("PATH", os.pathsep.join([str(other), path]))
+    refused()
+    monkeypatch.setenv("PATH", path)
+    # A named file edited in the work tree: same name, other text.
+    (repo / "spec.md").write_text("# Spec\nSomething else.\n", encoding="utf-8")
+    refused()
+    (repo / "spec.md").write_text("# Spec\nWhat it does.\n", encoding="utf-8")
+    # The base ref moved: same ref name and end commit, another diff.
+    git(repo, "branch", "-f", "reviewed-base", "HEAD")
+    refused()
+    git(repo, "branch", "-f", "reviewed-base", "HEAD~1")
+    code, out, err = council(capsys, repo, "--accept", *args, "--plan-id", approved)
+    assert code == 0, out + err
+
+
+def test_an_account_folder_unfit_for_a_child_process_is_refused_before_a_plan(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     place = person / ".outcomebound/council.json"
     _write_config(place, homes={"codex": "relative/folder"})
@@ -1144,3 +1343,13 @@ def test_a_home_that_is_not_absolute_is_refused_and_names_the_persons_file(
     _write_config(place, homes={"cursor": str(person)})
     code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1")
     assert code == 1 and "unknown field" in err and "cursor" in err
+    for value in (str(person / "a\u0000b"), str(person / "a\nb")):
+        _write_config(place, homes={"codex": value})
+        code, out, err = council(capsys, repo, "--accept", "--base", "HEAD~1")
+        assert code == 1 and out == "" and "holds a control character" in err, err
+    place.unlink()
+    monkeypatch.setenv("CODEX_HOME", str(person / "a\nb"))
+    code, out, err = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    assert code == 1 and out == "" and "holds a control character" in err, err
+    assert list((tools / "log").iterdir()) == []
+    assert not (repo / ".agents").exists()

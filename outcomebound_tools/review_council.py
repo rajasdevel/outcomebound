@@ -36,6 +36,7 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.parse
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -110,6 +111,12 @@ Write your answer as Markdown, in this form and no other:
 """
 
 
+DEFAULT_LENS = (
+    "anything that makes the change fail its purpose, a claim it makes that its text or "
+    "tests do not support, and a case it misses"
+)
+
+
 class CouncilError(Exception):
     """A request the verb refuses, with the reason."""
 
@@ -153,6 +160,10 @@ class Job:
     # The account folder and the credential keys the reviewer starts with (`account` of the
     # table's row), as `bind_accounts` resolved them; empty for a harness with no such row.
     account: dict[str, Any] = field(default_factory=dict)
+    # The variables the reviewer starts without (an account folder the tool must find unset).
+    unset: list[str] = field(default_factory=list)
+    # The program that starts, found on PATH when the plan was made, or None where none was.
+    program: str | None = None
 
 
 @dataclass
@@ -278,18 +289,35 @@ def _same_file(one: Path, other: Path) -> bool:
         return False
 
 
+def _real(place: Path) -> Path:
+    return Path(os.path.realpath(place))
+
+
 def load_config(top: Path) -> Config:
     """The council files: the project's `.outcomebound/council.json` supplies the reviewers,
     lens, timeout and cap where it exists, else the `.outcomebound/council.json` in the person's
     home folder does; the two are not merged. The person's file alone names councils and homes,
     and they apply also where a project file exists; a project file that defines either is a
-    refusal (where the repository is the home folder, the two are one file, the person's). A file
-    that is not valid against `schemas/council-config.schema.json` is a refusal that names it."""
+    refusal. A person's file that resolves inside the repository under review (a linked file or
+    a linked folder) is that repository's content, and its councils and homes are refused too,
+    except where the repository is the person's home folder, where the two paths are one file,
+    the person's. A file that is not valid against `schemas/council-config.schema.json` is a
+    refusal that names it."""
 
     own = Path.home() / ".outcomebound" / "council.json"
     person = _read_config(own) if own.is_file() else None
+    top_real, at_home = _real(top), _real(top) == _real(Path.home())
+    if person is not None and not at_home and _real(own).is_relative_to(top_real):
+        defined = [key for key in PERSON_ONLY if key in person]
+        if defined:
+            raise CouncilError(
+                f"the person's council file {own} resolves to {_real(own)}, inside the "
+                f"repository under review {top}, so it is that repository's content: its "
+                f"{' and '.join(defined)} are refused; keep the person's file outside the "
+                "repository"
+            )
     project = top / CONFIG_PROJECT
-    if project.is_file() and not _same_file(project, own):
+    if project.is_file() and not (at_home and _same_file(project, own)):
         data = _read_config(project)
         defined = [key for key in PERSON_ONLY if key in data]
         if defined:
@@ -338,6 +366,12 @@ def person_homes(config: Config, table: dict[str, Any]) -> dict[str, str]:
                 "folder in the council table"
             )
         place = os.path.expanduser(value)
+        if any(ord(char) < 32 or ord(char) == 127 for char in place):
+            raise CouncilError(
+                f"in the council file {config.person}: the home of {harness} "
+                f"{textio.quote(value)} holds a control character, which no environment "
+                "variable of a child process can hold"
+            )
         if not os.path.isabs(place):
             raise CouncilError(
                 f"in the council file {config.person}: the home of {harness} "
@@ -412,10 +446,7 @@ def gather(
     contents = _named(top, files)
     if files:
         described += " and the files named below (read from the work tree)"
-    lens = lens.strip() or (
-        "anything that makes the change fail its purpose, a claim it makes that its text or "
-        "tests do not support, and a case it misses"
-    )
+    lens = lens.strip() or DEFAULT_LENS
     return Request(top, commit, described, diff, contents, lens)
 
 
@@ -503,10 +534,20 @@ def measured(limit: dict[str, Any], job: Job, program: str, prompt: str) -> int:
     if scope == "arguments and environment":
         strings = [
             *delivered(job, program, prompt),
-            *(f"{name}={value}" for name, value in {**os.environ, **job.env}.items()),
+            *(f"{name}={value}" for name, value in child_env(job).items()),
         ]
         return sum(measure(text, unit) + 1 + POINTER for text in strings) + 2 * POINTER
     return measure(prompt, unit)
+
+
+def child_env(job: Job) -> dict[str, str]:
+    """The environment the reviewer starts with: this one, the job's variables over it, and
+    without the variables the job leaves unset."""
+
+    env = {**os.environ, **job.env}
+    for name in job.unset:
+        env.pop(name, None)
+    return env
 
 
 def _limit_text(limit: dict[str, Any]) -> str:
@@ -523,7 +564,7 @@ def over_limit(request: Request, jobs: Sequence[Job]) -> list[str]:
 
     over = []
     for job in jobs:
-        program = programs.find(job.spec["binary"]) or job.spec["binary"]
+        program = job.program or job.spec["binary"]
         limit = input_limit(job.spec, program)
         if limit is None:
             continue
@@ -614,15 +655,19 @@ def plan_jobs(
                 spec=spec,
                 values=values,
                 env=env,
+                program=programs.find(spec["binary"]),
             )
         )
     return jobs
 
 
 def bind_accounts(jobs: Sequence[Job], homes: dict[str, str]) -> None:
-    """Each job's account: the folder its reviewer starts with (set by the person's `homes`,
-    which puts it in the job's environment; else inherited; else unset) and whether each
-    credential key of the table's `account` row is set. It holds no key's value."""
+    """Each job's account, from the table's `account` row: the folder its reviewer starts with
+    (set by the person's `homes`, else inherited, else the tool's default under the home folder),
+    resolved to its canonical path, which the reviewer starts with; whether each credential or
+    route variable of the row is set (never a value); and the value of each endpoint variable.
+    Where the row says the tool must find its folder variable unset for its default, the
+    variable stays unset and the folder is still shown and bound."""
 
     for job in jobs:
         row = job.spec.get("account")
@@ -630,14 +675,28 @@ def bind_accounts(jobs: Sequence[Job], homes: dict[str, str]) -> None:
             continue
         name, harness = row["home"], job.reviewer.harness
         if harness in homes:
-            job.env[name] = homes[harness]
-            value, how = homes[harness], "set by the person's council file"
+            given, how = homes[harness], "set by the person's council file"
         elif os.environ.get(name):
-            value, how = os.environ[name], "inherited from this environment"
+            given, how = os.environ[name], "inherited from this environment"
         else:
-            value, how = None, "unset, the tool's default"
-        keys = [[key, bool(os.environ.get(key))] for key in row["keys"]]
-        job.account = {"home": name, "value": value, "how": how, "keys": keys}
+            given, how = str(Path.home() / row["default"]), "unset: the tool's default"
+        if any(ord(char) < 32 or ord(char) == 127 for char in given):
+            raise CouncilError(
+                f"the account folder {name} of reviewer {job.reviewer.tag} holds a control "
+                "character, which no environment variable of a child process can hold"
+            )
+        folder = os.path.realpath(given)
+        if how.startswith("unset") and not row["set_default"]:
+            job.unset.append(name)
+        else:
+            job.env[name] = folder
+        job.account = {
+            "home": name,
+            "folder": folder,
+            "how": how,
+            "presence": [[key, bool(os.environ.get(key))] for key in row["presence"]],
+            "values": [[key, os.environ.get(key)] for key in row["values"]],
+        }
 
 
 def _shown(argv: Sequence[str]) -> str:
@@ -645,19 +704,35 @@ def _shown(argv: Sequence[str]) -> str:
 
 
 def plan_id(request: Request, jobs: Sequence[Job]) -> str:
-    """A short digest of what a run would do: the revision, the lens, and each reviewer's argv,
-    environment, timeout, account folder and which of its credential keys are set (never a
-    value). `--accept --plan-id ID` refuses a run that differs, such as one where an API key was
-    set or unset, or an account folder changed, after the plan; a change to any other variable
-    does not change it."""
+    """A short digest of what a run would do: the revision, the lens, a digest of the diff and
+    of the named files' text as sent, and each reviewer's program (its path and the path it
+    resolves to, or its absence), argv, environment, timeout, account folder, which of its
+    credential and route variables are set (never a value) and its endpoint values.
+    `--accept --plan-id ID` refuses a run that differs, such as one where an API key was set or
+    unset, an account folder or its link target changed, a named file changed or the base ref
+    moved after the plan; a change to any other variable does not change it."""
+
+    def digest(value: Any) -> str:
+        return hashlib.sha256(json.dumps(value).encode("utf-8")).hexdigest()
 
     record = [
         request.commit,
         request.described,
         request.lens,
-        sorted(request.files),
+        digest(request.diff),
+        digest(list(request.files.items())),
         [
-            [j.reviewer.label, j.argv, sorted(j.env.items()), j.timeout, str(j.cwd), j.account]
+            [
+                j.reviewer.label,
+                j.program,
+                os.path.realpath(j.program) if j.program else None,
+                j.argv,
+                sorted(j.env.items()),
+                sorted(j.unset),
+                j.timeout,
+                str(j.cwd),
+                j.account,
+            ]
             for j in jobs
         ],
     ]
@@ -686,7 +761,7 @@ def render_plan(
     ]
     for job in jobs:
         spec, reviewer = job.spec, job.reviewer
-        found = programs.find(spec["binary"])
+        found = job.program
         lines += [
             "",
             f"reviewer {reviewer.tag}: {reviewer.label}",
@@ -758,8 +833,9 @@ def render_plan(
         "",
         "No run has shown that a safeguard stops a write. Whether the model named exists on the "
         "person's login and ran at the effort asked is shown only where a flag's observed note "
-        "says so. The plan shows the account folder and which keys are set; which account a run "
-        "bills is not shown (UNVERIFIED).",
+        "says so. The plan shows each account folder, which credential and route variables are "
+        "set and the endpoints; which account a run bills is not shown (UNVERIFIED), and a "
+        "different key or login in the same mode is not detected.",
         f"plan id: {plan_id(request, jobs)}",
         "To run it, after the person says yes: the same command with --accept in place of --plan "
         f"and --plan-id {plan_id(request, jobs)} added; a run that differs from this plan is "
@@ -768,17 +844,38 @@ def render_plan(
     return "\n".join(lines) + "\n"
 
 
+def _endpoint(value: str) -> str:
+    """An endpoint as shown: a user name or password in it is replaced."""
+
+    parts = urllib.parse.urlsplit(value)
+    if parts.username is None and parts.password is None:
+        return textio.visible(value)
+    host = parts.netloc.rpartition("@")[2]
+    return textio.visible(urllib.parse.urlunsplit(parts._replace(netloc=f"[redacted]@{host}")))
+
+
 def _account_lines(job: Job) -> list[str]:
     account = job.account
     if not account:
         return ["  account: no account folder or key recorded for this harness (UNVERIFIED)"]
-    home = (
-        f"{account['home']}={account['value']} ({account['how']})"
-        if account["value"] is not None
-        else f"{account['home']} {account['how']}"
+    folder = textio.visible(account["folder"])
+    started = (
+        f"{account['home']} left unset"
+        if account["home"] in job.unset
+        else f"{account['home']}={folder}"
     )
-    keys = "; ".join(f"{key} {'set' if present else 'not set'}" for key, present in account["keys"])
-    return [f"  account folder: {home}", f"  credentials: {keys} (a value is never printed)"]
+    set_or_not = "; ".join(
+        f"{key} {'set' if present else 'not set'}" for key, present in account["presence"]
+    )
+    endpoints = "; ".join(
+        f"{key}={_endpoint(value)}" if value else f"{key} not set"
+        for key, value in account["values"]
+    )
+    return [
+        f"  account folder: {folder} ({account['how']}; the reviewer starts with {started})",
+        f"  credentials and route: {set_or_not} (a value is never printed)",
+        *([f"  endpoints: {endpoints}"] if endpoints else []),
+    ]
 
 
 # --- the run ------------------------------------------------------------------------------------
@@ -893,7 +990,7 @@ def _execute(job: Job, argv: list[str]) -> tuple[str, str] | None:
                 stdout=stdout,
                 stderr=stderr,
                 cwd=job.cwd,
-                env={**os.environ, **job.env},
+                env=child_env(job),
             )
             try:
                 process.wait(job.timeout)
@@ -915,9 +1012,9 @@ def run_job(job: Job) -> Outcome:
     def done(status: str, detail: str = "", **more: Any) -> Outcome:
         return Outcome(reviewer, status, detail, round(time.monotonic() - started, 1), **more)
 
-    found = programs.find(job.spec["binary"])
+    found = job.program
     if found is None:
-        return done("failed", f"{job.spec['binary']} is not on PATH")
+        return done("failed", f"{job.spec['binary']} was not on PATH when the plan was made")
     limit = input_limit(job.spec, found)
     if limit:
         # The prompt as the reviewer receives it, on standard input or as an argument.
@@ -1179,7 +1276,8 @@ def _parser() -> argparse.ArgumentParser:
     mode.add_argument(
         "--defaults",
         action="store_true",
-        help="print the built-in default council and any council file in effect; runs nothing",
+        help="print the built-in default council and any council file in effect, or with "
+        "--council the resolved seats for a host that starts its own agents; runs nothing",
     )
     mode.add_argument("--plan", action="store_true", help="print the plan; run nothing")
     mode.add_argument("--accept", action="store_true", help="run the plan; spends credits")
@@ -1214,9 +1312,18 @@ def _parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _labels(entries: Sequence[str], where: Path | None, table: dict[str, Any]) -> str:
+    """Seats as `parse_reviewer` resolves them, as `--plan` would; a refusal names the file."""
+
+    try:
+        return ", ".join(parse_reviewer(text, i, table).label for i, text in enumerate(entries, 1))
+    except CouncilError as error:
+        raise CouncilError(f"in the council file {where}: {error}") from error
+
+
 def render_defaults(table: dict[str, Any], root: Path) -> str:
     """The built-in default council, the council file in effect for `root`, and the councils
-    and homes of the person's own file."""
+    and homes of the person's own file, each seat resolved as `--plan` resolves it."""
 
     config = load_config(_toplevel(root))
     lines = ["built-in default council: " + ", ".join(table["default_council"])]
@@ -1225,15 +1332,42 @@ def render_defaults(table: dict[str, Any], root: Path) -> str:
     else:
         lines.append(f"council file in effect: {config.place}")
         if "reviewers" in config.data:
-            lines.append("  reviewers: " + ", ".join(config.data["reviewers"]))
+            lines.append("  reviewers: " + _labels(config.data["reviewers"], config.place, table))
     if config.person_data is None:
         lines.append(f"the person's council file: none at {config.person}")
     else:
         lines.append(f"the person's council file: {config.person}")
         for name, seats in sorted((config.person_data.get("councils") or {}).items()):
-            lines.append(f"  council {name}: " + ", ".join(seats))
+            lines.append(f"  council {name}: " + _labels(seats, config.person, table))
         for harness, place in sorted(person_homes(config, table).items()):
-            lines.append(f"  home of {harness}: {place}")
+            lines.append(f"  home of {harness}: {textio.visible(place)}")
+    return "\n".join(lines) + "\n"
+
+
+def render_seats(options: argparse.Namespace, table: dict[str, Any]) -> str:
+    """The seats of `--council NAME` for a host that starts its own agents: resolved and
+    refused as `--plan` resolves and refuses them, with the lens, timeout and cap that apply,
+    and what the engine does not enforce on a host thread. It starts nothing."""
+
+    chosen = _settings(options, table)
+    lens = chosen["lens"].strip() or DEFAULT_LENS
+    cap = f"{chosen['budget']} USD" if chosen["budget"] else "none"
+    lines = [
+        f"COUNCIL SEATS for a host that starts its own agents (nothing has run): the council "
+        f"{options.council}, from {chosen['source']}",
+        f"lens: {textio.visible(lens)} (from {chosen['lens_source']})",
+    ]
+    for reviewer in chosen["reviewers"]:
+        spec = table["harnesses"][reviewer.harness]
+        timeout = chosen["timeout"] or int(spec["timeout_seconds"])
+        lines.append(f"seat {reviewer.tag}: {reviewer.label}; timeout {timeout} s; cap {cap}")
+    lines.append(
+        "On a host thread the engine enforces none of these: the host's provider and login run "
+        "each seat and the person's homes do not apply; no spend cap, timeout or read-only mode "
+        "holds except by the brief, and no snapshot hides the revision's instruction files. "
+        "Tell the person this, and the host provider of each seat, and start the threads only "
+        "after their yes."
+    )
     return "\n".join(lines) + "\n"
 
 
@@ -1337,7 +1471,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         table = load_table()
         if options.defaults:
-            sys.stdout.write(render_defaults(table, Path(options.root)))
+            if options.council is not None:
+                sys.stdout.write(render_seats(options, table))
+            else:
+                sys.stdout.write(render_defaults(table, Path(options.root)))
             return 0
         chosen = _settings(options, table)
         request = gather(
@@ -1383,8 +1520,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise CouncilError(
                 f"this run differs from the plan with id {textio.plain(options.plan_id)} "
                 f"(now {plan_id(request, jobs)}): the reviewers, the argument values, the login "
-                "(ANTHROPIC_API_KEY set or unset), an account folder, which credential keys are "
-                "set, or the revision changed; plan again"
+                "(ANTHROPIC_API_KEY set or unset), an account folder, which credential or route "
+                "variables are set, an endpoint, the program on PATH, a named file, the diff or "
+                "the revision changed; plan again"
             )
         if out.exists():
             raise CouncilError(

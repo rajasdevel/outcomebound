@@ -36,11 +36,11 @@
       "pattern": "^[0-9]+(\\.[0-9]+)?$"
     },
     "councils": {
-      "description": "The person's file only: a name (a plain word, such as `high2`) for each list of seats, each `harness:model[:effort]` as `--reviewer` takes it. `--council NAME` runs those seats. The engine checks the names and the seats, since this format has no rule for the keys of an object.",
+      "description": "The person's file only: a name (a plain word, such as `pair`) for each list of seats, each `harness:model[:effort]` as `--reviewer` takes it. `--council NAME` runs those seats. The engine checks the names and the seats, since this format has no rule for the keys of an object.",
       "type": "object"
     },
     "homes": {
-      "description": "The person's file only: the account folder each harness starts with, an absolute path (a leading `~` is the home folder). `codex` sets CODEX_HOME and `claude` sets CLAUDE_CONFIG_DIR. The plan prints it and its plan id covers it.",
+      "description": "The person's file only: the account folder each harness starts with, an absolute path (a leading `~` is the home folder). `codex` sets CODEX_HOME and `claude` sets CLAUDE_CONFIG_DIR. The plan prints it as its canonical path, the reviewer starts with that path, and the plan id covers it; a path with a control character is refused.",
       "type": "object",
       "additionalProperties": false,
       "properties": {

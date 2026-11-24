@@ -197,7 +197,8 @@ def test_a_second_identical_finding_fails_a_baseline_that_holds_one(
 def test_check_with_no_floor_file_says_no_check_ran_and_how_to_get_a_proposal(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    root = repository(tmp_path, {"README.md": "x\n"})
+    # A file a floor would find something in: with no floor.json, nothing is checked.
+    root = repository(tmp_path, {"run.sh": EVAL})
     status = floor.main(["check", str(root)])
     captured = capsys.readouterr()
     assert status == 2 and captured.out == ""
@@ -315,14 +316,6 @@ def test_a_failing_exit_status_fails_its_gate(
     monkeypatch.setenv("PATH", os.pathsep.join([str(probe(tmp_path, 3)), os.environ["PATH"]]))
 
     assert run(capsys, "check", str(root))[:2] == (1, {"project.probe": "FAIL"})
-
-
-def test_check_without_a_floor_cannot_run(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    root = repository(tmp_path, {"run.sh": EVAL})
-
-    assert run(capsys, "check", str(root))[:2] == (2, {})
 
 
 # --- Secrets: gitleaks over the pushed range, or the tracked files; never the secret --------

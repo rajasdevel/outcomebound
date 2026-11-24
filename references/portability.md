@@ -88,11 +88,10 @@ every skill copy in `.outcomebound/skills/`, outside both `.gemini/skills/` and 
 T3 Code is a host, not a harness: it starts provider harnesses as its child agents (Claude through
 the Claude Agent SDK, Codex, Cursor and OpenCode). It has no `--harness` name, and `adopt` has no
 route for it; adopt for each provider the host runs. Each provider loads instructions as its own
-row says, with one exception. In one observation under T3 Code on 2026-11-25, a Cursor child did
-not load the project's `AGENTS.md`; that is observed once, not verified. In the same observation,
-Claude and Codex children loaded the kernel and the person's user-level rules. OpenCode was not
-observed. T3 Code's child agents have no read-only mode, so a review council run as host threads is
-read-only by its briefs only (the `review-council` skill).
+row says. That a child agent T3 Code starts loads them the same way is `UNVERIFIED`; for a Cursor
+child, whether it loads the project's `AGENTS.md` is `UNVERIFIED`. T3 Code's child agents have no
+read-only mode, so a review council run as host threads is read-only by its briefs only (the
+`review-council` skill).
 
 ### Any other harness: `--harness generic`
 
