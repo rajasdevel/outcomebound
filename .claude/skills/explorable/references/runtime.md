@@ -258,7 +258,8 @@ I entered".
   `build` refuses any other script type, a self-closing `<script/>`, and any `on...` attribute such
   as `onclick`: attach handlers in page code with `addEventListener`.
 - `<!` and `<?` are refused anywhere after the header, script text included, so write no HTML
-  comment and no such string in code. Write `</html` as `<\/html` inside a string.
+  comment and no such string in code. In a string, put a backslash before the slash of a closing
+  html tag.
 - An image is `src` with a `data:` URL; `srcset` is refused.
 - An empty input is unknown, not zero. Test for `null` before you compute.
 - A range is two inputs. An uncertain value is a range, never one exact number.

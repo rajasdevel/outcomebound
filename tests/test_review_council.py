@@ -26,6 +26,7 @@ IDENTITY = ("-c", "user.name=T", "-c", "user.email=t@example.test", "-c", "commi
 CODEX = """#!/bin/sh
 log="$FAKE_LOG"
 printf '%s\\n' "$@" > "$log/codex.argv"
+printf 'CODEX_HOME=%s\\n' "${CODEX_HOME-(unset)}" > "$log/codex.env"
 cat > "$log/codex.stdin"
 pwd > "$log/codex.cwd"
 cp src/app.py "$log/codex.snapshot"
@@ -60,6 +61,7 @@ printf 'Verdict: PASS\\n\\nNothing found.\\n'
 CLAUDE = """#!/bin/sh
 log="$FAKE_LOG"
 printf '%s\\n' "$@" > "$log/claude.argv"
+printf 'CLAUDE_CONFIG_DIR=%s\\n' "${CLAUDE_CONFIG_DIR-(unset)}" > "$log/claude.env"
 cat > "$log/claude.stdin"
 pwd > "$log/claude.cwd"
 cat "$FAKE_CLAUDE_JSON"
@@ -157,7 +159,15 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("FAKE_CLAUDE_JSON", str(answers / "claude.json"))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", os.devnull)
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # The account the reviewers start with comes from the test alone: no key, no account folder
+    # and no council file of the person running the suite.
+    for name in ("ANTHROPIC_API_KEY", "OPENAI_API_KEY", "CODEX_API_KEY"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.delenv("CLAUDE_CONFIG_DIR", raising=False)
+    (tmp_path / "home").mkdir(exist_ok=True)
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path / "home"))
     for name in ("codex", "claude", "cursor-agent", "opencode"):
         assert Path(programs.find(name) or "").parent == bin_dir, f"a real {name} would run"
     return tmp_path
@@ -790,7 +800,7 @@ def person(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """A home folder of the person with nothing in it."""
 
     home = tmp_path / "home"
-    home.mkdir()
+    home.mkdir(exist_ok=True)
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("USERPROFILE", str(home))
     return home
@@ -940,3 +950,197 @@ def test_every_refusal_of_a_value_from_the_council_file_names_the_file(
         _write_config(place, **data)
         code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
         assert code == 1 and "in the council file" in err and "council.json" in err, (data, err)
+
+
+# --- named councils and the account a reviewer starts with -------------------------------------
+
+
+def _plan_id(out: str) -> str:
+    shown = re.search(r"plan id: ([0-9a-f]{12})", out)
+    assert shown, out
+    return shown.group(1)
+
+
+def test_a_named_council_of_the_persons_file_supplies_the_reviewers(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    place = person / ".outcomebound/council.json"
+    _write_config(
+        place, councils={"high2": ["codex:m-a:high", "claude:m-b:low"], "solo": ["codex:m-c"]}
+    )
+    code, out, _ = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "high2", pair=False
+    )
+    assert code == 0, out
+    assert f"reviewers from: the council high2 in the council file {place}" in out
+    assert "reviewer r1: codex:m-a:high" in out and "reviewer r2: claude:m-b:low" in out
+    assert "reviewer r3" not in out
+    # A project file hides the person's reviewers, as before, but not the person's councils.
+    _write_config(repo / ".outcomebound/council.json", reviewers=["codex:project-model:high"])
+    code, out, _ = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "solo", pair=False
+    )
+    assert code == 0 and "reviewer r1: codex:m-c:high" in out and "project-model" not in out
+    _, out, _ = council(capsys, repo, "--defaults", pair=False)
+    assert f"the person's council file: {place}" in out
+    assert "  council high2: codex:m-a:high, claude:m-b:low" in out
+    assert "  council solo: codex:m-c" in out
+
+
+def test_a_council_name_is_refused_with_reviewer_and_an_unknown_one_lists_the_names(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    place = person / ".outcomebound/council.json"
+    code, _, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "high2", pair=False
+    )
+    assert code == 1 and f"the person's council file {place} does not exist" in err
+    _write_config(place, councils={"high2": ["codex:m-a:high"], "solo": ["codex:m-c"]})
+    code, _, err = council(
+        capsys,
+        repo,
+        "--plan",
+        "--base",
+        "HEAD~1",
+        "--council",
+        "high2",
+        "--reviewer",
+        "codex",
+        pair=False,
+    )
+    assert code == 1 and err == "COUNCIL_REFUSED: give --council or --reviewer, not both\n"
+    code, _, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "high3", pair=False
+    )
+    assert code == 1
+    assert err == (
+        'COUNCIL_REFUSED: there is no council named "high3" in the person\'s council file '
+        f"{place}; the councils it names: high2, solo\n"
+    )
+    _write_config(place, councils={"bad": ["gemini:x"]})
+    code, _, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "bad", pair=False
+    )
+    assert code == 1 and f"in the council file {place}:" in err and "not in the table" in err
+    for councils, word in (
+        ({"no spaces": ["codex"]}, "is not a plain word"),
+        (["codex"], "$.councils"),
+        ({"empty": []}, "$.councils.empty is not a list"),
+        ({"mixed": ["codex", 3]}, "$.councils.mixed is not a list"),
+    ):
+        _write_config(place, councils=councils)
+        code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+        assert code == 1 and "COUNCIL_REFUSED" in err and word in err, (councils, err)
+    # A project file is checked the same way before it is refused for holding councils.
+    place.unlink()
+    project = repo / ".outcomebound/council.json"
+    _write_config(project, councils=["codex"])
+    code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+    assert code == 1 and f"the council file {project} is not valid" in err, err
+    project.unlink()
+    assert list((tools / "log").iterdir()) == []
+
+
+def test_a_project_file_that_defines_councils_or_homes_is_refused(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    project = repo / ".outcomebound/council.json"
+    for key, value in (("councils", {"high2": ["codex"]}), ("homes", {"codex": str(person)})):
+        _write_config(project, reviewers=[CODEX_REVIEWER], **{key: value})
+        code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1", pair=False)
+        assert code == 1, err
+        assert f"the project's council file {project} defines {key}, which only" in err
+        assert str(person / ".outcomebound/council.json") in err
+    assert list((tools / "log").iterdir()) == []
+
+
+def test_the_plan_shows_each_reviewers_account_folder_and_keys_and_its_id_binds_them(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def plan() -> str:
+        code, out, err = council(capsys, repo, "--plan", "--base", "HEAD~1")
+        assert code == 0, err
+        return out
+
+    out = plan()
+    assert "  account folder: CODEX_HOME unset, the tool's default" in out
+    assert "  account folder: CLAUDE_CONFIG_DIR unset, the tool's default" in out
+    assert "  credentials: CODEX_API_KEY not set; OPENAI_API_KEY not set" in out
+    assert "  credentials: ANTHROPIC_API_KEY not set" in out
+    unset = _plan_id(out)
+    ids = {unset}
+    for folder in ("a", "b"):
+        monkeypatch.setenv("CODEX_HOME", str(tools / folder))
+        out = plan()
+        assert (
+            f"  account folder: CODEX_HOME={tools / folder} (inherited from this environment)"
+            in out
+        )
+        ids.add(_plan_id(out))
+    assert len(ids) == 3, "unset, one folder and another are three plans"
+    monkeypatch.setenv("OPENAI_API_KEY", "sk-not-a-real-key-0000")
+    out = plan()
+    assert "OPENAI_API_KEY set (a value is never printed)" in out
+    assert "sk-not-a-real-key" not in out and _plan_id(out) not in ids
+    monkeypatch.delenv("OPENAI_API_KEY")
+    # The person's file sets the folder, over the inherited one.
+    _write_config(
+        person / ".outcomebound/council.json",
+        homes={"codex": str(tools / "set"), "claude": str(tools / "claude-set")},
+    )
+    out = plan()
+    assert f"CODEX_HOME={tools / 'set'} (set by the person's council file)" in out
+    assert f"CLAUDE_CONFIG_DIR={tools / 'claude-set'} (set by the person's council file)" in out
+    _, shown, _ = council(capsys, repo, "--defaults", pair=False)
+    assert f"  home of codex: {tools / 'set'}" in shown
+
+
+def test_accept_refuses_a_changed_account_folder_and_runs_after_an_unrelated_change(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_config(person / ".outcomebound/council.json", homes={"codex": str(tools / "set")})
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tools / "inherited"))
+    _, plan, _ = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    approved = _plan_id(plan)
+    # The inherited Claude folder changed after the person's yes: refused, nothing started.
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tools / "other"))
+    code, _, err = council(capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", approved)
+    assert code == 1 and "differs from the plan" in err and "account folder" in err
+    assert list((tools / "log").iterdir()) == []
+    # So did the person's file.
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tools / "inherited"))
+    _write_config(person / ".outcomebound/council.json", homes={"codex": str(tools / "moved")})
+    code, _, err = council(capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", approved)
+    assert code == 1 and "differs from the plan" in err
+    assert list((tools / "log").iterdir()) == []
+    # Back as planned, with a variable no reviewer's account uses changed: the plan holds.
+    _write_config(person / ".outcomebound/council.json", homes={"codex": str(tools / "set")})
+    monkeypatch.setenv("SOME_UNRELATED_SETTING", "changed")
+    code, out, err = council(capsys, repo, "--accept", "--base", "HEAD~1", "--plan-id", approved)
+    assert code == 0, out + err
+    log = tools / "log"
+    assert (log / "codex.env").read_text(encoding="utf-8") == f"CODEX_HOME={tools / 'set'}\n"
+    assert (log / "claude.env").read_text(encoding="utf-8") == (
+        f"CLAUDE_CONFIG_DIR={tools / 'inherited'}\n"
+    )
+
+
+def test_a_home_that_is_not_absolute_is_refused_and_names_the_persons_file(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    place = person / ".outcomebound/council.json"
+    _write_config(place, homes={"codex": "relative/folder"})
+    code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    assert code == 1
+    assert f'in the council file {place}: the home of codex "relative/folder" is not' in err
+    _write_config(place, homes={"cursor": str(person)})
+    code, _, err = council(capsys, repo, "--plan", "--base", "HEAD~1")
+    assert code == 1 and "unknown field" in err and "cursor" in err

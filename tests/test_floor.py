@@ -194,6 +194,20 @@ def test_a_second_identical_finding_fails_a_baseline_that_holds_one(
     assert output.count("`eval` executes text as code") == 2, output
 
 
+def test_check_with_no_floor_file_says_no_check_ran_and_how_to_get_a_proposal(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    root = repository(tmp_path, {"README.md": "x\n"})
+    status = floor.main(["check", str(root)])
+    captured = capsys.readouterr()
+    assert status == 2 and captured.out == ""
+    assert captured.err == (
+        "floor: no floor checks ran: .outcomebound/floor.json is absent. "
+        "`outcomebound floor propose TARGET` prints a proposal, and "
+        "`outcomebound floor apply TARGET --floor FILE` writes it\n"
+    )
+
+
 def test_ratchet_deletes_the_lines_no_finding_matches_and_adds_nothing(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

@@ -1,9 +1,18 @@
 {
   "version": 1,
-  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. `max_prompt` lists the input limits of a harness; `review council` uses the first row that applies (`platform`: a `sys.platform` prefix; `programs`: the extensions of the program that would start) and checks the assembled prompt against it before the plan is shown and again before each reviewer starts. A row gives the `limit`; its `unit` (`characters`, counted as Unicode code points, `utf-16` code units, or UTF-8 `bytes`); what it `measure`s (`prompt`, the prompt alone; `command line`, the Windows command line with its final NUL; `arguments and environment`, every argument and environment string with its NUL and pointer); the `version` it was read for; its `source`; and the `read` day. A harness or platform with no row that applies has no limit checked, and the plan says so. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. `account` names the variable that sets the folder a harness keeps its login in (`home`) and the credential variables it may read (`keys`): the plan prints the folder and whether each key is set, never a value, and the plan id covers both. `max_prompt` lists the input limits of a harness; `review council` uses the first row that applies (`platform`: a `sys.platform` prefix; `programs`: the extensions of the program that would start) and checks the assembled prompt against it before the plan is shown and again before each reviewer starts. A row gives the `limit`; its `unit` (`characters`, counted as Unicode code points, `utf-16` code units, or UTF-8 `bytes`); what it `measure`s (`prompt`, the prompt alone; `command line`, the Windows command line with its final NUL; `arguments and environment`, every argument and environment string with its NUL and pointer); the `version` it was read for; its `source`; and the `read` day. A harness or platform with no row that applies has no limit checked, and the plan says so. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
+      "account": {
+        "home": "CODEX_HOME",
+        "keys": [
+          "CODEX_API_KEY",
+          "OPENAI_API_KEY"
+        ],
+        "source": "outcomebound-research harnesses/codex.md sections 1 and 10 (CODEX_HOME relocates the Codex folder; with --ignore-user-config, authentication still uses CODEX_HOME) and harnesses/non-interactive-modes.md section 3 (CODEX_API_KEY authenticates one invocation); that codex exec reads OPENAI_API_KEY is UNVERIFIED, and it is shown so that a key the person set is not hidden",
+        "read": "2026-11-25"
+      },
       "help_version": "codex-cli 0.163.0",
       "timeout_seconds": 1800,
       "timeout_source": "https://skills.cat/skills/trancong12102/agentskills/council-review (read 2026-10-18: a Codex review may take up to 30 minutes)",
@@ -170,6 +179,14 @@
     },
     "claude": {
       "binary": "claude",
+      "account": {
+        "home": "CLAUDE_CONFIG_DIR",
+        "keys": [
+          "ANTHROPIC_API_KEY"
+        ],
+        "source": "outcomebound-research harnesses/claude-code.md section 5 (bare mode needs ANTHROPIC_API_KEY or an apiKeyHelper); that CLAUDE_CONFIG_DIR selects the folder that holds the login is UNVERIFIED: no first-party page was read for it",
+        "read": "2026-11-25"
+      },
       "help_version": "Claude Code 2.1.302",
       "timeout_seconds": 1800,
       "timeout_source": "UNVERIFIED: no source for a Claude run; the Codex figure is used",

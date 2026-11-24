@@ -83,6 +83,17 @@ every skill copy in `.outcomebound/skills/`, outside both `.gemini/skills/` and 
   beside Cursor, a skill sits in two folders that Cursor reads. Whether Cursor lists that skill
   twice is `UNVERIFIED`.
 
+### T3 Code, a host
+
+T3 Code is a host, not a harness: it starts provider harnesses as its child agents (Claude through
+the Claude Agent SDK, Codex, Cursor and OpenCode). It has no `--harness` name, and `adopt` has no
+route for it; adopt for each provider the host runs. Each provider loads instructions as its own
+row says, with one exception. In one observation under T3 Code on 2026-11-25, a Cursor child did
+not load the project's `AGENTS.md`; that is observed once, not verified. In the same observation,
+Claude and Codex children loaded the kernel and the person's user-level rules. OpenCode was not
+observed. T3 Code's child agents have no read-only mode, so a review council run as host threads is
+read-only by its briefs only (the `review-council` skill).
+
 ### Any other harness: `--harness generic`
 
 `generic` is the default when you name no harness. Use it for a harness that the table does not

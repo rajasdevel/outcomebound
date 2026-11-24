@@ -4,12 +4,13 @@ independent review of one change, read-only, and write one review file for each
 
 What this module decides: the request (a diff of a ref range or against a base, and named files,
 quoted as data with a lens); the reviewers (`harness:model[:effort]`, with defaults from
-`adapters/council.json`); the exact argv of each, built from that table; and, after a run, one
-review file for each reviewer that answered, in the `review check` format, with every `path:line`
-citation looked up at the reviewed revision. `--plan` prints all of that and runs nothing; it
-and `--accept` refuse a request whose assembled prompt is over a reviewer's input limit.
-`--accept` runs the reviewers in parallel, each against a snapshot of the reviewed revision, and
-spends the person's credits with every reviewer it starts.
+`adapters/council.json`, or a council the person's own file names); the account folder and the
+credential keys set for each (never a value); the exact argv of each, built from that table; and,
+after a run, one review file for each reviewer that answered, in the `review check` format, with
+every `path:line` citation looked up at the reviewed revision. `--plan` prints all of that and
+runs nothing; it and `--accept` refuse a request whose assembled prompt is over a reviewer's
+input limit. `--accept` runs the reviewers in parallel, each against a snapshot of the reviewed
+revision, and spends the person's credits with every reviewer it starts.
 
 What it does not decide: whether a finding is right (the acting agent checks it, with the
 `review-findings` skill), whether a flag in the table has its effect (each entry says whether a
@@ -47,6 +48,10 @@ from outcomebound_tools.gitenv import git_environment
 TABLE = home.ROOT / "adapters" / "council.json"
 CONFIG_SCHEMA = home.ROOT / "schemas" / "council-config.schema.json"
 CONFIG_PROJECT = Path(".outcomebound") / "council.json"
+# The keys only the person's own file may hold: a committed file must not choose the person's
+# named councils or the account folder a reviewer bills.
+PERSON_ONLY = ("councils", "homes")
+_COUNCIL_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SPEND = (
     "This run spends the person's credits: every reviewer below starts a model run on the "
     "person's own login or key. Run it only after the person says yes to this plan."
@@ -145,6 +150,9 @@ class Job:
     spec: dict[str, Any]
     values: dict[str, str]
     env: dict[str, str] = field(default_factory=dict)
+    # The account folder and the credential keys the reviewer starts with (`account` of the
+    # table's row), as `bind_accounts` resolved them; empty for a harness with no such row.
+    account: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -227,30 +235,116 @@ def default_reviewers(table: dict[str, Any]) -> list[Reviewer]:
     return [parse_reviewer(entry, i, table) for i, entry in enumerate(table["default_council"], 1)]
 
 
-def load_config(top: Path) -> tuple[Path | None, dict[str, Any]]:
-    """The council configuration and where it came from: the project's
-    `.outcomebound/council.json`, else the `.outcomebound/council.json` in the person's home
-    folder, else none. The first file found is read alone and the other is not merged with it. A
-    file that is not valid against `schemas/council-config.schema.json` is a refusal that names
-    it."""
+@dataclass(frozen=True)
+class Config:
+    """The council files of a run: `place` and `data` are the file whose reviewers, lens,
+    timeout and cap apply (the project's, else the person's); `person` and `person_data` are the
+    person's own file, which alone names councils and homes, also where a project file exists."""
 
-    for place in (top / CONFIG_PROJECT, Path.home() / ".outcomebound" / "council.json"):
-        if not place.is_file():
-            continue
-        try:
-            data = json.loads(textio.read_text(place))
-            schema = json.loads(CONFIG_SCHEMA.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+    place: Path | None
+    data: dict[str, Any]
+    person: Path
+    person_data: dict[str, Any] | None
+
+
+def _read_config(place: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(textio.read_text(place))
+        schema = json.loads(CONFIG_SCHEMA.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CouncilError(
+            f"the council file {place} cannot be read: {textio.plain(str(error))}"
+        ) from error
+    problems = schemacheck.validate(data, schema)
+    councils = data.get("councils") if isinstance(data, dict) else None
+    for name, seats in councils.items() if isinstance(councils, dict) else ():
+        if not _COUNCIL_NAME.fullmatch(name):
+            problems.append(f"$.councils has the name {name!r}, which is not a plain word")
+        elif not (
+            isinstance(seats, list) and seats and all(isinstance(s, str) and s for s in seats)
+        ):
+            problems.append(f"$.councils.{name} is not a list of harness:model[:effort] seats")
+    if problems:
+        raise CouncilError(
+            f"the council file {place} is not valid: {textio.plain('; '.join(problems))}"
+        )
+    return data
+
+
+def _same_file(one: Path, other: Path) -> bool:
+    try:
+        return one.resolve() == other.resolve()
+    except OSError:
+        return False
+
+
+def load_config(top: Path) -> Config:
+    """The council files: the project's `.outcomebound/council.json` supplies the reviewers,
+    lens, timeout and cap where it exists, else the `.outcomebound/council.json` in the person's
+    home folder does; the two are not merged. The person's file alone names councils and homes,
+    and they apply also where a project file exists; a project file that defines either is a
+    refusal (where the repository is the home folder, the two are one file, the person's). A file
+    that is not valid against `schemas/council-config.schema.json` is a refusal that names it."""
+
+    own = Path.home() / ".outcomebound" / "council.json"
+    person = _read_config(own) if own.is_file() else None
+    project = top / CONFIG_PROJECT
+    if project.is_file() and not _same_file(project, own):
+        data = _read_config(project)
+        defined = [key for key in PERSON_ONLY if key in data]
+        if defined:
             raise CouncilError(
-                f"the council file {place} cannot be read: {textio.plain(str(error))}"
-            ) from error
-        problems = schemacheck.validate(data, schema)
-        if problems:
-            raise CouncilError(
-                f"the council file {place} is not valid: {textio.plain('; '.join(problems))}"
+                f"the project's council file {project} defines {' and '.join(defined)}, which "
+                f"only the person's own file {own} may define, since a committed file would "
+                "then choose the person's councils or the account a reviewer bills; move them "
+                "there"
             )
-        return place, data
-    return None, {}
+        return Config(project, data, own, person)
+    if person is not None:
+        return Config(own, person, own, person)
+    return Config(None, {}, own, None)
+
+
+def named_council(config: Config, name: str) -> list[str]:
+    """The seats of the council `name` in the person's own file, or a refusal that lists the
+    names it holds."""
+
+    councils = (config.person_data or {}).get("councils") or {}
+    if name in councils:
+        return list(councils[name])
+    if config.person_data is None:
+        raise CouncilError(
+            f"there is no council named {textio.quote(name)}: the person's council file "
+            f"{config.person} does not exist (a council is named there, under `councils`)"
+        )
+    known = ", ".join(sorted(councils)) or "none"
+    raise CouncilError(
+        f"there is no council named {textio.quote(name)} in the person's council file "
+        f"{config.person}; the councils it names: {known}"
+    )
+
+
+def person_homes(config: Config, table: dict[str, Any]) -> dict[str, str]:
+    """The account folder the person's own file sets for each harness (`homes`), as an absolute
+    path; a harness whose row records no account folder, or a path that is not absolute, is a
+    refusal that names the file."""
+
+    homes = {}
+    for harness, value in ((config.person_data or {}).get("homes") or {}).items():
+        row = table["harnesses"].get(harness, {})
+        if "account" not in row:
+            raise CouncilError(
+                f"in the council file {config.person}: the harness {harness} has no account "
+                "folder in the council table"
+            )
+        place = os.path.expanduser(value)
+        if not os.path.isabs(place):
+            raise CouncilError(
+                f"in the council file {config.person}: the home of {harness} "
+                f"{textio.quote(value)} is not an absolute path"
+            )
+        homes[harness] = place
+    return homes
 
 
 # --- the request --------------------------------------------------------------------------------
@@ -501,6 +595,11 @@ def plan_jobs(
             "prompt": "<the prompt>",
             "configdir": str(out / f"{reviewer.tag}.config"),
         }
+        env = {
+            entry["name"]: _fill(entry["value"], values)
+            for entry in spec.get("env", [])
+            if _holds(entry.get("when"), values)
+        }
         jobs.append(
             Job(
                 reviewer=reviewer,
@@ -514,14 +613,31 @@ def plan_jobs(
                 timeout=timeout or int(spec["timeout_seconds"]),
                 spec=spec,
                 values=values,
-                env={
-                    entry["name"]: _fill(entry["value"], values)
-                    for entry in spec.get("env", [])
-                    if _holds(entry.get("when"), values)
-                },
+                env=env,
             )
         )
     return jobs
+
+
+def bind_accounts(jobs: Sequence[Job], homes: dict[str, str]) -> None:
+    """Each job's account: the folder its reviewer starts with (set by the person's `homes`,
+    which puts it in the job's environment; else inherited; else unset) and whether each
+    credential key of the table's `account` row is set. It holds no key's value."""
+
+    for job in jobs:
+        row = job.spec.get("account")
+        if not row:
+            continue
+        name, harness = row["home"], job.reviewer.harness
+        if harness in homes:
+            job.env[name] = homes[harness]
+            value, how = homes[harness], "set by the person's council file"
+        elif os.environ.get(name):
+            value, how = os.environ[name], "inherited from this environment"
+        else:
+            value, how = None, "unset, the tool's default"
+        keys = [[key, bool(os.environ.get(key))] for key in row["keys"]]
+        job.account = {"home": name, "value": value, "how": how, "keys": keys}
 
 
 def _shown(argv: Sequence[str]) -> str:
@@ -530,15 +646,20 @@ def _shown(argv: Sequence[str]) -> str:
 
 def plan_id(request: Request, jobs: Sequence[Job]) -> str:
     """A short digest of what a run would do: the revision, the lens, and each reviewer's argv,
-    environment and timeout. `--accept --plan-id ID` refuses a run that differs, such as one
-    where an API key was set or unset after the plan."""
+    environment, timeout, account folder and which of its credential keys are set (never a
+    value). `--accept --plan-id ID` refuses a run that differs, such as one where an API key was
+    set or unset, or an account folder changed, after the plan; a change to any other variable
+    does not change it."""
 
     record = [
         request.commit,
         request.described,
         request.lens,
         sorted(request.files),
-        [[j.reviewer.label, j.argv, sorted(j.env.items()), j.timeout, str(j.cwd)] for j in jobs],
+        [
+            [j.reviewer.label, j.argv, sorted(j.env.items()), j.timeout, str(j.cwd), j.account]
+            for j in jobs
+        ],
     ]
     return hashlib.sha256(json.dumps(record, sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
@@ -586,6 +707,7 @@ def render_plan(
                     if e["name"] in job.env
                 )
             ],
+            *_account_lines(job),
             *(
                 [
                     "  READ-ONLY NOT CONFIRMED BY DOCUMENTATION (UNVERIFIED): "
@@ -636,13 +758,27 @@ def render_plan(
         "",
         "No run has shown that a safeguard stops a write. Whether the model named exists on the "
         "person's login and ran at the effort asked is shown only where a flag's observed note "
-        "says so.",
+        "says so. The plan shows the account folder and which keys are set; which account a run "
+        "bills is not shown (UNVERIFIED).",
         f"plan id: {plan_id(request, jobs)}",
         "To run it, after the person says yes: the same command with --accept in place of --plan "
         f"and --plan-id {plan_id(request, jobs)} added; a run that differs from this plan is "
         "refused.",
     ]
     return "\n".join(lines) + "\n"
+
+
+def _account_lines(job: Job) -> list[str]:
+    account = job.account
+    if not account:
+        return ["  account: no account folder or key recorded for this harness (UNVERIFIED)"]
+    home = (
+        f"{account['home']}={account['value']} ({account['how']})"
+        if account["value"] is not None
+        else f"{account['home']} {account['how']}"
+    )
+    keys = "; ".join(f"{key} {'set' if present else 'not set'}" for key, present in account["keys"])
+    return [f"  account folder: {home}", f"  credentials: {keys} (a value is never printed)"]
 
 
 # --- the run ------------------------------------------------------------------------------------
@@ -1062,6 +1198,11 @@ def _parser() -> argparse.ArgumentParser:
         help="a reviewer (repeat); with none, the council file's, else the default council",
     )
     parser.add_argument(
+        "--council",
+        metavar="NAME",
+        help="the reviewers of a council named in .outcomebound/council.json in your home folder",
+    )
+    parser.add_argument(
         "--plan-id", metavar="ID", help="required with --accept: the id the plan printed"
     )
     parser.add_argument("--timeout", type=int, metavar="SECONDS", help="per reviewer")
@@ -1074,15 +1215,25 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def render_defaults(table: dict[str, Any], root: Path) -> str:
-    """The built-in default council and the council file in effect for `root`, if any."""
+    """The built-in default council, the council file in effect for `root`, and the councils
+    and homes of the person's own file."""
 
-    place, config = load_config(_toplevel(root))
+    config = load_config(_toplevel(root))
     lines = ["built-in default council: " + ", ".join(table["default_council"])]
-    if place is None:
+    if config.place is None:
         lines.append("council file in effect: none")
     else:
-        lines.append(f"council file in effect: {place}")
-        lines.append("  reviewers: " + ", ".join(config["reviewers"]))
+        lines.append(f"council file in effect: {config.place}")
+        if "reviewers" in config.data:
+            lines.append("  reviewers: " + ", ".join(config.data["reviewers"]))
+    if config.person_data is None:
+        lines.append(f"the person's council file: none at {config.person}")
+    else:
+        lines.append(f"the person's council file: {config.person}")
+        for name, seats in sorted((config.person_data.get("councils") or {}).items()):
+            lines.append(f"  council {name}: " + ", ".join(seats))
+        for harness, place in sorted(person_homes(config, table).items()):
+            lines.append(f"  home of {harness}: {place}")
     return "\n".join(lines) + "\n"
 
 
@@ -1095,51 +1246,66 @@ def _toplevel(root: Path) -> Path:
 
 
 def _settings(options: argparse.Namespace, table: dict[str, Any]) -> dict[str, Any]:
-    """The reviewers, lens, timeout and cap of this run, and where each came from: the command
-    line wins, then the council file, then the table's default council (the lens, the timeout
-    and the cap have no default beyond the general lens, the table's timeout and no cap)."""
+    """The reviewers, lens, timeout, cap and account folders of this run, and where each came
+    from: the command line wins (`--reviewer`, or `--council` for a council of the person's
+    file), then the council file, then the table's default council (the lens, the timeout and
+    the cap have no default beyond the general lens, the table's timeout and no cap). The account
+    folders come from the person's own file only."""
 
     top = _toplevel(Path(options.root))
-    place, config = load_config(top)
+    config = load_config(top)
+    place, data = config.place, config.data
     where = f"the council file {place}"
     lens = textio.read_text(Path(options.lens_file)) if options.lens_file else options.lens
     lens_source = "--lens on the command line" if lens is not None else where
-    if lens is None and "lens" not in config:
+    if lens is None and "lens" not in data:
         lens_source = "the general default lens"
-    if options.reviewer:
+    entries_from = None
+    if options.council is not None:
+        if options.reviewer:
+            raise CouncilError("give --council or --reviewer, not both")
+        entries = named_council(config, options.council)
+        entries_from = f"the council file {config.person}"
+        source = f"the council {options.council} in {entries_from}"
+    elif options.reviewer:
         entries, source = options.reviewer, "--reviewer on the command line"
-    elif place is not None:
-        entries, source = config["reviewers"], where
+    elif "reviewers" in data:
+        entries, source = data["reviewers"], where
+        entries_from = where
     else:
         entries, source = table["default_council"], "the built-in default council"
-    budget = options.budget_usd if options.budget_usd is not None else config.get("budget_usd")
-    timeout = options.timeout if options.timeout is not None else config.get("timeout_seconds")
+    budget = options.budget_usd if options.budget_usd is not None else data.get("budget_usd")
+    timeout = options.timeout if options.timeout is not None else data.get("timeout_seconds")
+    # An error from a value a file supplied names the file.
+    if budget is not None and not re.fullmatch(r"\d+(\.\d+)?", budget):
+        raise CouncilError(
+            ("" if options.budget_usd is not None else f"in {where}: ")
+            + "the cap is a number of US dollars"
+        )
+    if timeout is not None and timeout < 1:
+        raise CouncilError(
+            ("" if options.timeout is not None else f"in {where}: ")
+            + "the timeout is a whole number of seconds, one or more"
+        )
     try:
-        if budget is not None and not re.fullmatch(r"\d+(\.\d+)?", budget):
-            raise CouncilError("the cap is a number of US dollars")
-        if timeout is not None and timeout < 1:
-            raise CouncilError("the timeout is a whole number of seconds, one or more")
         reviewers = [parse_reviewer(text, i, table) for i, text in enumerate(entries, 1)]
     except CouncilError as error:
-        # An error from a value the file supplied names the file.
-        from_file = place is not None and (
-            source == where or (options.budget_usd is None and options.timeout is None)
-        )
-        raise CouncilError(f"in {where}: {error}" if from_file else str(error)) from error
+        raise CouncilError(f"in {entries_from}: {error}" if entries_from else str(error)) from error
     return {
         "reviewers": reviewers,
         "source": source,
-        "lens": config.get("lens", "") if lens is None else lens,
+        "lens": data.get("lens", "") if lens is None else lens,
         "lens_source": lens_source,
         "timeout": timeout,
         "budget": budget,
+        "homes": person_homes(config, table),
         "file": place,
         "file_used": place is not None
         and (
             source == where
             or lens_source == where
-            or (options.timeout is None and "timeout_seconds" in config)
-            or (options.budget_usd is None and "budget_usd" in config)
+            or (options.timeout is None and "timeout_seconds" in data)
+            or (options.budget_usd is None and "budget_usd" in data)
         ),
     }
 
@@ -1195,6 +1361,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             timeout=chosen["timeout"],
             budget=chosen["budget"],
         )
+        bind_accounts(jobs, chosen["homes"])
         over = over_limit(request, jobs)
         if over:
             raise CouncilError(
@@ -1216,7 +1383,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise CouncilError(
                 f"this run differs from the plan with id {textio.plain(options.plan_id)} "
                 f"(now {plan_id(request, jobs)}): the reviewers, the argument values, the login "
-                "(ANTHROPIC_API_KEY set or unset) or the revision changed; plan again"
+                "(ANTHROPIC_API_KEY set or unset), an account folder, which credential keys are "
+                "set, or the revision changed; plan again"
             )
         if out.exists():
             raise CouncilError(
