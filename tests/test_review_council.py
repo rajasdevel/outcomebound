@@ -1437,6 +1437,9 @@ def test_an_endpoint_shows_only_its_scheme_host_and_port_and_a_bad_one_is_refuse
     monkeypatch.setenv("OPENAI_BASE_URL", endpoint.replace("q-not-real", "q-other"))
     out = council(capsys, repo, "--plan", *args)[1]
     assert _plan_id(out) != first, "the plan id binds the whole value"
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://gw.example.test:000443/v1")
+    out = council(capsys, repo, "--plan", *args)[1]
+    assert "OPENAI_BASE_URL=https://gw.example.test:443 (only" in out, "leading zeros of a port"
     monkeypatch.setenv("OPENAI_BASE_URL", "https://[::1]:9/v1")
     out = council(capsys, repo, "--plan", *args)[1]
     assert "OPENAI_BASE_URL=https://[::1]:9 (only" in out

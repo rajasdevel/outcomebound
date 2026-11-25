@@ -759,9 +759,10 @@ def _switch(value: str | None, on: Sequence[str]) -> bool:
 
 
 # An endpoint's host and port: a name of letters, digits, `.`, `_`, `~` and `-`, or an IPv6
-# address in brackets; then an optional port of ASCII digits.
+# address in brackets; then an optional port of ASCII digits, leading zeros allowed as a URL
+# parser allows them (its value is checked, not its length).
 _AUTHORITY = re.compile(
-    r"(?:\[(?P<v6>[0-9A-Fa-f:.]+)\]|(?P<name>[A-Za-z0-9._~-]+))(?::(?P<port>[0-9]{0,5}))?"
+    r"(?:\[(?P<v6>[0-9A-Fa-f:.]+)\]|(?P<name>[A-Za-z0-9._~-]+))(?::(?P<port>[0-9]*))?"
 )
 
 
