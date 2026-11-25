@@ -1201,7 +1201,8 @@ def test_the_plan_shows_each_reviewers_account_folder_and_route_and_its_id_binds
     ):
         monkeypatch.setenv(name, value)
         out = plan()
-        assert f"={value}" not in out, name
+        # A switch's value "1" is in the plan in other words; every other value is never in it.
+        assert (f"={value}" if value == "1" else value) not in out, name
         ids.add(_plan_id(out))
         monkeypatch.delenv(name)
     assert len(ids) == 8, "each of these is a different plan"
@@ -1623,3 +1624,13 @@ def test_a_host_answer_is_filed_only_in_the_engines_form(
     assert [entry.id for entry in entries] == ["r1-1", "r1-2", "r1-3"]
     code, _, err = file(CLEAN)
     assert code == 1 and "exists" in err
+
+
+def test_each_review_council_option_the_skill_names_is_one_the_command_takes() -> None:
+    text = (ROOT / "skills/review-council/SKILL.md").read_text(encoding="utf-8")
+    named = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", text)) - {"--verify"}  # Git's own
+    taken = {flag for action in review_council._parser()._actions for flag in action.option_strings}
+    assert named and named <= taken, named - taken
+    # The host route names its listing and its filing.
+    host = text.split("## On a host that starts agents itself", 1)[1]
+    assert "--defaults --council NAME --host" in host and "--file-answer" in host

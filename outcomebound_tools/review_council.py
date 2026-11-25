@@ -16,7 +16,8 @@ What it does not decide: whether a finding is right (the acting agent checks it,
 `review-findings` skill), whether a flag in the table has its effect (each entry says whether a
 run showed it), or whom to ask: the person says yes to the plan before `--accept` is run. It never
 runs reviewer output as a command, never copies a `Disposition:` or a `Reviewed:` line a reviewer
-wrote, and writes nothing under the checkout except the run folder. Standard library only.
+wrote, and writes nothing under the checkout except the run folder, and with `--file-answer` the
+one review file `--out` names. Standard library only.
 """
 
 from __future__ import annotations
@@ -341,8 +342,10 @@ def _identity(place: Path | str) -> tuple[int, int] | None:
 
 
 def _same_file(one: Path, other: Path) -> bool:
+    """Whether two paths name one file: by their resolved paths, or by filesystem identity."""
+
     found = _identity(one)
-    return found is not None and found == _identity(other)
+    return _real(one) == _real(other) or (found is not None and found == _identity(other))
 
 
 def _real(place: Path) -> Path:
@@ -1450,7 +1453,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--budget-usd", metavar="N", help="a spend cap for Claude reviewers")
     parser.add_argument("--root", default=".", metavar="DIR", help="a folder inside the work tree")
     parser.add_argument(
-        "--out", metavar="DIR", help="the run folder (default .agents/work/council/<revision>)"
+        "--out",
+        metavar="DIR",
+        help="the run folder (default .agents/work/council/<revision>); with --file-answer, the "
+        "review file to write",
     )
     return parser
 

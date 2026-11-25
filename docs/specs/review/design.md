@@ -31,7 +31,7 @@ a code fence are not read.
 
 ## The council
 
-`outcomebound review council (--plan | --accept | --defaults)` asks reviewers of other harnesses and models
+`outcomebound review council (--plan | --accept | --defaults | --file-answer FILE)` asks reviewers of other harnesses and models
 for one independent, read-only review of a change, and writes one review file for each reviewer
 that answers. How: `outcomebound_tools/review_council.py`; the flags of each harness are data in
 `adapters/council.json`. The verb does not judge or merge: the session's agent reads each finding
