@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 
 import pytest
@@ -1172,7 +1173,7 @@ def test_the_plan_shows_each_reviewers_account_folder_and_route_and_its_id_binds
     assert _line(out, "credentials and route: ANTHROPIC_API_KEY") == (
         "credentials and route: ANTHROPIC_API_KEY not set; ANTHROPIC_AUTH_TOKEN not set; "
         "CLAUDE_CODE_OAUTH_TOKEN not set; CLAUDE_CODE_USE_BEDROCK off; "
-        "CLAUDE_CODE_USE_VERTEX off; CLAUDE_CODE_USE_FOUNDRY off "
+        "CLAUDE_CODE_USE_VERTEX off "
         "(a value is never printed; a route switch is on where its value is 1, true, yes or on)"
     )
     assert _line(out, "endpoints: OPENAI") == "endpoints: OPENAI_BASE_URL not set"
@@ -1634,3 +1635,308 @@ def test_each_review_council_option_the_skill_names_is_one_the_command_takes() -
     # The host route names its listing and its filing.
     host = text.split("## On a host that starts agents itself", 1)[1]
     assert "--defaults --council NAME --host" in host and "--file-answer" in host
+
+
+# --- the second fix round: routes, endpoints, the host route's filing, and Windows -------------
+
+
+@pytest.mark.parametrize("switch", ["CLAUDE_CODE_USE_GATEWAY", "CLAUDE_CODE_USE_FOUNDRY"])
+def test_a_gateway_or_foundry_route_refuses_the_run_a_plan_without_it_approved(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    switch: str,
+) -> None:
+    args = ("--base", "HEAD~1", "--reviewer", CLAUDE_REVIEWER)
+    code, plan, err = council(capsys, repo, "--plan", *args)
+    assert code == 0, err
+    earlier = _plan_id(plan)
+    # The route bills an account or a destination the plan cannot show: no plan, and the plan
+    # the person said yes to does not run.
+    monkeypatch.setenv(switch, "1")
+    monkeypatch.setenv("ANTHROPIC_FOUNDRY_BASE_URL", "https://foundry.example.test")
+    code, out, err = council(capsys, repo, "--plan", *args)
+    assert code == 1 and out == "" and switch in err and "not supported" in err, err
+    code, out, err = council(capsys, repo, "--accept", *args, "--plan-id", earlier)
+    assert code == 1 and switch in err and "not supported" in err, err
+    assert list((tools / "log").iterdir()) == []
+
+
+def test_a_route_switch_is_trimmed_as_the_clients_javascript_trims_it(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = ("--base", "HEAD~1", "--reviewer", CLAUDE_REVIEWER)
+
+    def plan() -> tuple[int, str, str]:
+        return council(capsys, repo, "--plan", *args)
+
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "0")
+    off = _plan_id(plan()[1])
+    # JavaScript's trim() removes a byte-order mark, so the client reads "\ufeff1" as on.
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "\ufeff1\u3000")
+    code, out, err = plan()
+    assert code == 0, err
+    assert "CLAUDE_CODE_USE_BEDROCK on" in out and _plan_id(out) != off
+    # It keeps U+001C, which Python's strip() removes: the client reads "\x1c1" as off.
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "\x1c1")
+    code, out, err = plan()
+    assert "CLAUDE_CODE_USE_BEDROCK off" in out and _plan_id(out) == off
+    monkeypatch.delenv("CLAUDE_CODE_USE_BEDROCK")
+    monkeypatch.setenv("CLAUDE_CODE_USE_MANTLE", "\ufeff1")
+    code, out, err = plan()
+    assert code == 1 and out == "" and "CLAUDE_CODE_USE_MANTLE" in err, err
+    assert list((tools / "log").iterdir()) == []
+
+
+def test_an_endpoint_with_a_malformed_authority_is_refused_by_its_name_only(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = ("--base", "HEAD~1", "--reviewer", CODEX_REVIEWER)
+    for bad in (
+        "https://gw.example.test marker-not-real/v1",
+        "https://gw.example.test\\marker-not-real/v1",
+        "https://gw.example.test\\@marker-not-real.example.test/v1",
+        "https://gw.example.test\tmarker-not-real/v1",
+        "https://gw.example.test:+80/marker-not-real",
+        "https://gw.example.test%2Fmarker-not-real/v1",
+    ):
+        monkeypatch.setenv("OPENAI_BASE_URL", bad)
+        code, out, err = council(capsys, repo, "--plan", *args)
+        assert code == 1 and out == "" and err.startswith("COUNCIL_REFUSED: "), (bad, err)
+        assert "OPENAI_BASE_URL" in err, err
+        assert "marker-not-real" not in out + err and "gw.example.test" not in out + err, err
+    # A well-formed value is still shown by its scheme, host and port.
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://user@GW.example.test:8443/v1?q=marker-not-real")
+    code, out, err = council(capsys, repo, "--plan", *args)
+    assert code == 0, err
+    assert "OPENAI_BASE_URL=https://gw.example.test:8443 (only" in out
+    assert "marker-not-real" not in out
+    assert list((tools / "log").iterdir()) == []
+
+
+def _host_section() -> str:
+    text = (ROOT / "skills/review-council/SKILL.md").read_text(encoding="utf-8")
+    return text.split("## On a host that starts agents itself", 1)[1].split("\n## ", 1)[0]
+
+
+def _step(section: str, number: int) -> str:
+    """Step `number` of a numbered list, its lines joined by single spaces."""
+
+    return " ".join(section.split(f"\n{number}. ", 1)[1].split(f"\n{number + 1}. ", 1)[0].split())
+
+
+def test_the_host_route_reserves_a_fresh_folder_for_each_run_before_any_thread() -> None:
+    host = _host_section()
+    # A new folder for each run, made so that one another run made is refused, and named for
+    # every answer and review path of the run; never the engine's own run folder.
+    reserve = _step(host, 4)
+    assert "SHORT-host-STAMP/` with `mkdir`, never `mkdir -p`" in reserve
+    assert "before you start any thread" in reserve
+    assert ".agents/work/council/SHORT/" not in host
+    assert "FOLDER/TAG-host.md" in host
+
+
+def test_the_host_consent_step_shows_each_seats_model_and_effort_beside_its_instance() -> None:
+    consent = _step(_host_section(), 3)
+    assert "its model and effort as the listing resolved them" in consent
+    assert "host provider instance" in consent and "billing mode" in consent
+
+
+def test_of_two_filings_of_one_review_file_exactly_one_succeeds(
+    tools: Path, repo: Path, person: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    folder = repo / ".agents/work/council/x"
+    folder.mkdir(parents=True)
+    review = folder / "r1-host.md"
+    answers = {"a": GOOD, "b": CLEAN}
+    for name, text in answers.items():
+        (folder / f"r1-{name}.answer").write_text(text, encoding="utf-8")
+    # Both filings pass every check before either writes: they meet just before the write.
+    meet = threading.Barrier(2, timeout=30)
+    real_mkdir = Path.mkdir
+
+    def mkdir(self: Path, mode: int = 0o777, parents: bool = False, exist_ok: bool = False) -> None:
+        if self == folder:
+            meet.wait()
+        real_mkdir(self, mode, parents, exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", mkdir)
+    results: dict[str, str] = {}
+
+    def file(name: str) -> None:
+        options = review_council._parser().parse_args(
+            [
+                "--root",
+                str(repo),
+                "--file-answer",
+                str(folder / f"r1-{name}.answer"),
+                "--revision",
+                "HEAD",
+                "--seat",
+                "r1 cursor:neon-x",
+                "--out",
+                str(review),
+            ]
+        )
+        try:
+            results[name] = review_council.file_answer(options)
+        except Exception as error:  # the test reports what each writer met
+            results[name] = f"refused: {error}"
+
+    threads = [threading.Thread(target=file, args=(name,)) for name in answers]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=60)
+    assert not any(thread.is_alive() for thread in threads)
+    filed = [name for name, said in results.items() if said.startswith("filed ")]
+    assert len(filed) == 1, results
+    (other,) = set(answers) - set(filed)
+    assert "exists" in results[other] and "never replaced" in results[other], results
+    text = review.read_text(encoding="utf-8")
+    assert ("### r1-1 · " in text) == (filed == ["a"]) and ("Nothing found." in text) == (
+        filed == ["b"]
+    ), text
+
+
+def test_filing_refuses_what_the_review_record_would_reject(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = repo / ".agents/work/council/x"
+    folder.mkdir(parents=True)
+    raw, review = folder / "r1.answer", folder / "r1-host.md"
+    cite = "src/app.py:2 is wrong.\n"
+    for text, why in (
+        # The refusal line escapes the middle dot, so the reasons are matched before it.
+        (f"Verdict: PASS\n\n### Wrong sum\n{cite}", '"### Wrong sum" is one `review check`'),
+        (f"Verdict: PASS\n\n- ### r1-1 · In a list\n{cite}", "refuses: not `### <id> "),
+        (f"Verdict: FAIL\n\n### r1-1 · One\n{cite}\n### R1-1 · Two\n{cite}", "used twice"),
+        (f"Verdict: FAIL\n\n### r2-1 · Another seat's\n{cite}", "r2-1 is not in the form"),
+        (f"Verdict: FAIL\n\n### r1-0 · Numbered from 0\n{cite}", "`### r1-<number> "),
+    ):
+        raw.write_text(text, encoding="utf-8")
+        code, _, err = council(
+            capsys,
+            repo,
+            "--file-answer",
+            str(raw),
+            "--revision",
+            "HEAD",
+            "--seat",
+            "r1 cursor:neon-x",
+            "--out",
+            str(review),
+            pair=False,
+        )
+        assert code == 1 and why in err and not review.exists(), (text, err)
+    # A seat that does not start with the tag the listing gave is refused.
+    raw.write_text(GOOD, encoding="utf-8")
+    code, _, err = council(
+        capsys,
+        repo,
+        "--file-answer",
+        str(raw),
+        "--revision",
+        "HEAD",
+        "--seat",
+        "cursor:neon-x",
+        "--out",
+        str(review),
+        pair=False,
+    )
+    assert code == 1 and "--seat" in err and not review.exists(), err
+
+
+def test_filing_refuses_a_review_the_sweep_would_not_read(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = repo / ".agents/work/council/x"
+    folder.mkdir(parents=True)
+    raw, review = folder / "r1.answer", folder / "r1-host.md"
+    raw.write_text("Verdict: PASS\n\n" + ("x" * 99 + "\n") * 10500, encoding="utf-8")
+    code, _, err = council(
+        capsys,
+        repo,
+        "--file-answer",
+        str(raw),
+        "--revision",
+        "HEAD",
+        "--seat",
+        "r1 cursor:neon-x",
+        "--out",
+        str(review),
+        pair=False,
+    )
+    assert code == 1 and not review.exists(), err
+    assert f"{review_check.SWEEP_BYTES} bytes" in err and "review sweep" in err, err
+
+
+def test_on_windows_the_argument_limit_measures_the_path_that_is_launched(
+    tools: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    table = review_council.load_table()
+    request = review_council.gather(repo, range_spec=None, base="HEAD~1", files=[], lens="x")
+    reviewer = review_council.parse_reviewer("opencode:p/m", 1, table)
+    out = tools / "run"
+    out.mkdir()
+    [job] = review_council.plan_jobs(request, [reviewer], table, out=out, timeout=None, budget=None)
+    monkeypatch.setattr(review_council, "PLATFORM", "win32")
+    job.program = r"C:\b\opencode.cmd"  # the name found on PATH
+    job.executable = r"C:\tools\npm\node_modules\opencode-ai\bin\opencode.cmd"
+    prompt = review_council.build_prompt(request, reviewer)
+    row = review_council.input_limit(job.spec, job.executable)
+    assert row and row["measure"] == "command line"
+    at = review_council.measured(row, job, job.program, prompt)
+    # The limit holds the command line with the name found, and not the one Windows starts.
+    job.spec = {**job.spec, "max_prompt": [{**row, "limit": at}]}
+    over = review_council.over_limit(request, [job])
+    assert len(over) == 1 and f"over the limit of {at} utf-16" in over[0], over
+    job.stdin.write_bytes(prompt.encode("utf-8"))
+    outcome = review_council.run_job(job)
+    assert outcome.status == "failed" and outcome.detail.startswith("not started:"), outcome
+    assert list((tools / "log").iterdir()) == []
+    # Where the two are one path, the same prompt is within the limit.
+    job.executable = job.program
+    assert review_council.over_limit(request, [job]) == []
+    # Elsewhere the launch keeps the name found, and so does the measure.
+    monkeypatch.setattr(review_council, "PLATFORM", "linux")
+    job.program, job.executable = "/usr/bin/opencode", "/opt/opencode/bin/opencode-real"
+    assert review_council.delivered(job, review_council.launched(job), "p")[0] == job.program
+
+
+def test_defaults_lists_the_councils_beside_a_refused_default_reviewer(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_config(person / ".outcomebound/council.json", councils={"pair": TRIO[:2]})
+    _write_config(repo / ".outcomebound/council.json", reviewers=["cursor:neon-x:high"])
+    code, out, err = council(capsys, repo, "--defaults", pair=False)
+    assert code == 1
+    assert "  council pair: codex:m-a:high, claude:m-b:low" in out
+    assert _line(out, "reviewers:").startswith("reviewers: refused: ")
+    assert "the harness cursor takes no effort part" in _line(out, "reviewers:")
+    assert err.startswith("COUNCIL_REFUSED: ") and "the harness cursor takes no effort part" in err
+
+
+@pytest.mark.parametrize("option", [("--revision", "no-such-ref"), ("--seat", "r1 other")])
+@pytest.mark.parametrize("mode", [("--plan", "--base", "HEAD~1"), ("--defaults",)])
+def test_a_filing_option_outside_file_answer_is_refused(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    option: tuple[str, str],
+    mode: tuple[str, ...],
+) -> None:
+    code, out, err = council(capsys, repo, *mode, *option)
+    assert code == 1 and out == "", out
+    assert err.startswith("COUNCIL_REFUSED: ") and f"{option[0]} goes with --file-answer" in err

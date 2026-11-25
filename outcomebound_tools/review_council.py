@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import hashlib
+import ipaddress
 import json
 import os
 import re
@@ -585,6 +586,15 @@ def measure(text: str, unit: str) -> int:
     return len(text.encode("utf-8"))
 
 
+def launched(job: Job) -> str:
+    """The program name a launch puts first, which a limit is chosen for and measured with: on
+    Windows, which takes no other name, the file the plan resolved; elsewhere the name found on
+    PATH, which the launch keeps."""
+
+    found = job.program or job.spec["binary"]
+    return (job.executable or found) if PLATFORM.startswith("win") else found
+
+
 def delivered(job: Job, program: str, prompt: str) -> list[str]:
     """The argv that starts the reviewer, with the prompt as its last argument where the harness
     takes it so."""
@@ -635,7 +645,7 @@ def over_limit(request: Request, jobs: Sequence[Job]) -> list[str]:
 
     over = []
     for job in jobs:
-        program = job.program or job.spec["binary"]
+        program = launched(job)
         limit = input_limit(job.spec, program)
         if limit is None:
             continue
@@ -734,32 +744,59 @@ def plan_jobs(
     return jobs
 
 
-def _switch(value: str | None, on: Sequence[str]) -> bool:
-    """A route switch as the tool reads it: on where its value, trimmed and in lower case, is
-    one of `on`."""
+# The characters JavaScript's String.prototype.trim() removes (ECMAScript WhiteSpace and
+# LineTerminator): Python's str.strip() also removes U+001C to U+001F and U+0085, and keeps U+FEFF.
+_JS_SPACE = "".join(
+    map(chr, [0x9, 0xA, 0xB, 0xC, 0xD, 0x20, 0xA0, 0x1680, *range(0x2000, 0x200B), 0x2028, 0x2029])
+) + "".join(map(chr, [0x202F, 0x205F, 0x3000, 0xFEFF]))
 
-    return (value or "").strip().lower() in on
+
+def _switch(value: str | None, on: Sequence[str]) -> bool:
+    """A route switch as the tool reads it: on where its value, in lower case and trimmed as
+    JavaScript trims, is one of `on`."""
+
+    return (value or "").lower().strip(_JS_SPACE) in on
+
+
+# An endpoint's host and port: a name of letters, digits, `.`, `_`, `~` and `-`, or an IPv6
+# address in brackets; then an optional port of ASCII digits.
+_AUTHORITY = re.compile(
+    r"(?:\[(?P<v6>[0-9A-Fa-f:.]+)\]|(?P<name>[A-Za-z0-9._~-]+))(?::(?P<port>[0-9]{0,5}))?"
+)
 
 
 def _endpoint(name: str, value: str) -> tuple[str, str]:
     """An endpoint as the plan shows it, its scheme, host and port only, and a digest of its
-    whole value, which the plan id binds; a value that is not a URL with a scheme and a host is
+    whole value, which the plan id binds; a value that is not a URL with a scheme and a
+    well-formed host and port (no space or control character in it, no backslash in its
+    authority, no percent sign in its host) is
     a refusal that names the variable and never shows the value, which may hold a credential."""
 
-    try:
-        parts = urllib.parse.urlsplit(value)
-        host, port = parts.hostname, parts.port
-    except ValueError:
-        host = port = None
-        parts = None
-    if parts is None or not parts.scheme or not host:
+    found, scheme = None, ""
+    if not any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in value):
+        try:
+            parts = urllib.parse.urlsplit(value)
+        except ValueError:
+            parts = None
+        # A backslash ends the authority for a WHATWG parser and not for this one, so the two
+        # would read different hosts: it is refused anywhere in the authority.
+        if parts is not None and parts.scheme and "\\" not in parts.netloc:
+            scheme = parts.scheme
+            found = _AUTHORITY.fullmatch(parts.netloc.rpartition("@")[2])
+    port = found.group("port") if found else None
+    if found and found.group("v6"):
+        try:
+            ipaddress.IPv6Address(found.group("v6"))
+        except ValueError:
+            found = None
+    if found is None or (port and int(port) > 65535):
         raise CouncilError(
             f"the endpoint {name} is not a URL with a scheme and a host, or its port is not a "
             "number up to 65535 (its value is not shown, since it may hold a credential); "
             "correct it or unset it"
         )
-    host = f"[{host}]" if ":" in host else host
-    shown = textio.visible(f"{parts.scheme}://{host}" + (f":{port}" if port is not None else ""))
+    host = f"[{found.group('v6')}]" if found.group("v6") else found.group("name")
+    shown = f"{scheme}://{host.lower()}" + (f":{int(port)}" if port else "")
     return shown, hashlib.sha256(value.encode("utf-8", "surrogateescape")).hexdigest()
 
 
@@ -937,7 +974,7 @@ def render_plan(
                 )
             )
         prompt = build_prompt(request, reviewer)
-        program = found or spec["binary"]
+        program = launched(job)
         limit = input_limit(spec, program)
         lines.append(
             f"  prompt: {measure(prompt, 'characters')} characters, "
@@ -1138,10 +1175,10 @@ def run_job(job: Job) -> Outcome:
     found = job.program
     if found is None:
         return done("failed", f"{job.spec['binary']} was not on PATH when the plan was made")
-    limit = input_limit(job.spec, found)
+    limit = input_limit(job.spec, launched(job))
     if limit:
         # The prompt as the reviewer receives it, on standard input or as an argument.
-        size_now = measured(limit, job, found, job.stdin.read_bytes().decode("utf-8"))
+        size_now = measured(limit, job, launched(job), job.stdin.read_bytes().decode("utf-8"))
         if size_now > limit["limit"]:
             return done(
                 "failed",
@@ -1156,10 +1193,12 @@ def run_job(job: Job) -> Outcome:
     return _filed(job, text, cost, done)
 
 
-def check_answer(text: str) -> tuple[str, str, int, int]:
+def check_answer(text: str, tag: str | None = None) -> tuple[str, str, int, int]:
     """An answer in the answer form: its verdict, its text without the `Reviewed:` and
     `Disposition:` lines a reviewer wrote outside a code fence, how many findings `review check`
-    reads in it, and how many lines were left out; else a refusal that says what is wrong."""
+    reads in it, and how many lines were left out; else a refusal that says what is wrong: also
+    a `###` heading `review check` reads as malformed, an id used twice, and, with `tag`, an id
+    that is not `<tag>-<number>` with the number from 1."""
 
     first = next((line.strip() for line in text.splitlines() if line.strip()), "")
     verdict = _VERDICT.fullmatch(first.strip("`*# "))
@@ -1172,6 +1211,23 @@ def check_answer(text: str) -> tuple[str, str, int, int]:
             "its verdict is FAIL and it names no finding in the form "
             "(`### <tag>-<number> · <short title>`)"
         )
+    _, entries, malformed = review_check._parse(body)
+    if malformed:
+        line = body.splitlines()[malformed[0] - 1]
+        raise CouncilError(
+            f"its heading {textio.quote(line.strip(), 80)} is one `review check` refuses: "
+            "not `### <id> · <title>`"
+        )
+    seen: set[str] = set()
+    for entry in entries:
+        if entry.id.casefold() in seen:
+            raise CouncilError(f"the finding id {entry.id} is used twice")
+        seen.add(entry.id.casefold())
+        if tag is not None and not re.fullmatch(re.escape(tag) + r"-[1-9][0-9]*", entry.id):
+            raise CouncilError(
+                f"the finding id {entry.id} is not in the form the listing gave this seat, "
+                f"`### {tag}-<number> · <short title>`, with the number from 1"
+            )
     return named, body, count, dropped
 
 
@@ -1473,8 +1529,8 @@ def _labels(entries: Sequence[str], where: Path | None, table: dict[str, Any]) -
 def render_defaults(table: dict[str, Any], root: Path) -> tuple[str, list[str]]:
     """The built-in default council, the council file in effect for `root`, and the councils
     and homes of the person's own file, each seat resolved as `--plan` resolves it; and the
-    refusals. A council with a seat `--plan` refuses is listed with its reason, and the other
-    councils are still listed."""
+    refusals. A reviewers list or a council with a seat `--plan` refuses is listed with its
+    reason, and the councils are still listed."""
 
     config = load_config(_toplevel(root))
     refused: list[str] = []
@@ -1484,7 +1540,13 @@ def render_defaults(table: dict[str, Any], root: Path) -> tuple[str, list[str]]:
     else:
         lines.append(f"council file in effect: {config.place}")
         if "reviewers" in config.data:
-            lines.append("  reviewers: " + _labels(config.data["reviewers"], config.place, table))
+            try:
+                labels = _labels(config.data["reviewers"], config.place, table)
+            except CouncilError as error:
+                lines.append(f"  reviewers: refused: {error}")
+                refused.append(str(error))
+            else:
+                lines.append(f"  reviewers: {labels}")
     if config.person_data is None:
         lines.append(f"the person's council file: none at {config.person}")
     else:
@@ -1557,11 +1619,19 @@ def render_seats(options: argparse.Namespace, table: dict[str, Any]) -> str:
 def file_answer(options: argparse.Namespace) -> str:
     """`--file-answer`: the answer of a seat a host ran, checked as `check_answer` checks a
     reviewer's, written to the review file `--out` with the engine's `Reviewed:` line of
-    `--revision` resolved to a commit; a refused answer stays where it is and nothing is
-    written. No citation is checked: the host's thread read the work tree, not a snapshot."""
+    `--revision` resolved to a commit, each finding id the seat's tag and a number as the listing
+    promised; a refused answer stays where it is and nothing is written. The file is created only
+    where none is, and only at a size `review sweep` reads. No citation is checked: the host's
+    thread read the work tree, not a snapshot."""
 
     if not (options.revision and options.seat and options.out):
         raise CouncilError("--file-answer needs --revision REF, --seat TEXT and --out FILE")
+    tag = (options.seat.split() or [""])[0]
+    if not re.fullmatch(r"r[1-9][0-9]*", tag):
+        raise CouncilError(
+            "--seat starts with the seat's tag as the listing named it (for example \"r1 "
+            'codex:MODEL:EFFORT")'
+        )
     raw, review = Path(options.file_answer), Path(options.out)
     if raw.suffix == ".md" or review.suffix != ".md":
         raise CouncilError(
@@ -1570,7 +1640,7 @@ def file_answer(options: argparse.Namespace) -> str:
         )
     commit = _commit(_toplevel(Path(options.root)), options.revision)
     try:
-        verdict, body, count, dropped = check_answer(textio.read_text(raw))
+        verdict, body, count, dropped = check_answer(textio.read_text(raw), tag)
     except CouncilError as error:
         raise CouncilError(
             f"the answer {raw} is not filed: {error}; it stays where it is, outside the review "
@@ -1593,8 +1663,20 @@ def file_answer(options: argparse.Namespace) -> str:
             else []
         ),
     ]
+    data = ("\n".join(head) + "\n\n" + body).encode("utf-8")
+    if len(data) > review_check.SWEEP_BYTES:
+        raise CouncilError(
+            f"the review file would be {len(data)} bytes, over the limit of "
+            f"{review_check.SWEEP_BYTES} bytes of a file `review sweep` reads, so the answer "
+            f"{raw} is not filed; it stays where it is, and no review file was written"
+        )
     review.parent.mkdir(parents=True, exist_ok=True)
-    review.write_text("\n".join(head) + "\n\n" + body, encoding="utf-8")
+    try:
+        handle = review.open("xb")  # created only where no file is: never a replacement
+    except FileExistsError as error:
+        raise CouncilError(f"the review file {review} exists; it is never replaced") from error
+    with handle:
+        handle.write(data)
     return f"filed {review}: verdict {verdict}, {count} finding(s), at revision {commit}\n"
 
 
@@ -1701,8 +1783,8 @@ def _file_warning(request: Request, chosen: dict[str, Any]) -> str:
 
 
 def _defaults(options: argparse.Namespace, table: dict[str, Any]) -> int:
-    """`--defaults`: the listing, or the seats of `--council NAME`; 1 where a council of the
-    listing is refused, each refusal on standard error."""
+    """`--defaults`: the listing, or the seats of `--council NAME`; 1 where the file's reviewers
+    or a council of the listing is refused, each refusal on standard error."""
 
     if options.council is not None:
         sys.stdout.write(render_seats(options, table))
@@ -1714,11 +1796,20 @@ def _defaults(options: argparse.Namespace, table: dict[str, Any]) -> int:
     return 1 if refused else 0
 
 
+def _placed(options: argparse.Namespace) -> None:
+    """A refusal for an option given outside the mode it goes with."""
+
+    if options.host and not (options.defaults and options.council is not None):
+        raise CouncilError("--host goes with --defaults --council NAME")
+    for flag, value in (("--revision", options.revision), ("--seat", options.seat)):
+        if value is not None and options.file_answer is None:
+            raise CouncilError(f"{flag} goes with --file-answer")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(argv)
     try:
-        if options.host and not (options.defaults and options.council is not None):
-            raise CouncilError("--host goes with --defaults --council NAME")
+        _placed(options)
         if options.file_answer is not None:
             sys.stdout.write(file_answer(options))
             return 0

@@ -199,15 +199,17 @@
           "on": ["1", "true", "yes", "on"],
           "shown": [
             "CLAUDE_CODE_USE_BEDROCK",
-            "CLAUDE_CODE_USE_VERTEX",
-            "CLAUDE_CODE_USE_FOUNDRY"
+            "CLAUDE_CODE_USE_VERTEX"
           ],
           "refused": [
             "CLAUDE_CODE_USE_ANTHROPIC_AWS",
             "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
-            "CLAUDE_CODE_USE_MANTLE"
+            "CLAUDE_CODE_USE_MANTLE",
+            "CLAUDE_CODE_USE_FOUNDRY",
+            "CLAUDE_CODE_USE_GATEWAY"
           ],
-          "source": "the installed Claude Code 2.1.332 (read 2026-11-26) reads each of these switches as on where its value, trimmed and in lower case, is 1, true, yes or on, and else as off, and lists the six together as the cloud routes; which account or cloud each one bills is UNVERIFIED"
+          "refused_why": "in the installed Claude Code 2.1.332 (read 2026-11-26), Foundry sends to ANTHROPIC_FOUNDRY_BASE_URL, else to https://<ANTHROPIC_FOUNDRY_RESOURCE>.services.ai.azure.com, and gateway mode selects gateway authentication; the plan shows and binds neither, so both are refused until it does",
+          "source": "the installed Claude Code 2.1.332 (read 2026-11-26) reads each switch of `shown` and of `refused` as on where its value, in lower case and trimmed by JavaScript's trim() (which also removes U+FEFF), is 1, true, yes or on, and else as off, and lists those six together as the cloud routes; it reads CLAUDE_CODE_USE_GATEWAY, the switch of gateway mode, with the same reader (its `L.bool()`); which account or cloud each switch bills is UNVERIFIED"
         },
         "values": [
           "ANTHROPIC_BASE_URL",
