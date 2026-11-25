@@ -435,7 +435,11 @@ def parse_floor(value: object) -> Floor:
 def load_floor(root: Path) -> Floor:
     data = fileplan.current(root, FLOOR_PATH)
     if data is None:
-        raise FloorError(f"{FLOOR_PATH} is absent; `outcomebound floor propose` prints one")
+        raise FloorError(
+            f"no floor checks ran: {FLOOR_PATH} is absent. `outcomebound floor propose TARGET` "
+            "prints a proposal, and `outcomebound floor apply TARGET --floor FILE` previews it; "
+            "add --accept to write it"
+        )
     try:
         value = json.loads(data)
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
