@@ -64,24 +64,30 @@ folder first; a council named only elsewhere is not one the host route runs.
 2. Resolve the revision to a commit (`git rev-parse --verify REV^{commit}`), and use that commit,
    not a branch name, from here on.
 3. Before you ask for the yes, show the person: the commit; the range or the files; the lens; for
-   each seat, the exact host provider instance that will run it and its billing mode where you
-   know it (else say it is not known); the timeout and cap asked for; and which of these controls
-   the host enforces: on host threads, none. No spend cap, timeout or read-only mode holds except
+   each seat, its model and effort as the listing resolved them, beside the exact host provider
+   instance that will run it and its billing mode where you know it (else say it is not known);
+   the timeout and cap asked for; and which of these controls the host enforces: on host threads,
+   none. No spend cap, timeout or read-only mode holds except
    by the brief, and no snapshot hides the revision's instruction files: the run is "read-only by
    brief, not enforced". Where the person asked for subscription use only, a seat runs only on an
    instance you checked bills their subscription. Start no thread without a plain yes to this.
-4. Start one thread for each seat, on exactly the instance you showed, with the seat's model and
-   effort. Each brief names the commit, the range or the files, and the lens; says that the
-   reviewer reads and changes nothing; gives the answer form the listing printed, with the seat's
-   tag; and names the one answer file it writes, `TAG.answer` in
-   `.agents/work/council/SHORT/` of the main checkout, where SHORT is the output of
-   `git rev-parse --short=12 COMMIT`, the folder name an engine run uses.
-5. File each answer with `outcomebound review council --file-answer FILE --revision COMMIT --seat
-   "TAG SEAT" --out FOLDER/TAG-host.md`, where FOLDER is that folder. It files an answer only in the
-   answer form: a first line of `Verdict: FAIL`, `Verdict: UNVERIFIED` or `Verdict: PASS`, and for
-   a `FAIL` at least one finding heading in the form the listing printed. It removes the `Disposition:` and
-   `Reviewed:` lines the reviewer wrote outside code fences, and puts the engine's `Reviewed:` line
-   first. A refused answer stays where it is, outside the review record: report that seat to the
+4. Reserve this run's folder before you start any thread: in the main checkout, make
+   `.agents/work/council/` with `mkdir -p` where it is not there yet, then make the new folder
+   `.agents/work/council/SHORT-host-STAMP/` with `mkdir`, never `mkdir -p`, so that a folder
+   another run made is refused. SHORT is the output of
+   `git rev-parse --short=12 COMMIT`, and STAMP is the time now, `date -u +%Y%m%dT%H%M%SZ`; where
+   `mkdir` refuses, take a new STAMP. That folder is FOLDER, this run's alone: two councils at one
+   commit never share an answer or a review file, and `review sweep` reads it. Then start one
+   thread for each seat, on exactly the instance you showed, with the seat's model and effort.
+   Each brief names the commit, the range or the files, and the lens; says that the reviewer reads
+   and changes nothing; gives the answer form the listing printed, with the seat's tag; and names
+   the one answer file it writes, `FOLDER/TAG.answer`.
+5. File each answer with `outcomebound review council --file-answer FOLDER/TAG.answer --revision
+   COMMIT --seat "TAG SEAT" --out FOLDER/TAG-host.md`. It files an answer only in the answer form:
+   a first line of `Verdict: FAIL`, `Verdict: UNVERIFIED` or `Verdict: PASS`, and for a `FAIL` at
+   least one finding heading; each finding heading in the form the listing printed for that seat,
+   each id once. It removes the `Disposition:` and `Reviewed:` lines the reviewer wrote outside
+   code fences, and puts the engine's `Reviewed:` line first. A refused answer stays where it is, outside the review record: report that seat to the
    person as a failed review, by name. On host threads no citation was checked.
 
 ## Merge and dispose
