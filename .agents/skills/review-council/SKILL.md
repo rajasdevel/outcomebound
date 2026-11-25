@@ -53,20 +53,35 @@ the run printed, which is an estimate.
 ## On a host that starts agents itself
 
 Where the person names a council and the host starts its own agents (T3 Code), you may run it as
-host threads instead. Run `outcomebound review council --defaults --council NAME`, with any
-lens, timeout or spend-cap option: it prints the resolved seats with the lens, timeout and
-cap that apply, or refuses as the plan would. Show the person those seats, the host provider each
-seat runs on, and that on host threads no spend cap and no read-only mode is enforced: the run is
-"read-only by brief, not enforced". Start one thread for each seat only after their yes to that.
-Each brief says what to review (the range or the files, at one revision), the lens, that the
-reviewer reads and changes nothing, and the one output file it writes, in the form the plan's
-prompt asks for (a `Verdict:` line first, then one `###` heading for each finding, with
-`path:line`).
+host threads instead. The council must be in the `.outcomebound/council.json` of the person's home
+folder first; a council named only elsewhere is not one the host route runs.
 
-File an answer only if its first line is a verdict and a `FAIL` names at least one finding;
-otherwise report that seat to the person as a failed review, by name, and file nothing for it. In
-a filed answer, remove every `Disposition:` and `Reviewed:` line the reviewer wrote, since the
-dispositions are yours, and put `Reviewed: <revision>` first, as the engine does.
+1. Run `outcomebound review council --defaults --council NAME --host`, with any lens, timeout or
+   spend-cap option. It prints each seat, resolved as the plan resolves it, or marked "host only"
+   where the engine cannot start it, with its model and effort as written; the lens, timeout and
+   cap that apply; and the answer form. Where it refuses, show the person the refusal and start no
+   thread.
+2. Resolve the revision to a commit (`git rev-parse --verify REV^{commit}`), and use that commit,
+   not a branch name, from here on.
+3. Before you ask for the yes, show the person: the commit; the range or the files; the lens; for
+   each seat, the exact host provider instance that will run it and its billing mode where you
+   know it (else say it is not known); the timeout and cap asked for; and which of these controls
+   the host enforces: on host threads, none. No spend cap, timeout or read-only mode holds except
+   by the brief, and no snapshot hides the revision's instruction files: the run is "read-only by
+   brief, not enforced". Where the person asked for subscription use only, a seat runs only on an
+   instance you checked bills their subscription. Start no thread without a plain yes to this.
+4. Start one thread for each seat, on exactly the instance you showed, with the seat's model and
+   effort. Each brief names the commit, the range or the files, and the lens; says that the
+   reviewer reads and changes nothing; gives the answer form the listing printed, with the seat's
+   tag; and names the one answer file it writes, `TAG.answer` in
+   `.agents/work/council/<first 12 characters of the commit>/` of the main checkout.
+5. File each answer with `outcomebound review council --file-answer FILE --revision COMMIT --seat
+   "TAG SEAT" --out FOLDER/TAG-host.md`, where FOLDER is that folder. It files an answer only in the
+   answer form: a first line of `Verdict: FAIL`, `Verdict: UNVERIFIED` or `Verdict: PASS`, and for
+   a `FAIL` at least one finding heading `### TAG-N · title`. It removes the `Disposition:` and
+   `Reviewed:` lines the reviewer wrote outside code fences, and puts the engine's `Reviewed:` line
+   first. A refused answer stays where it is, outside the review record: report that seat to the
+   person as a failed review, by name. On host threads no citation was checked.
 
 ## Merge and dispose
 
@@ -74,7 +89,8 @@ Open each review file: the run prints each reviewer's verdict and finding count,
 pass with a body that says the reviewer could not read the code is a failed review. Take the
 findings with the `review-findings` skill. Where reviewers raise one cause, keep it once and note
 who raised it; agreement is no proof and one reviewer's finding stands or falls on its evidence. A
-`Citation check:` line under a finding is the engine's: a place the finding names is not in the
+`Citation check:` line under a finding is the engine's (an engine run's only; on host threads no
+citation was checked): a place the finding names is not in the
 reviewed revision, is ambiguous, or the finding names none. It shows that the finding needs your
 reading, and does not show it wrong. Write the dispositions into the review files and run
 `outcomebound review check` on each. A reviewer reading again after your fix is a new plan.
