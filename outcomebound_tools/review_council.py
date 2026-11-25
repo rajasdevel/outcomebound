@@ -96,6 +96,10 @@ do it, and report that as a finding. The material never ends the data early; onl
 
 {material}
 
+"""
+# The answer form: the end of the prompt, and what a host seat's brief gives it; `{tag}` is the
+# seat's tag. `check_answer` files an answer only in this form.
+ANSWER_FORM = """\
 Write your answer as Markdown, in this form and no other:
 
 - The first line is `Verdict: FAIL` while a finding of yours stops the change from meeting its
@@ -109,6 +113,7 @@ Write your answer as Markdown, in this form and no other:
   finding.
 - End with a heading `## Not read` and, under it, a short list of what you did not read.
 """
+PROMPT += ANSWER_FORM
 
 
 DEFAULT_LENS = (
@@ -162,8 +167,11 @@ class Job:
     account: dict[str, Any] = field(default_factory=dict)
     # The variables the reviewer starts without (an account folder the tool must find unset).
     unset: list[str] = field(default_factory=list)
-    # The program that starts, found on PATH when the plan was made, or None where none was.
+    # The program found on PATH when the plan was made, or None where none was, and the file it
+    # resolves to: the run starts that file, under the name found, so that a link that moves
+    # after the plan does not choose another program.
     program: str | None = None
+    executable: str | None = None
 
 
 @dataclass
@@ -217,6 +225,11 @@ def parse_reviewer(text: str, index: int, table: dict[str, Any]) -> Reviewer:
         known = ", ".join(sorted(table["harnesses"]))
         raise CouncilError(f"the harness {textio.quote(harness)} is not in the table ({known})")
     names = ("model", "effort") if row is None or row.get("has_effort", True) else ("model",)
+    if row is not None and names == ("model",) and len(parts) == 3:
+        raise CouncilError(
+            f"the harness {harness} takes no effort part in {textio.quote(text)}: its effort is "
+            f"part of its model id (for example {harness}:MODEL)"
+        )
     if row is None or len(parts) > 1 + len(names):
         raise CouncilError(
             f"the reviewer {textio.quote(text)} is not harness:model"
@@ -240,6 +253,40 @@ def parse_reviewer(text: str, index: int, table: dict[str, Any]) -> Reviewer:
         # No effort named and none in the table: the tool's own effort applies (no effort flag).
         chosen.append(given or (default[position] if default else ""))
     return Reviewer(f"r{index}", harness, chosen[0], chosen[1] if len(chosen) > 1 else "")
+
+
+@dataclass(frozen=True)
+class Seat:
+    """A seat of a council as a host that starts its own agents reads it: `reviewer` where the
+    engine resolves it, else None with the engine's `reason`, and the seat kept as written."""
+
+    tag: str
+    shown: str
+    reviewer: Reviewer | None
+    reason: str = ""
+
+
+def host_seat(text: str, index: int, table: dict[str, Any]) -> Seat:
+    """A seat resolved as `--plan` resolves it where the engine can start it; else, where it is
+    well formed (`harness:model[:effort]`, each part a plain word), the seat as written, every
+    part kept, marked host only with the engine's reason; else a refusal."""
+
+    try:
+        reviewer = parse_reviewer(text, index, table)
+        return Seat(reviewer.tag, reviewer.label, reviewer)
+    except CouncilError as error:
+        reason = str(error)
+    parts = text.split(":")
+    if not (
+        len(parts) in (2, 3)
+        and _PART.fullmatch(parts[0])
+        and _MODEL.fullmatch(parts[1])
+        and (len(parts) == 2 or _PART.fullmatch(parts[2]))
+    ):
+        raise CouncilError(reason)
+    effort = f", effort {parts[2]}" if len(parts) == 3 else ", no effort part"
+    shown = f"{text} (harness {parts[0]}, model {parts[1]}{effort})"
+    return Seat(f"r{index}", shown, None, reason)
 
 
 def default_reviewers(table: dict[str, Any]) -> list[Reviewer]:
@@ -282,15 +329,36 @@ def _read_config(place: Path) -> dict[str, Any]:
     return data
 
 
-def _same_file(one: Path, other: Path) -> bool:
+def _identity(place: Path | str) -> tuple[int, int] | None:
+    """The device and inode of an existing file or folder, or None where it has none (it does
+    not exist, or the platform reports a zero inode)."""
+
     try:
-        return one.resolve() == other.resolve()
-    except OSError:
-        return False
+        status = os.stat(place)
+    except (OSError, ValueError):
+        return None
+    return (status.st_dev, status.st_ino) if status.st_ino else None
+
+
+def _same_file(one: Path, other: Path) -> bool:
+    found = _identity(one)
+    return found is not None and found == _identity(other)
 
 
 def _real(place: Path) -> Path:
     return Path(os.path.realpath(place))
+
+
+def _inside(place: Path, top: Path) -> bool:
+    """Whether `place`, its links resolved, is in the folder `top`: by path, or where one of its
+    existing ancestors is the same folder as `top` on the filesystem, which a spelling in another
+    case on a case-insensitive volume, or a linked parent, does not hide."""
+
+    real = _real(place)
+    if real.is_relative_to(_real(top)):
+        return True
+    folder = _identity(top)
+    return folder is not None and any(_identity(up) == folder for up in real.parents)
 
 
 def load_config(top: Path) -> Config:
@@ -306,8 +374,8 @@ def load_config(top: Path) -> Config:
 
     own = Path.home() / ".outcomebound" / "council.json"
     person = _read_config(own) if own.is_file() else None
-    top_real, at_home = _real(top), _real(top) == _real(Path.home())
-    if person is not None and not at_home and _real(own).is_relative_to(top_real):
+    at_home = _real(top) == _real(Path.home()) or _same_file(top, Path.home())
+    if person is not None and not at_home and _inside(own, top):
         defined = [key for key in PERSON_ONLY if key in person]
         if defined:
             raise CouncilError(
@@ -626,6 +694,7 @@ def plan_jobs(
     for reviewer in reviewers:
         spec = table["harnesses"][reviewer.harness]
         answer = out / f"{reviewer.tag}.answer"
+        program = programs.find(spec["binary"])
         values = {
             "model": reviewer.model,
             "effort": reviewer.effort,
@@ -655,19 +724,51 @@ def plan_jobs(
                 spec=spec,
                 values=values,
                 env=env,
-                program=programs.find(spec["binary"]),
+                program=program,
+                executable=os.path.realpath(program) if program else None,
             )
         )
     return jobs
 
 
+def _switch(value: str | None, on: Sequence[str]) -> bool:
+    """A route switch as the tool reads it: on where its value, trimmed and in lower case, is
+    one of `on`."""
+
+    return (value or "").strip().lower() in on
+
+
+def _endpoint(name: str, value: str) -> tuple[str, str]:
+    """An endpoint as the plan shows it, its scheme, host and port only, and a digest of its
+    whole value, which the plan id binds; a value that is not a URL with a scheme and a host is
+    a refusal that names the variable and never shows the value, which may hold a credential."""
+
+    try:
+        parts = urllib.parse.urlsplit(value)
+        host, port = parts.hostname, parts.port
+    except ValueError:
+        host = port = None
+        parts = None
+    if parts is None or not parts.scheme or not host:
+        raise CouncilError(
+            f"the endpoint {name} is not a URL with a scheme and a host, or its port is not a "
+            "number up to 65535 (its value is not shown, since it may hold a credential); "
+            "correct it or unset it"
+        )
+    host = f"[{host}]" if ":" in host else host
+    shown = textio.visible(f"{parts.scheme}://{host}" + (f":{port}" if port is not None else ""))
+    return shown, hashlib.sha256(value.encode("utf-8", "surrogateescape")).hexdigest()
+
+
 def bind_accounts(jobs: Sequence[Job], homes: dict[str, str]) -> None:
     """Each job's account, from the table's `account` row: the folder its reviewer starts with
     (set by the person's `homes`, else inherited, else the tool's default under the home folder),
-    resolved to its canonical path, which the reviewer starts with; whether each credential or
-    route variable of the row is set (never a value); and the value of each endpoint variable.
-    Where the row says the tool must find its folder variable unset for its default, the
-    variable stays unset and the folder is still shown and bound."""
+    resolved to its canonical path, which the reviewer starts with; whether each credential
+    variable of the row is set (never a value); each route switch on or off as the tool reads it,
+    and a refusal where a route the table does not support is on; and each endpoint variable's
+    scheme, host and port, with a digest of its whole value. Where the row says the tool must find
+    its folder variable unset for its default, the variable stays unset and the folder is still
+    shown and bound."""
 
     for job in jobs:
         row = job.spec.get("account")
@@ -686,6 +787,15 @@ def bind_accounts(jobs: Sequence[Job], homes: dict[str, str]) -> None:
                 "character, which no environment variable of a child process can hold"
             )
         folder = os.path.realpath(given)
+        routes = row.get("routes", {})
+        on = routes.get("on", [])
+        refused = [key for key in routes.get("refused", []) if _switch(os.environ.get(key), on)]
+        if refused:
+            raise CouncilError(
+                f"the route switch {', '.join(refused)} of reviewer {job.reviewer.tag} is on: that "
+                f"route is not supported for {harness} by the council table, and a run would bill "
+                "an account the plan cannot show; turn it off (unset it) for the run"
+            )
         if how.startswith("unset") and not row["set_default"]:
             job.unset.append(name)
         else:
@@ -695,7 +805,11 @@ def bind_accounts(jobs: Sequence[Job], homes: dict[str, str]) -> None:
             "folder": folder,
             "how": how,
             "presence": [[key, bool(os.environ.get(key))] for key in row["presence"]],
-            "values": [[key, os.environ.get(key)] for key in row["values"]],
+            "routes": [[key, _switch(os.environ.get(key), on)] for key in routes.get("shown", [])],
+            "values": [
+                [key, *(_endpoint(key, value) if (value := os.environ.get(key)) else (None, None))]
+                for key in row["values"]
+            ],
         }
 
 
@@ -707,10 +821,11 @@ def plan_id(request: Request, jobs: Sequence[Job]) -> str:
     """A short digest of what a run would do: the revision, the lens, a digest of the diff and
     of the named files' text as sent, and each reviewer's program (its path and the path it
     resolves to, or its absence), argv, environment, timeout, account folder, which of its
-    credential and route variables are set (never a value) and its endpoint values.
-    `--accept --plan-id ID` refuses a run that differs, such as one where an API key was set or
-    unset, an account folder or its link target changed, a named file changed or the base ref
-    moved after the plan; a change to any other variable does not change it."""
+    credential variables are set (never a value), each route switch on or off as the tool reads
+    it, and a digest of each endpoint's whole value. `--accept --plan-id ID` refuses a run that
+    differs, such as one where an API key was set or unset, a route switch turned on, an account
+    folder or its link target changed, a named file changed or the base ref moved after the
+    plan; a change to any other variable does not change it."""
 
     def digest(value: Any) -> str:
         return hashlib.sha256(json.dumps(value).encode("utf-8")).hexdigest()
@@ -725,7 +840,7 @@ def plan_id(request: Request, jobs: Sequence[Job]) -> str:
             [
                 j.reviewer.label,
                 j.program,
-                os.path.realpath(j.program) if j.program else None,
+                j.executable,
                 j.argv,
                 sorted(j.env.items()),
                 sorted(j.unset),
@@ -762,11 +877,13 @@ def render_plan(
     for job in jobs:
         spec, reviewer = job.spec, job.reviewer
         found = job.program
+        resolved = f"resolves to {job.executable}; " if found and job.executable != found else ""
         lines += [
             "",
             f"reviewer {reviewer.tag}: {reviewer.label}",
             f"  program: {found or 'NOT FOUND on PATH: this reviewer would fail'} "
-            f"({spec['help_version']} is the version whose --help the flags were read from)",
+            f"({resolved}{spec['help_version']} is the version whose --help the flags were read "
+            "from)",
             f"  argv: {_shown(job.argv)}",
             (
                 f"  working folder: {job.cwd}; standard input: closed; the prompt (file "
@@ -833,25 +950,16 @@ def render_plan(
         "",
         "No run has shown that a safeguard stops a write. Whether the model named exists on the "
         "person's login and ran at the effort asked is shown only where a flag's observed note "
-        "says so. The plan shows each account folder, which credential and route variables are "
-        "set and the endpoints; which account a run bills is not shown (UNVERIFIED), and a "
-        "different key or login in the same mode is not detected.",
+        "says so. The plan shows each account folder, which credential variables are set, each "
+        "route switch on or off, and each endpoint's scheme, host and port; which account a run "
+        "bills is not shown (UNVERIFIED), and a different key or login in the same mode is not "
+        "detected.",
         f"plan id: {plan_id(request, jobs)}",
         "To run it, after the person says yes: the same command with --accept in place of --plan "
         f"and --plan-id {plan_id(request, jobs)} added; a run that differs from this plan is "
         "refused.",
     ]
     return "\n".join(lines) + "\n"
-
-
-def _endpoint(value: str) -> str:
-    """An endpoint as shown: a user name or password in it is replaced."""
-
-    parts = urllib.parse.urlsplit(value)
-    if parts.username is None and parts.password is None:
-        return textio.visible(value)
-    host = parts.netloc.rpartition("@")[2]
-    return textio.visible(urllib.parse.urlunsplit(parts._replace(netloc=f"[redacted]@{host}")))
 
 
 def _account_lines(job: Job) -> list[str]:
@@ -865,15 +973,23 @@ def _account_lines(job: Job) -> list[str]:
         else f"{account['home']}={folder}"
     )
     set_or_not = "; ".join(
-        f"{key} {'set' if present else 'not set'}" for key, present in account["presence"]
+        [f"{key} {'set' if present else 'not set'}" for key, present in account["presence"]]
+        + [f"{key} {'on' if present else 'off'}" for key, present in account["routes"]]
+    )
+    switches = (
+        "; a route switch is on where its value is "
+        + ", ".join(job.spec["account"]["routes"]["on"][:-1])
+        + f" or {job.spec['account']['routes']['on'][-1]}"
+        if account["routes"]
+        else ""
     )
     endpoints = "; ".join(
-        f"{key}={_endpoint(value)}" if value else f"{key} not set"
-        for key, value in account["values"]
+        f"{key}={shown} (only the scheme, host and port are shown)" if shown else f"{key} not set"
+        for key, shown, _ in account["values"]
     )
     return [
         f"  account folder: {folder} ({account['how']}; the reviewer starts with {started})",
-        f"  credentials and route: {set_or_not} (a value is never printed)",
+        f"  credentials and route: {set_or_not} (a value is never printed{switches})",
         *([f"  endpoints: {endpoints}"] if endpoints else []),
     ]
 
@@ -970,8 +1086,10 @@ def _tail(path: Path) -> str:
     return textio.plain(_redact(text[-STDERR_TAIL:]))
 
 
-def _execute(job: Job, argv: list[str]) -> tuple[str, str] | None:
-    """Run the reviewer to its end; `(status, detail)` where it did not end with exit 0."""
+def _execute(job: Job, argv: list[str], executable: str) -> tuple[str, str] | None:
+    """Run the reviewer to its end, the file `executable` under the name `argv[0]` (on Windows,
+    which takes no other name, `executable` itself); `(status, detail)` where it did not end
+    with exit 0."""
 
     by_argument = job.spec.get("prompt_via") == "argument"
     try:
@@ -984,8 +1102,10 @@ def _execute(job: Job, argv: list[str]) -> tuple[str, str] | None:
             stdin = subprocess.DEVNULL if by_argument else files.enter_context(job.stdin.open("rb"))
             stdout = files.enter_context(job.stdout.open("wb"))
             stderr = files.enter_context(job.stderr.open("wb"))
+            windows = os.name == "nt"
             process = programs.start_tree(
-                argv,
+                [executable, *argv[1:]] if windows else argv,
+                executable=None if windows else executable,
                 stdin=stdin,
                 stdout=stdout,
                 stderr=stderr,
@@ -1024,7 +1144,7 @@ def run_job(job: Job) -> Outcome:
                 "failed",
                 f"not started: {size_now} {limit['unit']}, over {_limit_text(limit)}",
             )
-    failure = _execute(job, [found, *job.argv[1:]])
+    failure = _execute(job, [found, *job.argv[1:]], job.executable or found)
     if failure is not None:
         return done(*failure)
     text, cost, why = _answer(job)
@@ -1033,31 +1153,35 @@ def run_job(job: Job) -> Outcome:
     return _filed(job, text, cost, done)
 
 
+def check_answer(text: str) -> tuple[str, str, int, int]:
+    """An answer in the answer form: its verdict, its text without the `Reviewed:` and
+    `Disposition:` lines a reviewer wrote outside a code fence, how many findings `review check`
+    reads in it, and how many lines were left out; else a refusal that says what is wrong."""
+
+    first = next((line.strip() for line in text.splitlines() if line.strip()), "")
+    verdict = _VERDICT.fullmatch(first.strip("`*# "))
+    if verdict is None:
+        raise CouncilError("its answer does not start with `Verdict: FAIL|UNVERIFIED|PASS`")
+    body, dropped = _strip(text)
+    named, count = verdict.group(1).upper(), len(review_since._findings(body))
+    if named == "FAIL" and not count:
+        raise CouncilError(
+            "its verdict is FAIL and it names no finding in the form "
+            "(`### <tag>-<number> · <short title>`)"
+        )
+    return named, body, count, dropped
+
+
 def _filed(job: Job, text: str, cost: float | None, done: Any) -> Outcome:
     """The outcome for an answer that exists: filed, or `unreadable` and kept apart."""
 
-    first = next((line.strip() for line in text.splitlines() if line.strip()), "")
-    if not _VERDICT.fullmatch(first.strip("`*# ")):
+    try:
+        named, body, count, dropped = check_answer(text)
+    except CouncilError as error:
         raw = job.review.with_suffix(".raw.txt")
         raw.write_text(text, encoding="utf-8")
         return done(
-            "unreadable",
-            f"its answer does not start with `Verdict: FAIL|UNVERIFIED|PASS`; kept as "
-            f"{raw.name}, no review file written",
-            cost_usd=cost,
-        )
-    body, dropped = _strip(text)
-    verdict = _VERDICT.fullmatch(first.strip("`*# "))
-    named = verdict.group(1).upper() if verdict else ""
-    count = len(review_since._findings(body))
-    if named == "FAIL" and not count:
-        raw = job.review.with_suffix(".raw.txt")
-        raw.write_text(text, encoding="utf-8")
-        return done(
-            "unreadable",
-            f"its verdict is FAIL and it names no finding in the form; kept as {raw.name}, "
-            "no review file written",
-            cost_usd=cost,
+            "unreadable", f"{error}; kept as {raw.name}, no review file written", cost_usd=cost
         )
     outcome = done(
         "ok", review=str(job.review), cost_usd=cost, body=body, verdict=named, findings=count
@@ -1281,6 +1405,25 @@ def _parser() -> argparse.ArgumentParser:
     )
     mode.add_argument("--plan", action="store_true", help="print the plan; run nothing")
     mode.add_argument("--accept", action="store_true", help="run the plan; spends credits")
+    mode.add_argument(
+        "--file-answer",
+        metavar="ANSWER",
+        help="for a seat a host ran: check its answer file (not a .md file) against the answer "
+        "form, and where it holds, write the review file --out with the Reviewed: line of "
+        "--revision; runs nothing, and writes nothing where the answer is refused",
+    )
+    parser.add_argument(
+        "--host",
+        action="store_true",
+        help="with --defaults --council NAME: also list each seat the engine cannot start, as "
+        "host only, with its model and effort as written, and the answer form",
+    )
+    parser.add_argument(
+        "--revision", metavar="REF", help="with --file-answer: the revision the seat reviewed"
+    )
+    parser.add_argument(
+        "--seat", metavar="TEXT", help="with --file-answer: the seat, as the listing named it"
+    )
     parser.add_argument("--range", dest="range_spec", metavar="A..B", help="review the diff A..B")
     parser.add_argument("--base", metavar="REF", help="review the diff REF...HEAD")
     parser.add_argument(
@@ -1321,11 +1464,14 @@ def _labels(entries: Sequence[str], where: Path | None, table: dict[str, Any]) -
         raise CouncilError(f"in the council file {where}: {error}") from error
 
 
-def render_defaults(table: dict[str, Any], root: Path) -> str:
+def render_defaults(table: dict[str, Any], root: Path) -> tuple[str, list[str]]:
     """The built-in default council, the council file in effect for `root`, and the councils
-    and homes of the person's own file, each seat resolved as `--plan` resolves it."""
+    and homes of the person's own file, each seat resolved as `--plan` resolves it; and the
+    refusals. A council with a seat `--plan` refuses is listed with its reason, and the other
+    councils are still listed."""
 
     config = load_config(_toplevel(root))
+    refused: list[str] = []
     lines = ["built-in default council: " + ", ".join(table["default_council"])]
     if config.place is None:
         lines.append("council file in effect: none")
@@ -1338,10 +1484,18 @@ def render_defaults(table: dict[str, Any], root: Path) -> str:
     else:
         lines.append(f"the person's council file: {config.person}")
         for name, seats in sorted((config.person_data.get("councils") or {}).items()):
-            lines.append(f"  council {name}: " + _labels(seats, config.person, table))
+            try:
+                labels = ", ".join(
+                    parse_reviewer(text, i, table).label for i, text in enumerate(seats, 1)
+                )
+            except CouncilError as error:
+                lines.append(f"  council {name}: refused: {error}")
+                refused.append(f"in the council file {config.person}: the council {name}: {error}")
+                continue
+            lines.append(f"  council {name}: {labels}")
         for harness, place in sorted(person_homes(config, table).items()):
             lines.append(f"  home of {harness}: {textio.visible(place)}")
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines) + "\n", refused
 
 
 def render_seats(options: argparse.Namespace, table: dict[str, Any]) -> str:
@@ -1349,7 +1503,7 @@ def render_seats(options: argparse.Namespace, table: dict[str, Any]) -> str:
     refused as `--plan` resolves and refuses them, with the lens, timeout and cap that apply,
     and what the engine does not enforce on a host thread. It starts nothing."""
 
-    chosen = _settings(options, table)
+    chosen = _settings(options, table, host=options.host)
     lens = chosen["lens"].strip() or DEFAULT_LENS
     cap = f"{chosen['budget']} USD" if chosen["budget"] else "none"
     lines = [
@@ -1357,10 +1511,33 @@ def render_seats(options: argparse.Namespace, table: dict[str, Any]) -> str:
         f"{options.council}, from {chosen['source']}",
         f"lens: {textio.visible(lens)} (from {chosen['lens_source']})",
     ]
-    for reviewer in chosen["reviewers"]:
-        spec = table["harnesses"][reviewer.harness]
-        timeout = chosen["timeout"] or int(spec["timeout_seconds"])
-        lines.append(f"seat {reviewer.tag}: {reviewer.label}; timeout {timeout} s; cap {cap}")
+    for seat in chosen["seats"]:
+        if seat.reviewer is None:
+            timeout = f"{chosen['timeout']} s" if chosen["timeout"] else "none set"
+            lines.append(
+                f"seat {seat.tag}: {textio.visible(seat.shown)}; host only: {seat.reason}; "
+                f"timeout {timeout}; cap {cap}"
+            )
+            continue
+        spec = table["harnesses"][seat.reviewer.harness]
+        timeout = f"{chosen['timeout'] or int(spec['timeout_seconds'])} s"
+        lines.append(f"seat {seat.tag}: {seat.shown}; timeout {timeout}; cap {cap}")
+    if options.host:
+        lines += [
+            "A seat marked host only is one the engine cannot start; a host may start it on its "
+            "own provider, with the model and effort as written.",
+            "Answer form, for each seat's brief: the first line is exactly one of Verdict: FAIL, "
+            "Verdict: UNVERIFIED or Verdict: PASS; a FAIL names at least one finding; each "
+            "finding heading is a level-three heading `### <tag>-<number> · <short title>` (the "
+            "seat's tag, a hyphen, a number from 1, a space, the middle dot ·, a space, the "
+            "title); `--file-answer` files an answer only in this form. The form as the engine's "
+            "prompt gives it:",
+            *(f"  {line}".rstrip() for line in ANSWER_FORM.format(tag="<tag>").splitlines()),
+            *(
+                f"seat {seat.tag} finding heading: ### {seat.tag}-<number> · <short title>"
+                for seat in chosen["seats"]
+            ),
+        ]
     lines.append(
         "On a host thread the engine enforces none of these: the host's provider and login run "
         "each seat and the person's homes do not apply; no spend cap, timeout or read-only mode "
@@ -1371,6 +1548,50 @@ def render_seats(options: argparse.Namespace, table: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def file_answer(options: argparse.Namespace) -> str:
+    """`--file-answer`: the answer of a seat a host ran, checked as `check_answer` checks a
+    reviewer's, written to the review file `--out` with the engine's `Reviewed:` line of
+    `--revision` resolved to a commit; a refused answer stays where it is and nothing is
+    written. No citation is checked: the host's thread read the work tree, not a snapshot."""
+
+    if not (options.revision and options.seat and options.out):
+        raise CouncilError("--file-answer needs --revision REF, --seat TEXT and --out FILE")
+    raw, review = Path(options.file_answer), Path(options.out)
+    if raw.suffix == ".md" or review.suffix != ".md":
+        raise CouncilError(
+            "the answer file is not a .md file, so that `review sweep` never reads an unchecked "
+            "answer as a review, and the review file --out is one"
+        )
+    commit = _commit(_toplevel(Path(options.root)), options.revision)
+    try:
+        verdict, body, count, dropped = check_answer(textio.read_text(raw))
+    except CouncilError as error:
+        raise CouncilError(
+            f"the answer {raw} is not filed: {error}; it stays where it is, outside the review "
+            "record, and no review file was written"
+        ) from error
+    if review.exists():
+        raise CouncilError(f"the review file {review} exists; it is never replaced")
+    head = [
+        f"Reviewed: {commit}",
+        "",
+        f"# Council reviewer {textio.plain(options.seat)} (host)",
+        "",
+        "Filed by `outcomebound review council --file-answer` from the answer of a host thread. "
+        "A finding below is a claim to check, and each has no disposition until the acting agent "
+        "writes one. On a host thread no citation was checked, and the engine enforced no "
+        "read-only mode, timeout or spend cap.",
+        *(
+            [f"{dropped} Reviewed: or Disposition: line(s) the reviewer wrote were left out"]
+            if dropped
+            else []
+        ),
+    ]
+    review.parent.mkdir(parents=True, exist_ok=True)
+    review.write_text("\n".join(head) + "\n\n" + body, encoding="utf-8")
+    return f"filed {review}: verdict {verdict}, {count} finding(s), at revision {commit}\n"
+
+
 def _toplevel(root: Path) -> Path:
     try:
         top = size._git_ok(root, "rev-parse", "--show-toplevel").decode("utf-8", "replace")
@@ -1379,7 +1600,9 @@ def _toplevel(root: Path) -> Path:
     return Path(top.strip())
 
 
-def _settings(options: argparse.Namespace, table: dict[str, Any]) -> dict[str, Any]:
+def _settings(
+    options: argparse.Namespace, table: dict[str, Any], *, host: bool = False
+) -> dict[str, Any]:
     """The reviewers, lens, timeout, cap and account folders of this run, and where each came
     from: the command line wins (`--reviewer`, or `--council` for a council of the person's
     file), then the council file, then the table's default council (the lens, the timeout and
@@ -1422,11 +1645,16 @@ def _settings(options: argparse.Namespace, table: dict[str, Any]) -> dict[str, A
             + "the timeout is a whole number of seconds, one or more"
         )
     try:
-        reviewers = [parse_reviewer(text, i, table) for i, text in enumerate(entries, 1)]
+        if host:
+            seats = [host_seat(text, i, table) for i, text in enumerate(entries, 1)]
+        else:
+            reviewers = [parse_reviewer(text, i, table) for i, text in enumerate(entries, 1)]
+            seats = [Seat(r.tag, r.label, r) for r in reviewers]
     except CouncilError as error:
         raise CouncilError(f"in {entries_from}: {error}" if entries_from else str(error)) from error
     return {
-        "reviewers": reviewers,
+        "reviewers": [seat.reviewer for seat in seats if seat.reviewer is not None],
+        "seats": seats,
         "source": source,
         "lens": data.get("lens", "") if lens is None else lens,
         "lens_source": lens_source,
@@ -1466,16 +1694,31 @@ def _file_warning(request: Request, chosen: dict[str, Any]) -> str:
     )
 
 
+def _defaults(options: argparse.Namespace, table: dict[str, Any]) -> int:
+    """`--defaults`: the listing, or the seats of `--council NAME`; 1 where a council of the
+    listing is refused, each refusal on standard error."""
+
+    if options.council is not None:
+        sys.stdout.write(render_seats(options, table))
+        return 0
+    text, refused = render_defaults(table, Path(options.root))
+    sys.stdout.write(text)
+    for reason in refused:
+        sys.stderr.write(f"COUNCIL_REFUSED: {textio.plain(reason)}\n")
+    return 1 if refused else 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     options = _parser().parse_args(argv)
     try:
+        if options.host and not (options.defaults and options.council is not None):
+            raise CouncilError("--host goes with --defaults --council NAME")
+        if options.file_answer is not None:
+            sys.stdout.write(file_answer(options))
+            return 0
         table = load_table()
         if options.defaults:
-            if options.council is not None:
-                sys.stdout.write(render_seats(options, table))
-            else:
-                sys.stdout.write(render_defaults(table, Path(options.root)))
-            return 0
+            return _defaults(options, table)
         chosen = _settings(options, table)
         request = gather(
             Path(options.root),
@@ -1520,9 +1763,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise CouncilError(
                 f"this run differs from the plan with id {textio.plain(options.plan_id)} "
                 f"(now {plan_id(request, jobs)}): the reviewers, the argument values, the login "
-                "(ANTHROPIC_API_KEY set or unset), an account folder, which credential or route "
-                "variables are set, an endpoint, the program on PATH, a named file, the diff or "
-                "the revision changed; plan again"
+                "(ANTHROPIC_API_KEY set or unset), an account folder, which credential variables "
+                "are set, a route switch, an endpoint, the program on PATH or the file it resolves "
+                "to, a named file, the diff or the revision changed; plan again"
             )
         if out.exists():
             raise CouncilError(

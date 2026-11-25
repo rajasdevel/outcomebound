@@ -437,7 +437,8 @@ def load_floor(root: Path) -> Floor:
     if data is None:
         raise FloorError(
             f"no floor checks ran: {FLOOR_PATH} is absent. `outcomebound floor propose TARGET` "
-            "prints a proposal, and `outcomebound floor apply TARGET --floor FILE` writes it"
+            "prints a proposal, and `outcomebound floor apply TARGET --floor FILE` previews it; "
+            "add --accept to write it"
         )
     try:
         value = json.loads(data)

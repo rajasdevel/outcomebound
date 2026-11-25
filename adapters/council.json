@@ -1,13 +1,14 @@
 {
   "version": 1,
-  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. `account` names the variable that sets the folder a harness keeps its login in (`home`), that folder under the home folder where the variable is unset (`default`), whether the reviewer may start with the variable set to that default (`set_default`; else it stays unset), the credential and route variables whose presence the plan shows (`presence`, never a value) and the endpoint variables whose value it shows (`values`); the plan prints the folder as its canonical path, and the plan id covers all of them. `max_prompt` lists the input limits of a harness; `review council` uses the first row that applies (`platform`: a `sys.platform` prefix; `programs`: the extensions of the program that would start) and checks the assembled prompt against it before the plan is shown and again before each reviewer starts. A row gives the `limit`; its `unit` (`characters`, counted as Unicode code points, `utf-16` code units, or UTF-8 `bytes`); what it `measure`s (`prompt`, the prompt alone; `command line`, the Windows command line with its final NUL; `arguments and environment`, every argument and environment string with its NUL and pointer); the `version` it was read for; its `source`; and the `read` day. A harness or platform with no row that applies has no limit checked, and the plan says so. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
+  "note": "The review council's table: `default_council` is the reviewers that run when none is named by `--reviewer` or a council.json file, and a harness with no entry there needs a model named. One row per reviewer harness; each entry of `argv` is one flag with its reason and its source. An entry with `when` is used only if that condition holds (`api_key`: ANTHROPIC_API_KEY is set; `!api_key`: it is not; `budget`: --budget-usd is given; `effort`: the reviewer names an effort). `listed_in_help` says that the installed tool's own --help named the flag on the `read` day, at the `help_version`. `run` is `tested` only where a harmless run showed the effect, else `UNVERIFIED`; `observed` says what a run showed and on which day, also for an entry that stays `UNVERIFIED` because the run did not try its effect. `account` names the variable that sets the folder a harness keeps its login in (`home`), that folder under the home folder where the variable is unset (`default`), whether the reviewer may start with the variable set to that default (`set_default`; else it stays unset), the credential variables whose presence the plan shows (`presence`, never a value), the cloud route switches (`routes`: a switch is on where its value, trimmed and in lower case, is one of `on`; the plan shows each switch of `shown` as on or off, and refuses a run before the plan where a switch of `refused`, a route the table does not support, is on) and the endpoint variables (`values`), of which the plan shows the scheme, host and port only; the plan prints the folder as its canonical path, and the plan id covers all of them, an endpoint by its whole value. `max_prompt` lists the input limits of a harness; `review council` uses the first row that applies (`platform`: a `sys.platform` prefix; `programs`: the extensions of the program that would start) and checks the assembled prompt against it before the plan is shown and again before each reviewer starts. A row gives the `limit`; its `unit` (`characters`, counted as Unicode code points, `utf-16` code units, or UTF-8 `bytes`); what it `measure`s (`prompt`, the prompt alone; `command line`, the Windows command line with its final NUL; `arguments and environment`, every argument and environment string with its NUL and pointer); the `version` it was read for; its `source`; and the `read` day. A harness or platform with no row that applies has no limit checked, and the plan says so. The model ids are examples: a model name changes faster than this file, and a reviewer entry on the command line overrides it.",
   "harnesses": {
     "codex": {
       "binary": "codex",
       "account": {
         "home": "CODEX_HOME",
         "default": ".codex",
-        "set_default": true,
+        "set_default": false,
+        "set_default_why": "observed 2026-11-26 with codex-cli 0.172.0 and an empty home folder: `codex login status` with CODEX_HOME unset reached \"Not logged in\", and with CODEX_HOME set to the default folder, which did not exist yet, it stopped with a configuration error; so the default is bound and shown, and the variable stays unset",
         "presence": [
           "CODEX_API_KEY",
           "OPENAI_API_KEY"
@@ -192,11 +193,22 @@
         "presence": [
           "ANTHROPIC_API_KEY",
           "ANTHROPIC_AUTH_TOKEN",
-          "CLAUDE_CODE_OAUTH_TOKEN",
-          "CLAUDE_CODE_USE_BEDROCK",
-          "CLAUDE_CODE_USE_VERTEX",
-          "CLAUDE_CODE_USE_FOUNDRY"
+          "CLAUDE_CODE_OAUTH_TOKEN"
         ],
+        "routes": {
+          "on": ["1", "true", "yes", "on"],
+          "shown": [
+            "CLAUDE_CODE_USE_BEDROCK",
+            "CLAUDE_CODE_USE_VERTEX",
+            "CLAUDE_CODE_USE_FOUNDRY"
+          ],
+          "refused": [
+            "CLAUDE_CODE_USE_ANTHROPIC_AWS",
+            "CLAUDE_CODE_USE_ANTHROPIC_GOOGLE_CLOUD",
+            "CLAUDE_CODE_USE_MANTLE"
+          ],
+          "source": "the installed Claude Code 2.1.332 (read 2026-11-26) reads each of these switches as on where its value, trimmed and in lower case, is 1, true, yes or on, and else as off, and lists the six together as the cloud routes; which account or cloud each one bills is UNVERIFIED"
+        },
         "values": [
           "ANTHROPIC_BASE_URL",
           "ANTHROPIC_BEDROCK_BASE_URL",

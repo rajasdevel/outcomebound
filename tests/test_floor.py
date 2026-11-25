@@ -205,7 +205,7 @@ def test_check_with_no_floor_file_says_no_check_ran_and_how_to_get_a_proposal(
     assert captured.err == (
         "floor: no floor checks ran: .outcomebound/floor.json is absent. "
         "`outcomebound floor propose TARGET` prints a proposal, and "
-        "`outcomebound floor apply TARGET --floor FILE` writes it\n"
+        "`outcomebound floor apply TARGET --floor FILE` previews it; add --accept to write it\n"
     )
 
 

@@ -163,7 +163,13 @@ def tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # and no council file of the person running the suite.
     for row in review_council.load_table()["harnesses"].values():
         account = row.get("account", {})
-        for name in [account.get("home", ""), *account.get("presence", [])]:
+        routes = account.get("routes", {})
+        for name in [
+            account.get("home", ""),
+            *account.get("presence", []),
+            *routes.get("shown", []),
+            *routes.get("refused", []),
+        ]:
             monkeypatch.delenv(name, raising=False)
         for name in account.get("values", []):
             monkeypatch.delenv(name, raising=False)
@@ -743,6 +749,12 @@ def test_a_harness_with_its_effort_in_the_model_id_refuses_an_effort_part() -> N
     for bad in ("cursor", "cursor:m:high", "opencode:p/m:high", "opencode"):
         with pytest.raises(review_council.CouncilError):
             review_council.parse_reviewer(bad, 1, table)
+    with pytest.raises(review_council.CouncilError) as refused:
+        review_council.parse_reviewer("cursor:m:high", 1, table)
+    assert str(refused.value) == (
+        'the harness cursor takes no effort part in "cursor:m:high": its effort is part of its '
+        "model id (for example cursor:MODEL)"
+    )
     assert review_council.parse_reviewer("cursor:m[effort=high]", 1, table).effort == ""
 
 
@@ -1149,7 +1161,7 @@ def test_the_plan_shows_each_reviewers_account_folder_and_route_and_its_id_binds
     folders = [line for line in out.splitlines() if "account folder:" in line]
     assert folders == [
         f"  account folder: {codex_default} (unset: the tool's default; the reviewer starts "
-        f"with CODEX_HOME={codex_default})",
+        "with CODEX_HOME left unset)",
         f"  account folder: {claude_default} (unset: the tool's default; the reviewer starts "
         "with CLAUDE_CONFIG_DIR left unset)",
     ]
@@ -1159,9 +1171,9 @@ def test_the_plan_shows_each_reviewers_account_folder_and_route_and_its_id_binds
     )
     assert _line(out, "credentials and route: ANTHROPIC_API_KEY") == (
         "credentials and route: ANTHROPIC_API_KEY not set; ANTHROPIC_AUTH_TOKEN not set; "
-        "CLAUDE_CODE_OAUTH_TOKEN not set; CLAUDE_CODE_USE_BEDROCK not set; "
-        "CLAUDE_CODE_USE_VERTEX not set; CLAUDE_CODE_USE_FOUNDRY not set "
-        "(a value is never printed)"
+        "CLAUDE_CODE_OAUTH_TOKEN not set; CLAUDE_CODE_USE_BEDROCK off; "
+        "CLAUDE_CODE_USE_VERTEX off; CLAUDE_CODE_USE_FOUNDRY off "
+        "(a value is never printed; a route switch is on where its value is 1, true, yes or on)"
     )
     assert _line(out, "endpoints: OPENAI") == "endpoints: OPENAI_BASE_URL not set"
     assert "a different key or login in the same mode is not detected" in out
@@ -1184,22 +1196,22 @@ def test_the_plan_shows_each_reviewers_account_folder_and_route_and_its_id_binds
     for name, value in (
         ("OPENAI_API_KEY", "sk-not-a-real-key-0000"),
         ("CLAUDE_CODE_OAUTH_TOKEN", "oauth-not-real-0000"),
-        ("CLAUDE_CODE_USE_BEDROCK", "bedrock-on-not-real"),
+        ("CLAUDE_CODE_USE_BEDROCK", "1"),
         ("ANTHROPIC_BASE_URL", "https://user:pw-not-real@proxy.example.test/v1"),
     ):
         monkeypatch.setenv(name, value)
         out = plan()
-        assert value not in out, name
+        assert f"={value}" not in out, name
         ids.add(_plan_id(out))
         monkeypatch.delenv(name)
     assert len(ids) == 8, "each of these is a different plan"
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://proxy.example.test/v1")
     out = plan()
-    assert "endpoints: ANTHROPIC_BASE_URL=https://proxy.example.test/v1;" in out
+    assert "endpoints: ANTHROPIC_BASE_URL=https://proxy.example.test (only the scheme" in out
     monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://user:pw-not-real@proxy.example.test/v1")
     out = plan()
-    assert "ANTHROPIC_BASE_URL=https://[redacted]@proxy.example.test/v1" in out
-    assert "pw-not-real" not in out
+    assert "ANTHROPIC_BASE_URL=https://proxy.example.test (only the scheme" in out
+    assert "pw-not-real" not in out and "user" not in _line(out, "endpoints: ANTHROPIC")
     monkeypatch.delenv("ANTHROPIC_BASE_URL")
     # The person's file sets the folder, over the inherited one.
     _write_config(
@@ -1256,8 +1268,9 @@ def test_a_default_account_folder_reaches_the_reviewer_as_planned(
     code, out, err = council(capsys, repo, "--accept", "--base", "HEAD~1")
     assert code == 0, out + err
     log = tools / "log"
-    codex_default = _real(person / ".codex")
-    assert (log / "codex.env").read_text(encoding="utf-8") == f"CODEX_HOME={codex_default}\n"
+    # The tool's default folder is bound in the plan, and the variable stays unset, as the tool
+    # needs it where that folder does not exist yet.
+    assert (log / "codex.env").read_text(encoding="utf-8") == "CODEX_HOME=(unset)\n"
     assert (log / "claude.env").read_text(encoding="utf-8") == "CLAUDE_CONFIG_DIR=(unset)\n"
 
 
@@ -1353,3 +1366,260 @@ def test_an_account_folder_unfit_for_a_child_process_is_refused_before_a_plan(
     assert code == 1 and out == "" and "holds a control character" in err, err
     assert list((tools / "log").iterdir()) == []
     assert not (repo / ".agents").exists()
+
+
+# --- route switches, endpoints, file identity, the program and the host route ------------------
+
+
+def test_a_route_switch_is_bound_by_the_value_the_tool_reads_and_an_unsupported_route_refused(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = ("--base", "HEAD~1", "--reviewer", CLAUDE_REVIEWER)
+
+    def plan() -> str:
+        code, out, err = council(capsys, repo, "--plan", *args)
+        assert code == 0, err
+        return out
+
+    unset = _plan_id(plan())
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "0")
+    out = plan()
+    assert "CLAUDE_CODE_USE_BEDROCK off" in out
+    off = _plan_id(out)
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", " Yes ")
+    out = plan()
+    assert "CLAUDE_CODE_USE_BEDROCK on" in out and " Yes " not in out
+    on = _plan_id(out)
+    # The tool reads "0" as off, as if unset, and " Yes " as on: a yes to one is no yes to the
+    # other.
+    assert off == unset and on != off
+    monkeypatch.setenv("CLAUDE_CODE_USE_BEDROCK", "0")
+    code, _, err = council(capsys, repo, "--accept", *args, "--plan-id", on)
+    assert code == 1 and "differs from the plan" in err
+    assert list((tools / "log").iterdir()) == []
+    monkeypatch.delenv("CLAUDE_CODE_USE_BEDROCK")
+    # A cloud route the table does not support is refused before a plan; off, it is no route.
+    monkeypatch.setenv("CLAUDE_CODE_USE_MANTLE", "1")
+    code, out, err = council(capsys, repo, "--plan", *args)
+    assert code == 1 and out == ""
+    assert "CLAUDE_CODE_USE_MANTLE" in err and "not supported" in err, err
+    monkeypatch.setenv("CLAUDE_CODE_USE_MANTLE", "false")
+    assert _plan_id(plan()) == unset
+
+
+def test_an_endpoint_shows_only_its_scheme_host_and_port_and_a_bad_one_is_refused(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    args = ("--base", "HEAD~1", "--reviewer", CODEX_REVIEWER)
+    endpoint = (
+        "https://u:pw-not-real@gw.example.test:8443/v1/tok-not-real?api_key=q-not-real#f-not-real"
+    )
+    monkeypatch.setenv("OPENAI_BASE_URL", endpoint)
+    code, out, err = council(capsys, repo, "--plan", *args)
+    assert code == 0, err
+    assert _line(out, "endpoints:") == (
+        "endpoints: OPENAI_BASE_URL=https://gw.example.test:8443 (only the scheme, host and port "
+        "are shown)"
+    )
+    for part in ("pw-not-real", "tok-not-real", "q-not-real", "f-not-real"):
+        assert part not in out, part
+    first = _plan_id(out)
+    monkeypatch.setenv("OPENAI_BASE_URL", endpoint.replace("q-not-real", "q-other"))
+    out = council(capsys, repo, "--plan", *args)[1]
+    assert _plan_id(out) != first, "the plan id binds the whole value"
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://[::1]:9/v1")
+    out = council(capsys, repo, "--plan", *args)[1]
+    assert "OPENAI_BASE_URL=https://[::1]:9 (only" in out
+    for bad in ("http://[bad", "gw.example.test/v1", "https://gw.example.test:99999/q-not-real"):
+        monkeypatch.setenv("OPENAI_BASE_URL", bad)
+        code, out, err = council(capsys, repo, "--plan", *args)
+        assert code == 1 and out == "" and err.startswith("COUNCIL_REFUSED: "), (bad, err)
+        assert "OPENAI_BASE_URL" in err and bad not in err and "q-not-real" not in err
+    assert list((tools / "log").iterdir()) == []
+
+
+def _other_case(place: Path) -> Path | None:
+    """`place` spelled with its letters' case swapped, where the volume finds the same folder
+    there (a case-insensitive volume), else None."""
+
+    other = Path(str(place).swapcase())
+    try:
+        return other if other != place and os.path.samefile(other, place) else None
+    except OSError:
+        return None
+
+
+@needs_symlinks
+@pytest.mark.parametrize("linked", ["file", "folder"])
+def test_a_persons_file_inside_the_repository_by_another_spelling_is_still_inside(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str], linked: str
+) -> None:
+    spelled = _other_case(repo)
+    if spelled is None:
+        pytest.skip("the volume of the temporary folder is case-sensitive")
+    inside = spelled / "settings" / ".outcomebound"
+    _write_config(inside / "council.json", councils={"pair": [CODEX_REVIEWER]})
+    if linked == "file":
+        (person / ".outcomebound").mkdir()
+        (person / ".outcomebound/council.json").symlink_to(inside / "council.json")
+    else:
+        (person / ".outcomebound").symlink_to(inside, target_is_directory=True)
+    code, _, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "pair", pair=False
+    )
+    assert code == 1 and "councils are refused" in err, err
+    assert list((tools / "log").iterdir()) == []
+
+
+def test_a_repository_that_is_the_home_folder_by_another_spelling_holds_the_persons_file(
+    tools: Path, repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    spelled = _other_case(repo)
+    if spelled is None:
+        pytest.skip("the volume of the temporary folder is case-sensitive")
+    monkeypatch.setenv("HOME", str(spelled))
+    monkeypatch.setenv("USERPROFILE", str(spelled))
+    _write_config(repo / ".outcomebound/council.json", councils={"pair": [CODEX_REVIEWER]})
+    code, out, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "pair", pair=False
+    )
+    assert code == 0, err
+    assert "reviewer r1: codex:m-codex:high" in out
+
+
+@needs_symlinks
+@pytest.mark.skipif(WINDOWS, reason="the stand-in is a .cmd wrapper on Windows, not a link")
+def test_the_run_starts_the_program_the_plan_resolved_also_where_its_link_moves(
+    tools: Path,
+    repo: Path,
+    person: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marked = {
+        name: shell_tool(
+            tools / f"pkg-{name}",
+            "codex",
+            CODEX.replace('log="$FAKE_LOG"\n', f'log="$FAKE_LOG"\necho {name} > "$log/which"\n'),
+        )
+        for name in ("a", "b")
+    }
+    link = tools / "bin" / "codex"
+    link.unlink()
+    link.symlink_to(marked["a"])
+    args = ("--base", "HEAD~1", "--reviewer", CODEX_REVIEWER)
+    _, plan, _ = council(capsys, repo, "--plan", *args)
+    assert _line(plan, "program:").startswith(f"program: {link} (resolves to {_real(marked['a'])};")
+    snapshot = review_council._snapshot
+
+    def moved(root: Path, commit: str, into: Path) -> None:
+        snapshot(root, commit, into)
+        link.unlink()
+        link.symlink_to(marked["b"])  # an update between the yes and the start
+
+    monkeypatch.setattr(review_council, "_snapshot", moved)
+    code, out, err = council(capsys, repo, "--accept", *args, "--plan-id", _plan_id(plan))
+    assert code == 0, out + err
+    assert (tools / "log/which").read_text(encoding="utf-8") == "a\n"
+
+
+TRIO = ["codex:m-a:high", "claude:m-b:low", "cursor:neon-x:high"]
+
+
+def test_defaults_lists_every_council_and_names_a_refused_one_with_its_reason(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    _write_config(
+        person / ".outcomebound/council.json",
+        councils={"pair": TRIO[:2], "trio": TRIO, "solo": ["codex:m-c"]},
+    )
+    code, out, err = council(capsys, repo, "--defaults", pair=False)
+    assert code == 1
+    assert "  council pair: codex:m-a:high, claude:m-b:low" in out
+    assert "  council solo: codex:m-c:high" in out
+    assert _line(out, "council trio:") == (
+        'council trio: refused: the harness cursor takes no effort part in "cursor:neon-x:high": '
+        "its effort is part of its model id (for example cursor:MODEL)"
+    )
+    assert err.startswith("COUNCIL_REFUSED: ") and "council trio" in err
+    code, out, err = council(
+        capsys, repo, "--plan", "--base", "HEAD~1", "--council", "trio", pair=False
+    )
+    assert code == 1 and out == "" and "the harness cursor takes no effort part" in err
+
+
+def test_the_host_listing_marks_a_seat_the_engine_cannot_start_and_keeps_its_effort(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    place = person / ".outcomebound/council.json"
+    _write_config(place, councils={"trio": [*TRIO, "gemini:g-1:max"]})
+    code, out, err = council(capsys, repo, "--defaults", "--council", "trio", "--host", pair=False)
+    assert code == 0, err
+    assert _line(out, "seat r1:") == "seat r1: codex:m-a:high; timeout 1800 s; cap none"
+    assert _line(out, "seat r3:") == (
+        "seat r3: cursor:neon-x:high (harness cursor, model neon-x, effort high); host only: "
+        'the harness cursor takes no effort part in "cursor:neon-x:high": its effort is part '
+        "of its model id (for example cursor:MODEL); timeout none set; cap none"
+    )
+    assert _line(out, "seat r4:").startswith(
+        "seat r4: gemini:g-1:max (harness gemini, model g-1, effort max); host only: the harness "
+        '"gemini" is not in the table'
+    )
+    # Each seat's answer form, as the engine's filing reads it.
+    assert "Verdict: FAIL, Verdict: UNVERIFIED or Verdict: PASS" in out
+    assert "### r3-<number> · <short title>" in out
+    assert list((tools / "log").iterdir()) == []
+    # A malformed seat and an unknown council are still refused; --host goes with a council.
+    for seats in (["gemini"], ["codex:bad model"], ["a:b:c:d"]):
+        _write_config(place, councils={"trio": seats})
+        code, _, err = council(
+            capsys, repo, "--defaults", "--council", "trio", "--host", pair=False
+        )
+        assert code == 1 and f"in the council file {place}:" in err, (seats, err)
+    for args in (("--council", "other", "--host"), ("--host",), ("--plan", "--host")):
+        mode = () if "--plan" in args else ("--defaults",)
+        code, _, err = council(capsys, repo, *mode, *args, pair=False)
+        assert code == 1 and err.startswith("COUNCIL_REFUSED: "), (args, err)
+
+
+def test_a_host_answer_is_filed_only_in_the_engines_form(
+    tools: Path, repo: Path, person: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    folder = repo / ".agents/work/council/x"
+    folder.mkdir(parents=True)
+    raw, review = folder / "r1.answer", folder / "r1-host.md"
+
+    def file(text: str) -> tuple[int, str, str]:
+        raw.write_text(text, encoding="utf-8")
+        args = ("--file-answer", str(raw), "--revision", "HEAD", "--seat", "r1 cursor:neon-x")
+        return council(capsys, repo, *args, "--out", str(review), pair=False)
+
+    for text, why in (
+        ("Verdict: MAYBE\n\nNo findings.\n", "does not start with"),
+        ("Verdict: FAIL\n\n### Wrong sum\nsrc/app.py:2 is wrong.\n", "names no finding"),
+    ):
+        code, out, err = file(text)
+        assert code == 1 and why in err and not review.exists(), (text, err)
+    code, out, err = file(GOOD)
+    assert code == 0, err
+    filed = review.read_text(encoding="utf-8")
+    commit = git(repo, "rev-parse", "HEAD")
+    assert filed.startswith(f"Reviewed: {commit}\n\n# Council reviewer r1 cursor:neon-x (host)\n")
+    assert "no citation was checked" in filed
+    assert "Disposition: fixed" not in filed and "Reviewed: somewhere-else" not in filed
+    assert "Disposition: kept in a fence" in filed
+    assert "verdict FAIL, 3 finding(s)" in out
+    # The record is one `review check` reads; an existing review file is never replaced.
+    reviewed, entries, malformed = review_check._parse(filed)
+    assert reviewed == commit and not malformed
+    assert [entry.id for entry in entries] == ["r1-1", "r1-2", "r1-3"]
+    code, _, err = file(CLEAN)
+    assert code == 1 and "exists" in err
