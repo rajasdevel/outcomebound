@@ -74,11 +74,12 @@ folder first; a council named only elsewhere is not one the host route runs.
    effort. Each brief names the commit, the range or the files, and the lens; says that the
    reviewer reads and changes nothing; gives the answer form the listing printed, with the seat's
    tag; and names the one answer file it writes, `TAG.answer` in
-   `.agents/work/council/<first 12 characters of the commit>/` of the main checkout.
+   `.agents/work/council/SHORT/` of the main checkout, where SHORT is the output of
+   `git rev-parse --short=12 COMMIT`, the folder name an engine run uses.
 5. File each answer with `outcomebound review council --file-answer FILE --revision COMMIT --seat
    "TAG SEAT" --out FOLDER/TAG-host.md`, where FOLDER is that folder. It files an answer only in the
    answer form: a first line of `Verdict: FAIL`, `Verdict: UNVERIFIED` or `Verdict: PASS`, and for
-   a `FAIL` at least one finding heading `### TAG-N · title`. It removes the `Disposition:` and
+   a `FAIL` at least one finding heading in the form the listing printed. It removes the `Disposition:` and
    `Reviewed:` lines the reviewer wrote outside code fences, and puts the engine's `Reviewed:` line
    first. A refused answer stays where it is, outside the review record: report that seat to the
    person as a failed review, by name. On host threads no citation was checked.

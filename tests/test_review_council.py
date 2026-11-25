@@ -1628,7 +1628,7 @@ def test_a_host_answer_is_filed_only_in_the_engines_form(
 
 def test_each_review_council_option_the_skill_names_is_one_the_command_takes() -> None:
     text = (ROOT / "skills/review-council/SKILL.md").read_text(encoding="utf-8")
-    named = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", text)) - {"--verify"}  # Git's own
+    named = set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", text)) - {"--verify", "--short"}  # Git's
     taken = {flag for action in review_council._parser()._actions for flag in action.option_strings}
     assert named and named <= taken, named - taken
     # The host route names its listing and its filing.
